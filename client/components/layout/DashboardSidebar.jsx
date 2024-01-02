@@ -1,0 +1,172 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Building2,
+  FileText,
+  Calendar,
+  Clock,
+  Users,
+  BarChart3,
+  ShieldAlert,
+  Settings,
+  CheckCircle2,
+  Layers,
+  Bell,
+  User,
+  ArrowLeft,
+  ChevronRight,
+  LogOut,
+} from "lucide-react";
+import { useStore } from "@/lib/store";
+
+export default function DashboardSidebar({ role = "ADMIN" }) {
+  const pathname = usePathname();
+  const { currentUser, appointments, queue, notifications } = useStore();
+
+  const pendingAppointmentsCount = appointments.filter((a) => a.status === "PENDING").length;
+  const waitingQueueCount = queue.filter((q) => q.status === "WAITING").length;
+  const unreadNotifsCount = notifications.filter((n) => !n.isRead).length;
+
+  const adminNav = [
+    { href: "/admin", label: "Dashboard Overview", icon: LayoutDashboard },
+    { href: "/admin/departments", label: "Departments", icon: Building2 },
+    { href: "/admin/services", label: "Government Services", icon: FileText },
+    {
+      href: "/admin/appointments",
+      label: "All Appointments",
+      icon: Calendar,
+      badge: pendingAppointmentsCount > 0 ? pendingAppointmentsCount : null,
+    },
+    { href: "/admin/schedule", label: "Schedules & Capacity", icon: Clock },
+    { href: "/admin/users", label: "Staff & Citizens", icon: Users },
+    { href: "/admin/reports", label: "Reports & Analytics", icon: BarChart3 },
+    { href: "/admin/audit", label: "Audit Logs", icon: ShieldAlert },
+    { href: "/admin/settings", label: "Woreda Settings", icon: Settings },
+  ];
+
+  const officerNav = [
+    { href: "/officer", label: "Officer Desk", icon: LayoutDashboard },
+    {
+      href: "/officer/appointments",
+      label: "Department Bookings",
+      icon: Calendar,
+      badge: pendingAppointmentsCount > 0 ? pendingAppointmentsCount : null,
+    },
+    {
+      href: "/officer/queue",
+      label: "Live Queue Board",
+      icon: Layers,
+      badge: waitingQueueCount > 0 ? waitingQueueCount : null,
+    },
+    { href: "/officer/verify", label: "Citizen Check-In", icon: CheckCircle2 },
+    { href: "/officer/reports", label: "Department Report", icon: BarChart3 },
+  ];
+
+  const citizenNav = [
+    { href: "/citizen", label: "Overview", icon: LayoutDashboard },
+    { href: "/book", label: "Book Appointment", icon: Calendar },
+    { href: "/citizen/appointments", label: "My Appointments", icon: FileText },
+    {
+      href: "/citizen/notifications",
+      label: "Notifications",
+      icon: Bell,
+      badge: unreadNotifsCount > 0 ? unreadNotifsCount : null,
+    },
+    { href: "/citizen/profile", label: "Profile & Kebele ID", icon: User },
+  ];
+
+  let items = adminNav;
+  let title = "Administrator Portal";
+  let subtitle = "System Administration";
+  let badgeColor = "bg-purple-100 text-purple-800";
+
+  if (role === "OFFICER") {
+    items = officerNav;
+    title = "Officer Service Desk";
+    subtitle = currentUser?.departmentName || "Kebele Office";
+    badgeColor = "bg-emerald-100 text-emerald-800";
+  } else if (role === "CITIZEN") {
+    items = citizenNav;
+    title = "Citizen Portal";
+    subtitle = "Public Self-Service";
+    badgeColor = "bg-blue-100 text-blue-800";
+  }
+
+  return (
+    <aside className="w-64 bg-[#0b2545] text-slate-300 flex flex-col shrink-0 min-h-screen border-r border-slate-800">
+      {/* Brand & Portal Header */}
+      <div className="p-4 border-b border-white/10">
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-900 flex items-center justify-center font-bold text-sm shadow">
+            W
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
+              WoredaCare
+              <span className={`text-[9px] uppercase px-1.5 py-0.2 rounded font-semibold ${badgeColor}`}>
+                {role}
+              </span>
+            </h2>
+            <p className="text-[10px] text-slate-400 truncate max-w-[150px]">{subtitle}</p>
+          </div>
+        </Link>
+      </div>
+
+      {/* Navigation Items */}
+      <div className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          Navigation Menu
+        </div>
+        {items.map((item) => {
+          const Icon = item.icon;
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                isActive
+                  ? "bg-white/15 text-white font-semibold shadow-sm"
+                  : "text-slate-300 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Icon className={`w-4 h-4 ${isActive ? "text-amber-400" : "text-slate-400"}`} />
+                <span>{item.label}</span>
+              </div>
+              {item.badge && (
+                <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-amber-400 text-slate-950 font-bold">
+                  {item.badge}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Bottom Public Return & User Tag */}
+      <div className="p-3 border-t border-white/10 space-y-2">
+        <Link
+          href="/"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Exit to Public Portal</span>
+        </Link>
+
+        <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
+            {currentUser?.fullName?.charAt(0) || "U"}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-white truncate">{currentUser?.fullName}</p>
+            <p className="text-[10px] text-slate-400 truncate">{currentUser?.role}</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
