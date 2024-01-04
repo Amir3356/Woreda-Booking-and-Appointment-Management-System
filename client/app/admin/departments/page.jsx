@@ -277,3 +277,4 @@ export default function AdminDepartmentsPage() {
     </div>
   );
 }
+
