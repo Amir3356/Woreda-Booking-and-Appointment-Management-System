@@ -1,110 +1,280 @@
 "use client";
 
-import Link from "next/link";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
+import { INITIAL_USERS } from "@/lib/mock-data";
 import {
-  Calendar,
-  Search,
+  Building,
+  User,
+  Mail,
+  Lock,
+  Shield,
   ArrowRight,
-  Sparkles,
-  ChevronRight,
+  ShieldCheck,
+  AlertCircle,
 } from "lucide-react";
 
-export default function HomePage() {
-  const { departments, services } = useStore();
+export default function LoginPage() {
+  const router = useRouter();
+  const { setCurrentUser } = useStore();
+
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState("Citizen"); // Options: Citizen, Department Officer, Admin
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!username.trim()) {
+      setError("Please enter your username.");
+      return;
+    }
+    if (!email.trim()) {
+      setError("Please enter your email address.");
+      return;
+    }
+    if (!password) {
+      setError("Please enter your password.");
+      return;
+    }
+
+    setLoading(true);
+
+    // Map selected dropdown role to system role and target dashboard
+    let targetRole = "CITIZEN";
+    let targetPath = "/citizen";
+    let deptName = null;
+    let deptId = null;
+
+    if (role === "Admin") {
+      targetRole = "ADMIN";
+      targetPath = "/admin";
+      deptName = "Woreda Central Administration";
+    } else if (role === "Department Officer") {
+      targetRole = "OFFICER";
+      targetPath = "/officer";
+      deptName = "Kebele Administration & Vital Events";
+      deptId = "dept-1";
+    } else {
+      targetRole = "CITIZEN";
+      targetPath = "/citizen";
+    }
+
+    const authenticatedUser = {
+      id: `usr-${Date.now()}`,
+      fullName: username.trim(),
+      email: email.trim(),
+      phone: "+251911000000",
+      nationalId: `ET-${targetRole.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
+      role: targetRole,
+      departmentId: deptId,
+      departmentName: deptName,
+      isActive: true,
+      address: "Kebele 03, Woreda Center",
+    };
+
+    setCurrentUser(authenticatedUser);
+
+    setTimeout(() => {
+      setLoading(false);
+      router.push(targetPath);
+    }, 400);
+  };
+
+  // Quick fill helper for easy testing
+  const handleQuickFill = (roleName) => {
+    setRole(roleName);
+    if (roleName === "Citizen") {
+      setUsername("Bekele Tadesse");
+      setEmail("bekele@citizen.et");
+      setPassword("password123");
+    } else if (roleName === "Department Officer") {
+      setUsername("W/ro Tigist Mulugeta");
+      setEmail("tigist.kbl@woreda.gov.et");
+      setPassword("password123");
+    } else if (roleName === "Admin") {
+      setUsername("Ato Kibreab Demissie");
+      setEmail("admin@woreda.gov.et");
+      setPassword("password123");
+    }
+  };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      <Navbar />
+    <div className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-b from-[#0b2545] via-[#103058] to-[#133b5c] p-4 text-slate-800">
+      {/* Background decoration grid */}
+      <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
 
-      {/* Hero Section */}
-      <section className="flex-1 relative overflow-hidden bg-gradient-to-b from-[#0b2545] via-[#103058] to-[#133b5c] text-white py-16 lg:py-24 flex flex-col justify-between">
-        {/* Subtle patterned overlay */}
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]"></div>
+      {/* Main Authentication Card */}
+      <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden z-10">
+        {/* Top Government Emblem Header */}
+        <div className="bg-[#0b2545] text-white p-6 text-center border-b border-white/10">
+          <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-amber-400 mx-auto mb-3 shadow-md">
+            <Building className="w-7 h-7" />
+          </div>
+          <p className="text-[10px] uppercase font-bold tracking-widest text-slate-300">
+            FDRE — Woreda Public Administration
+          </p>
+          <h1 className="text-xl font-extrabold text-white tracking-tight mt-1">
+            WoredaCare Portal Login
+          </h1>
+          <p className="text-xs text-slate-300 mt-1">
+            Appointment & Queue Management System
+          </p>
+        </div>
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full my-auto">
-          <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-semibold text-amber-300 mb-6 backdrop-blur-sm">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Modernizing Ethiopian Municipal Public Administration</span>
+        {/* Login Form Body */}
+        <div className="p-6 sm:p-8 space-y-5">
+          {error && (
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            {/* Username Input */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Username *
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter username (e.g. Bekele Tadesse)"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none bg-slate-50/50"
+                />
+              </div>
             </div>
 
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight text-white mb-6">
-              Book Your Government Service Appointment{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-emerald-400">
-                Online
-              </span>
-            </h1>
+            {/* Email Input */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Email Address *
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter email (e.g. name@woreda.gov.et)"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none bg-slate-50/50"
+                />
+              </div>
+            </div>
 
-            <p className="text-base sm:text-lg text-slate-300 leading-relaxed mb-8">
-              Eliminate physical waiting queues and unnecessary trips. Schedule appointments with Kebele Administration, Land Administration, Revenue, and Trade offices in minutes.
-            </p>
+            {/* Role Dropdown */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Select Role *
+              </label>
+              <div className="relative">
+                <Shield className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white cursor-pointer"
+                >
+                  <option value="Citizen">Citizen</option>
+                  <option value="Department Officer">Department Officer</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+            </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <Link
-                href="/book"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm shadow-lg transition-transform active:scale-95"
+            {/* Password Input */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Password *
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none bg-slate-50/50"
+                />
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 mt-2 active:scale-98 disabled:opacity-70"
+            >
+              <span>{loading ? "Signing In..." : `Login as ${role}`}</span>
+              <ArrowRight className="w-4 h-4 text-amber-300" />
+            </button>
+          </form>
+
+          {/* Quick Demo Pre-fill helpers */}
+          <div className="pt-4 border-t border-slate-100">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2 text-center">
+              Quick Test Credentials
+            </span>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => handleQuickFill("Citizen")}
+                className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border transition-all text-center ${
+                  role === "Citizen"
+                    ? "bg-blue-50 border-blue-300 text-blue-700 font-bold"
+                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                }`}
               >
-                <Calendar className="w-4 h-4" />
-                <span>Book an Appointment</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-
-              <Link
-                href="/track"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-sm backdrop-blur-sm transition-colors"
+                Citizen
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickFill("Department Officer")}
+                className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border transition-all text-center ${
+                  role === "Department Officer"
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-700 font-bold"
+                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                }`}
               >
-                <Search className="w-4 h-4 text-slate-300" />
-                <span>Track Existing Booking</span>
-              </Link>
-
-              <Link
-                href="/services"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-slate-300 hover:text-white text-sm font-medium transition-colors"
+                Officer
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickFill("Admin")}
+                className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border transition-all text-center ${
+                  role === "Admin"
+                    ? "bg-purple-50 border-purple-300 text-purple-700 font-bold"
+                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                }`}
               >
-                <span>Browse All Services</span>
-                <ChevronRight className="w-4 h-4" />
-              </Link>
+                Admin
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Live Metrics Counter Strip */}
-        <div className="relative mt-12 border-t border-white/10 bg-black/20 backdrop-blur-md w-full">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-              <div>
-                <p className="text-2xl sm:text-3xl font-extrabold text-amber-300">{departments.length}</p>
-                <p className="text-xs text-slate-300 uppercase tracking-wider font-medium mt-1">
-                  Active Departments
-                </p>
-              </div>
-              <div>
-                <p className="text-2xl sm:text-3xl font-extrabold text-emerald-400">{services.length}+</p>
-                <p className="text-xs text-slate-300 uppercase tracking-wider font-medium mt-1">
-                  Public Services
-                </p>
-              </div>
-              <div>
-                <p className="text-2xl sm:text-3xl font-extrabold text-blue-300">100%</p>
-                <p className="text-xs text-slate-300 uppercase tracking-wider font-medium mt-1">
-                  Online Slot Reservation
-                </p>
-              </div>
-              <div>
-                <p className="text-2xl sm:text-3xl font-extrabold text-purple-300">15 min</p>
-                <p className="text-xs text-slate-300 uppercase tracking-wider font-medium mt-1">
-                  Avg. Desk Service Speed
-                </p>
-              </div>
-            </div>
-          </div>
+        {/* Card Footer */}
+        <div className="p-4 bg-slate-50 border-t border-slate-100 text-center text-[11px] text-slate-500 flex items-center justify-center gap-1.5">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Role-Based Access Control (RBAC) Protected</span>
         </div>
-      </section>
+      </div>
 
-      <Footer />
+      {/* Bottom copyright notice */}
+      <p className="mt-6 text-xs text-slate-400 text-center">
+        © 2026 Woreda Booking & Appointment Management System. All Rights Reserved.
+      </p>
     </div>
   );
 }
