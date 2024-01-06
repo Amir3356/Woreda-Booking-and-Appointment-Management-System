@@ -6,7 +6,6 @@ import { useStore } from "@/lib/store";
 import { INITIAL_USERS } from "@/lib/mock-data";
 import {
   Building,
-  User,
   Mail,
   Lock,
   Shield,
@@ -19,7 +18,6 @@ export default function LoginPage() {
   const router = useRouter();
   const { setCurrentUser } = useStore();
 
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("Citizen"); // Options: Citizen, Department Officer, Admin
@@ -30,10 +28,6 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
 
-    if (!username.trim()) {
-      setError("Please enter your username.");
-      return;
-    }
     if (!email.trim()) {
       setError("Please enter your email address.");
       return;
@@ -50,24 +44,29 @@ export default function LoginPage() {
     let targetPath = "/citizen";
     let deptName = null;
     let deptId = null;
+    let displayName = email.split("@")[0].replace(/[._-]/g, " ");
+    displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
 
     if (role === "Admin") {
       targetRole = "ADMIN";
       targetPath = "/admin";
       deptName = "Woreda Central Administration";
+      displayName = displayName || "Ato Kibreab Demissie";
     } else if (role === "Department Officer") {
       targetRole = "OFFICER";
       targetPath = "/officer";
       deptName = "Kebele Administration & Vital Events";
       deptId = "dept-1";
+      displayName = displayName || "W/ro Tigist Mulugeta";
     } else {
       targetRole = "CITIZEN";
       targetPath = "/citizen";
+      displayName = displayName || "Citizen User";
     }
 
     const authenticatedUser = {
       id: `usr-${Date.now()}`,
-      fullName: username.trim(),
+      fullName: displayName,
       email: email.trim(),
       phone: "+251911000000",
       nationalId: `ET-${targetRole.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -90,15 +89,12 @@ export default function LoginPage() {
   const handleQuickFill = (roleName) => {
     setRole(roleName);
     if (roleName === "Citizen") {
-      setUsername("Bekele Tadesse");
       setEmail("bekele@citizen.et");
       setPassword("password123");
     } else if (roleName === "Department Officer") {
-      setUsername("W/ro Tigist Mulugeta");
       setEmail("tigist.kbl@woreda.gov.et");
       setPassword("password123");
     } else if (roleName === "Admin") {
-      setUsername("Ato Kibreab Demissie");
       setEmail("admin@woreda.gov.et");
       setPassword("password123");
     }
@@ -137,24 +133,6 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleLogin} className="space-y-4">
-            {/* Username Input */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Username *
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter username (e.g. Bekele Tadesse)"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none bg-slate-50/50"
-                />
-              </div>
-            </div>
-
             {/* Email Input */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
