@@ -171,48 +171,11 @@ export default function AuthPage() {
             FDRE — Woreda Public Administration
           </p>
           <h1 className="text-xl font-extrabold text-white tracking-tight mt-1">
-            WoredaCare Portal
+            WoredaCare Portal Login
           </h1>
           <p className="text-xs text-slate-300 mt-1">
             Appointment & Queue Management System
           </p>
-        </div>
-
-        {/* Tab Switcher: Sign In | Sign Up */}
-        <div className="flex border-b border-slate-200 bg-slate-50 p-1.5 gap-1.5">
-          <button
-            type="button"
-            onClick={() => {
-              setMode("signin");
-              setError("");
-              setSuccessMsg("");
-            }}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              mode === "signin"
-                ? "bg-white text-slate-900 shadow-xs border border-slate-200"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <LogIn className="w-3.5 h-3.5 text-blue-600" />
-            <span>Sign In</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setMode("signup");
-              setError("");
-              setSuccessMsg("");
-            }}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              mode === "signup"
-                ? "bg-white text-slate-900 shadow-xs border border-slate-200"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <UserPlus className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Create Account (Sign Up)</span>
-          </button>
         </div>
 
         {/* Form Body */}
