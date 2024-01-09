@@ -1,0 +1,84 @@
+/* ==========================================================================
+   Woreda Booking & Appointment Management System
+   External CSS - Design Tokens & Custom Properties
+   ========================================================================== */
+
+:root {
+  /* Color Palette - Institutional Ethiopia / Municipal Blue & Emerald */
+  --color-primary: #1e40af;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-dark: #1e3a8a;
+  --color-primary-light: #eff6ff;
+  --color-primary-border: #bfdbfe;
+
+  --color-emerald: #059669;
+  --color-emerald-hover: #047857;
+  --color-emerald-dark: #065f46;
+  --color-emerald-light: #ecfdf5;
+  --color-emerald-border: #a7f3d0;
+
+  --color-amber: #d97706;
+  --color-amber-hover: #b45309;
+  --color-amber-light: #fffbeb;
+  --color-amber-border: #fde68a;
+
+  --color-rose: #e11d48;
+  --color-rose-hover: #be123c;
+  --color-rose-light: #fff1f2;
+  --color-rose-border: #fecdd3;
+
+  --color-purple: #7c3aed;
+  --color-purple-hover: #6d28d9;
+  --color-purple-light: #f5f3ff;
+  --color-purple-border: #ddd6fe;
+
+  /* Neutrals & Slate Scale */
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-white: #ffffff;
+
+  /* Semantic Mappings */
+  --bg-page: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-card-muted: #f1f5f9;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-inverse: #ffffff;
+  --border-color: #e2e8f0;
+  --border-color-subtle: #f1f5f9;
+
+  /* Typography */
+  --font-family-base: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font-family-mono: var(--font-geist-mono), monospace;
+
+  /* Border Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+

@@ -1,0 +1,285 @@
+/* ==========================================================================
+   Woreda Booking & Appointment Management System
+   External CSS - Authentication Module (Login / Sign Up)
+   ========================================================================== */
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-page::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: -10%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(30, 64, 175, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.auth-page::after {
+  content: "";
+  position: absolute;
+  bottom: -20%;
+  right: -10%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(5, 150, 105, 0.12) 0%, rgba(0, 0, 0, 0) 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  background-color: var(--color-white);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-2xl);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
+  animation: authCardEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes authCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.auth-header {
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+  padding: 1.75rem 1.5rem 1.5rem 1.5rem;
+  text-align: center;
+  color: var(--color-white);
+  border-bottom: 3px solid #fbbf24;
+}
+
+.auth-emblem-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  margin-bottom: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fbbf24;
+}
+
+.auth-header-sub {
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #bfdbfe;
+  font-weight: 700;
+}
+
+.auth-header-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--color-white);
+  letter-spacing: -0.02em;
+  margin-top: 0.25rem;
+}
+
+.auth-header-desc {
+  font-size: 0.75rem;
+  color: #cbd5e1;
+  margin-top: 0.25rem;
+}
+
+.auth-body {
+  padding: 1.75rem 1.5rem;
+}
+
+.auth-alert-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--radius-lg);
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.auth-alert-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--radius-lg);
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  font-size: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.auth-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.auth-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-slate-700);
+}
+
+.auth-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.auth-input-icon {
+  position: absolute;
+  left: 0.875rem;
+  width: 1rem;
+  height: 1rem;
+  color: var(--color-slate-400);
+  pointer-events: none;
+}
+
+.auth-input,
+.auth-select {
+  width: 100%;
+  padding: 0.6875rem 0.875rem 0.6875rem 2.5rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-slate-300);
+  background-color: #f8fafc;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-slate-900);
+  transition: all var(--transition-fast);
+}
+
+.auth-input:focus,
+.auth-select:focus {
+  outline: none;
+  background-color: #ffffff;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.15);
+}
+
+.auth-select {
+  background-color: #ffffff;
+  cursor: pointer;
+  appearance: auto;
+}
+
+.auth-btn-submit {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-lg);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-white);
+  background-color: var(--color-primary);
+  box-shadow: 0 4px 6px -1px rgba(30, 64, 175, 0.25);
+  transition: all var(--transition-fast);
+  margin-top: 0.5rem;
+}
+
+.auth-btn-submit:hover {
+  background-color: var(--color-primary-hover);
+  box-shadow: 0 6px 12px -2px rgba(30, 64, 175, 0.35);
+  transform: translateY(-1px);
+}
+
+.auth-btn-submit:active {
+  transform: scale(0.98);
+}
+
+.auth-btn-signup {
+  background-color: var(--color-emerald);
+  box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.25);
+}
+
+.auth-btn-signup:hover {
+  background-color: var(--color-emerald-hover);
+  box-shadow: 0 6px 12px -2px rgba(5, 150, 105, 0.35);
+}
+
+.auth-toggle-box {
+  padding-top: 0.75rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--color-slate-500);
+}
+
+.auth-toggle-btn {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin-left: 0.25rem;
+}
+
+.auth-toggle-btn:hover {
+  text-decoration: underline;
+  color: var(--color-primary-hover);
+}
+
+.auth-card-footer {
+  padding: 0.875rem 1rem;
+  background-color: #f8fafc;
+  border-top: 1px solid var(--color-slate-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  font-size: 0.7rem;
+  color: var(--color-slate-500);
+}
+
+.auth-card-footer-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--color-emerald);
+}
+
+.auth-copyright {
+  margin-top: 1.5rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-align: center;
+}
+

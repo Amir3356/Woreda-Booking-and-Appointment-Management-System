@@ -10,7 +10,7 @@ import {
   Clock,
   Users,
   BarChart3,
-  ShieldAlert,
+  UserCog,
   Settings,
   CheckCircle2,
   Layers,
@@ -43,7 +43,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
     { href: "/admin/schedule", label: "Schedules & Capacity", icon: Clock },
     { href: "/admin/users", label: "Staff & Citizens", icon: Users },
     { href: "/admin/reports", label: "Reports & Analytics", icon: BarChart3 },
-    { href: "/admin/audit", label: "Audit Logs", icon: ShieldAlert },
+    { href: "/admin/account-provision", label: "Account Provision", icon: UserCog },
     { href: "/admin/settings", label: "Woreda Settings", icon: Settings },
   ];
 

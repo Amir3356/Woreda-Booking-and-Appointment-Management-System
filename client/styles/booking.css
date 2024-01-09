@@ -1,0 +1,172 @@
+/* ==========================================================================
+   Woreda Booking & Appointment Management System
+   External CSS - Citizen Booking Wizard & Printable Confirmation Slips
+   ========================================================================== */
+
+/* Multi-Step Wizard Progress */
+.wizard-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+  position: relative;
+}
+
+.wizard-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 2;
+  background-color: var(--bg-page);
+  padding: 0 0.5rem;
+}
+
+.wizard-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  background-color: var(--color-slate-200);
+  color: var(--color-slate-600);
+  border: 2px solid transparent;
+  transition: all var(--transition-fast);
+}
+
+.wizard-circle.active {
+  background-color: var(--color-primary);
+  color: var(--color-white);
+  box-shadow: 0 0 0 4px var(--color-primary-border);
+}
+
+.wizard-circle.completed {
+  background-color: var(--color-emerald);
+  color: var(--color-white);
+}
+
+.wizard-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-slate-500);
+}
+
+.wizard-label.active {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+/* Time Slot Grid */
+.slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 0.625rem;
+  margin-top: 1rem;
+}
+
+.slot-item {
+  padding: 0.625rem 0.5rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  background-color: var(--color-white);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-slate-700);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.slot-item:hover:not(.disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background-color: var(--color-primary-light);
+}
+
+.slot-item.selected {
+  background-color: var(--color-primary);
+  color: var(--color-white);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.slot-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background-color: var(--color-slate-100);
+  text-decoration: line-through;
+}
+
+/* Printable Appointment Slip */
+.printable-slip {
+  background-color: var(--color-white);
+  border: 2px dashed #94a3b8;
+  border-radius: var(--radius-2xl);
+  padding: 2rem;
+  max-width: 640px;
+  margin: 0 auto;
+  box-shadow: var(--shadow-sm);
+}
+
+.slip-header {
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.slip-ref-code {
+  font-family: var(--font-family-mono);
+  font-size: 1.375rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--color-primary);
+  padding: 0.375rem 0.875rem;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-primary-light);
+  border: 1px solid var(--color-primary-border);
+  display: inline-block;
+}
+
+.slip-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.slip-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.slip-detail-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-slate-400);
+  letter-spacing: 0.05em;
+}
+
+.slip-detail-value {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-slate-800);
+}
+
+@media print {
+  .printable-slip {
+    border: 2px solid #000000 !important;
+    box-shadow: none !important;
+    padding: 1.5rem !important;
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+}
+

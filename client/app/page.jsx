@@ -156,39 +156,36 @@ export default function AuthPage() {
 
 
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-b from-[#0b2545] via-[#103058] to-[#133b5c] p-4 text-slate-800">
-      {/* Background decoration grid */}
-      <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-
+    <div className="auth-page">
       {/* Main Authentication Card */}
-      <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden z-10">
+      <div className="auth-card">
         {/* Top Government Emblem Header */}
-        <div className="bg-[#0b2545] text-white p-6 text-center border-b border-white/10">
-          <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-amber-400 mx-auto mb-3 shadow-md">
-            <Building className="w-7 h-7" />
+        <div className="auth-header">
+          <div className="auth-emblem-badge">
+            <Building className="w-6 h-6 text-amber-400" />
           </div>
-          <p className="text-[10px] uppercase font-bold tracking-widest text-slate-300">
+          <p className="auth-header-sub">
             FDRE — Woreda Public Administration
           </p>
-          <h1 className="text-xl font-extrabold text-white tracking-tight mt-1">
+          <h1 className="auth-header-title">
             WoredaCare Portal Login
           </h1>
-          <p className="text-xs text-slate-300 mt-1">
+          <p className="auth-header-desc">
             Appointment & Queue Management System
           </p>
         </div>
 
         {/* Form Body */}
-        <div className="p-6 sm:p-8 space-y-5">
+        <div className="auth-body">
           {error && (
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+            <div className="auth-alert-error">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
+            <div className="auth-alert-success">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>{successMsg}</span>
             </div>
@@ -196,34 +193,34 @@ export default function AuthPage() {
 
           {/* ===================== SIGN IN FORM ===================== */}
           {mode === "signin" && (
-            <form onSubmit={handleSignIn} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+            <form onSubmit={handleSignIn} className="auth-form">
+              <div className="auth-form-group">
+                <label className="auth-label">
                   Email Address *
                 </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <div className="auth-input-wrapper">
+                  <Mail className="auth-input-icon" />
                   <input
                     type="email"
                     required
                     value={signInEmail}
                     onChange={(e) => setSignInEmail(e.target.value)}
                     placeholder="Enter email (e.g. name@woreda.gov.et)"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none bg-slate-50/50"
+                    className="auth-input"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              <div className="auth-form-group">
+                <label className="auth-label">
                   Select Role *
                 </label>
-                <div className="relative">
-                  <Shield className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <div className="auth-input-wrapper">
+                  <Shield className="auth-input-icon" />
                   <select
                     value={signInRole}
                     onChange={(e) => setSignInRole(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white cursor-pointer"
+                    className="auth-select"
                   >
                     <option value="Citizen">Citizen</option>
                     <option value="Department Officer">Department Officer</option>
@@ -232,19 +229,19 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              <div className="auth-form-group">
+                <label className="auth-label">
                   Password *
                 </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <div className="auth-input-wrapper">
+                  <Lock className="auth-input-icon" />
                   <input
                     type="password"
                     required
                     value={signInPassword}
                     onChange={(e) => setSignInPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none bg-slate-50/50"
+                    className="auth-input"
                   />
                 </div>
               </div>
@@ -252,21 +249,21 @@ export default function AuthPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 mt-2 active:scale-98 disabled:opacity-70"
+                className="auth-btn-submit"
               >
                 <span>{loading ? "Signing In..." : "Sign In"}</span>
                 <ArrowRight className="w-4 h-4 text-amber-300" />
               </button>
 
-              <div className="pt-2 text-center">
-                <span className="text-xs text-slate-500">Don't have an account? </span>
+              <div className="auth-toggle-box">
+                <span>Don't have an account? </span>
                 <button
                   type="button"
                   onClick={() => {
                     setMode("signup");
                     setError("");
                   }}
-                  className="text-xs font-bold text-blue-700 hover:underline"
+                  className="auth-toggle-btn"
                 >
                   Sign Up here
                 </button>
@@ -277,51 +274,51 @@ export default function AuthPage() {
 
           {/* ===================== SIGN UP FORM ===================== */}
           {mode === "signup" && (
-            <form onSubmit={handleSignUp} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+            <form onSubmit={handleSignUp} className="auth-form">
+              <div className="auth-form-group">
+                <label className="auth-label">
                   Fullname *
                 </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <div className="auth-input-wrapper">
+                  <User className="auth-input-icon" />
                   <input
                     type="text"
                     required
                     value={signUpFullName}
                     onChange={(e) => setSignUpFullName(e.target.value)}
                     placeholder="e.g. Almaz Hailu Mengistu"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none bg-slate-50/50"
+                    className="auth-input"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              <div className="auth-form-group">
+                <label className="auth-label">
                   Email Address *
                 </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <div className="auth-input-wrapper">
+                  <Mail className="auth-input-icon" />
                   <input
                     type="email"
                     required
                     value={signUpEmail}
                     onChange={(e) => setSignUpEmail(e.target.value)}
                     placeholder="e.g. almaz@citizen.et"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none bg-slate-50/50"
+                    className="auth-input"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              <div className="auth-form-group">
+                <label className="auth-label">
                   Register As Role *
                 </label>
-                <div className="relative">
-                  <Shield className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <div className="auth-input-wrapper">
+                  <Shield className="auth-input-icon" />
                   <select
                     value={signUpRole}
                     onChange={(e) => setSignUpRole(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white cursor-pointer"
+                    className="auth-select"
                   >
                     <option value="Citizen">Citizen</option>
                     <option value="Department Officer">Department Officer</option>
@@ -331,14 +328,14 @@ export default function AuthPage() {
               </div>
 
               {signUpRole === "Department Officer" && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                <div className="auth-form-group">
+                  <label className="auth-label">
                     Assigned Department Office *
                   </label>
                   <select
                     value={signUpDeptId}
                     onChange={(e) => setSignUpDeptId(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white cursor-pointer"
+                    className="auth-select"
                   >
                     {departments.map((dept) => (
                       <option key={dept.id} value={dept.id}>
@@ -349,19 +346,19 @@ export default function AuthPage() {
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              <div className="auth-form-group">
+                <label className="auth-label">
                   Password *
                 </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <div className="auth-input-wrapper">
+                  <Lock className="auth-input-icon" />
                   <input
                     type="password"
                     required
                     value={signUpPassword}
                     onChange={(e) => setSignUpPassword(e.target.value)}
                     placeholder="At least 6 characters"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none bg-slate-50/50"
+                    className="auth-input"
                   />
                 </div>
               </div>
@@ -369,21 +366,21 @@ export default function AuthPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 mt-2 active:scale-98 disabled:opacity-70"
+                className="auth-btn-submit auth-btn-signup"
               >
                 <span>{loading ? "Creating Account..." : "Sign Up"}</span>
                 <UserPlus className="w-4 h-4 text-white" />
               </button>
 
-              <div className="pt-2 text-center">
-                <span className="text-xs text-slate-500">Already have an account? </span>
+              <div className="auth-toggle-box">
+                <span>Already have an account? </span>
                 <button
                   type="button"
                   onClick={() => {
                     setMode("signin");
                     setError("");
                   }}
-                  className="text-xs font-bold text-blue-700 hover:underline"
+                  className="auth-toggle-btn"
                 >
                   Sign In here
                 </button>
@@ -393,14 +390,14 @@ export default function AuthPage() {
         </div>
 
         {/* Card Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100 text-center text-[11px] text-slate-500 flex items-center justify-center gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+        <div className="auth-card-footer">
+          <ShieldCheck className="auth-card-footer-icon" />
           <span>Role-Based Access Control (RBAC) Protected</span>
         </div>
       </div>
 
       {/* Bottom copyright notice */}
-      <p className="mt-6 text-xs text-slate-400 text-center">
+      <p className="auth-copyright">
         © 2026 Woreda Booking & Appointment Management System. All Rights Reserved.
       </p>
     </div>
