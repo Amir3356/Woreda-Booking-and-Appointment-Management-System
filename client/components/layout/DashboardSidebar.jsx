@@ -96,7 +96,16 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   }
 
   return (
-    <aside className="w-64 bg-[#0b2545] text-slate-300 flex flex-col shrink-0 min-h-screen border-r border-slate-800">
+    <aside
+      className="dashboard-sidebar w-64 bg-[#0b2545] text-slate-300 flex flex-col shrink-0 min-h-screen border-r border-slate-800"
+      style={{
+        backgroundColor: "#0b2545",
+        color: "#cbd5e1",
+        width: "260px",
+        minWidth: "260px",
+        borderRight: "1px solid #16365c",
+      }}
+    >
       {/* Brand & Portal Header */}
       <div className="p-4 border-b border-white/10">
         <Link href="/" className="flex items-center gap-2.5 group">
