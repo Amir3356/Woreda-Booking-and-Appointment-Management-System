@@ -17,8 +17,8 @@ import {
 export const useStore = create(
   persist(
     (set, get) => ({
-      // Current Authenticated User (Defaults to Citizen Bekele for interactive preview, can switch to Admin or Officer)
-      currentUser: INITIAL_USERS.find((u) => u.id === "usr-citizen-1"),
+      // Current Authenticated User (Defaults to Admin)
+      currentUser: INITIAL_USERS.find((u) => u.id === "usr-admin") || INITIAL_USERS[0],
       setCurrentUser: (user) => {
         set({ currentUser: user });
         get().addAuditLog({

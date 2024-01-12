@@ -92,6 +92,8 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
     badgeColor = "bg-blue-100 text-blue-800";
   }
 
+  const isAdmin = role === "ADMIN" || pathname?.startsWith("/admin");
+
   return (
     <aside
       className="dashboard-sidebar w-64 bg-[#0b2545] text-slate-300 flex flex-col shrink-0 min-h-screen border-r border-slate-800"
@@ -154,25 +156,27 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
       </div>
 
       {/* Bottom Public Return & User Tag */}
-      <div className="p-3 border-t border-white/10 space-y-2">
-        <Link
-          href="/"
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Exit to Public Portal</span>
-        </Link>
+      {!isAdmin && (
+        <div className="p-3 border-t border-white/10 space-y-2">
+          <Link
+            href="/"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Exit to Public Portal</span>
+          </Link>
 
-        <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
-            {currentUser?.fullName?.charAt(0) || "U"}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-white truncate">{currentUser?.fullName}</p>
-            <p className="text-[10px] text-slate-400 truncate">{currentUser?.role}</p>
+          <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
+              {currentUser?.fullName?.charAt(0) || "U"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-white truncate">{currentUser?.fullName}</p>
+              <p className="text-[10px] text-slate-400 truncate">{currentUser?.role}</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </aside>
   );
 }

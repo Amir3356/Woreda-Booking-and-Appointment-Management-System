@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useStore } from "@/lib/store";
 import {
-  UserCog,
   Plus,
   Trash2,
   Pencil,
@@ -15,12 +14,11 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-const ROLE_OPTIONS = ["CITIZEN", "OFFICER", "ADMIN"];
+const ROLE_OPTIONS = ["Department Officer"];
 
 const ROLE_BADGE = {
-  ADMIN: "bg-purple-100 text-purple-700 border-purple-200",
+  "Department Officer": "bg-emerald-100 text-emerald-700 border-emerald-200",
   OFFICER: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  CITIZEN: "bg-blue-100 text-blue-700 border-blue-200",
 };
 
 export default function AccountProvisionPage() {
@@ -35,7 +33,7 @@ export default function AccountProvisionPage() {
   const [successMsg, setSuccessMsg] = useState("");
   const [error, setError] = useState("");
 
-  const emptyForm = { fullName: "", email: "", password: "", role: "CITIZEN" };
+  const emptyForm = { fullName: "", email: "", password: "", role: "Department Officer" };
   const [form, setForm] = useState(emptyForm);
 
   const openAdd = () => {
@@ -88,10 +86,10 @@ export default function AccountProvisionPage() {
         fullName: form.fullName.trim(),
         email: form.email.trim(),
         phone: "+251911000000",
-        role: form.role,
-        nationalId: `ET-${form.role.slice(0, 3)}-${Math.floor(
-          1000 + Math.random() * 9000
-        )}`,
+        role: "OFFICER",
+        departmentId: "dept-1",
+        departmentName: "Kebele Administration & Vital Events",
+        nationalId: `ET-OFF-${Math.floor(1000 + Math.random() * 9000)}`,
         address: "Kebele 03, Woreda Center",
         isActive: true,
       });
@@ -112,26 +110,21 @@ export default function AccountProvisionPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow">
-            <UserCog className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-extrabold text-slate-800 tracking-tight">
-              Account Provision
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Create and manage user accounts with role assignments
-            </p>
-          </div>
+      <div className="relative flex items-center w-full min-h-[48px]">
+        <div className="w-full text-center">
+          <h1 className="text-lg font-extrabold text-slate-800 tracking-tight">
+            Account Provision
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Create and manage user accounts with role assignments
+          </p>
         </div>
         <button
           onClick={openAdd}
-          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow transition-all"
+          className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1.5 px-3 py-2 w-fit whitespace-nowrap bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold rounded-xl shadow transition-all"
         >
-          <Plus className="w-4 h-4" />
-          Provision Account
+          <Plus className="w-3.5 h-3.5 text-amber-300" />
+          <span>Create User</span>
         </button>
       </div>
 
@@ -149,9 +142,6 @@ export default function AccountProvisionPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-5 py-3.5 font-bold text-slate-600 uppercase tracking-wider">
-                  #
-                </th>
                 <th className="text-left px-5 py-3.5 font-bold text-slate-600 uppercase tracking-wider">
                   Full Name
                 </th>
@@ -172,11 +162,11 @@ export default function AccountProvisionPage() {
             <tbody className="divide-y divide-slate-100">
               {accounts.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-16 text-center">
+                  <td colSpan={5} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-2 text-slate-400">
-                      <UserCog className="w-8 h-8" />
+                      <Shield className="w-8 h-8 text-slate-300" />
                       <p className="text-sm font-medium">No accounts provisioned yet</p>
-                      <p className="text-xs">Click "Provision Account" to get started</p>
+                      <p className="text-xs">Click "Create User" to get started</p>
                     </div>
                   </td>
                 </tr>
@@ -186,9 +176,6 @@ export default function AccountProvisionPage() {
                     key={idx}
                     className="hover:bg-slate-50/70 transition-colors"
                   >
-                    <td className="px-5 py-3.5 text-slate-400 font-semibold">
-                      {idx + 1}
-                    </td>
                     <td className="px-5 py-3.5 font-semibold text-slate-800">
                       {acc.fullName}
                     </td>
@@ -244,9 +231,9 @@ export default function AccountProvisionPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 bg-indigo-600 text-white">
+            <div className="flex items-center justify-between px-6 py-4 bg-[#0b2545] text-white">
               <div className="flex items-center gap-2">
-                <UserCog className="w-5 h-5" />
+                <Shield className="w-5 h-5 text-amber-300" />
                 <h2 className="text-sm font-bold">
                   {editIndex !== null ? "Edit Account" : "Provision New Account"}
                 </h2>
@@ -281,7 +268,7 @@ export default function AccountProvisionPage() {
                     setForm({ ...form, fullName: e.target.value })
                   }
                   placeholder="e.g. Bekele Tadesse"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-50"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50"
                 />
               </div>
 
@@ -296,7 +283,7 @@ export default function AccountProvisionPage() {
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   placeholder="e.g. bekele@woreda.gov.et"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-50"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50"
                 />
               </div>
 
@@ -313,8 +300,8 @@ export default function AccountProvisionPage() {
                     onChange={(e) =>
                       setForm({ ...form, password: e.target.value })
                     }
-                    placeholder="At least 6 characters"
-                    className="w-full px-3.5 pr-10 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-50"
+                    placeholder="••••••••"
+                    className="w-full px-3.5 pr-10 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50"
                   />
                   <button
                     type="button"
@@ -338,7 +325,7 @@ export default function AccountProvisionPage() {
                 <select
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white cursor-pointer"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-white cursor-pointer"
                 >
                   {ROLE_OPTIONS.map((r) => (
                     <option key={r} value={r}>
@@ -359,9 +346,9 @@ export default function AccountProvisionPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow transition-all"
+                  className="flex-1 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-all"
                 >
-                  {editIndex !== null ? "Save Changes" : "Provision Account"}
+                  {editIndex !== null ? "Save Changes" : "Create User"}
                 </button>
               </div>
             </form>

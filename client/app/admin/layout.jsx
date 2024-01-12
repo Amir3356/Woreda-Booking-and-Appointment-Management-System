@@ -8,10 +8,7 @@ export default function AdminLayout({ children }) {
     <div className="dashboard-shell min-h-screen flex bg-slate-100" style={{ backgroundColor: "#f1f5f9" }}>
       <DashboardSidebar role="ADMIN" />
       <div className="dashboard-main-area flex-1 flex flex-col min-w-0 overflow-hidden">
-        <DashboardHeader
-          title="Woreda Central Administration"
-          subtitle="System oversight, capacity management, and municipal analytics"
-        />
+        <DashboardHeader showNotifications={false} />
         <main className="flex-1 p-6 overflow-y-auto" style={{ backgroundColor: "#f1f5f9" }}>
           {children}
         </main>

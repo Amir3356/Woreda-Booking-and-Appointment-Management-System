@@ -357,7 +357,7 @@ export default function AuthPage() {
                     required
                     value={signUpPassword}
                     onChange={(e) => setSignUpPassword(e.target.value)}
-                    placeholder="At least 6 characters"
+                    placeholder="••••••••"
                     className="auth-input"
                   />
                 </div>
