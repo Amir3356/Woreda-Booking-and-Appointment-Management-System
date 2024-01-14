@@ -30,12 +30,6 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
 
   const adminNav = [
     { href: "/admin/services", label: "Government Services", icon: FileText },
-    {
-      href: "/admin/appointments",
-      label: "All Appointments",
-      icon: Calendar,
-      badge: pendingAppointmentsCount > 0 ? pendingAppointmentsCount : null,
-    },
     { href: "/admin/schedule", label: "Schedules & Capacity", icon: Clock },
     { href: "/admin/users", label: "Staff & Citizens", icon: Users },
     { href: "/admin/account-provision", label: "Account Provision", icon: UserCog },
