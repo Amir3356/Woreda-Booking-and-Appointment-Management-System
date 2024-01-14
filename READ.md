@@ -1,472 +1,353 @@
-# Project: Woreda Booking and Appointment Management System
+# Website Development Prompt: Woreda Booking and Appointment Management System
 
 ## 1. Project Overview
 
-Design and develop a modern, professional, responsive Woreda Booking and Appointment Management System that enables citizens to book appointments with local Woreda government offices without physically visiting the office or waiting in long queues.
+Design and develop a modern, secure, responsive, and user-friendly **Woreda Booking and Appointment Management System** that allows citizens to book appointments with different government departments within a Woreda.
 
-The system aims to digitize government appointment services, reduce waiting times, improve public service delivery, and help government employees manage appointments efficiently.
+The system should reduce long queues, minimize manual appointment handling, improve service delivery, and allow department officers to manage appointments efficiently.
 
-The platform should provide a user-friendly interface for citizens and a comprehensive administrative dashboard for government administrators and department officers.
+The system has three primary actors:
 
-The design should reflect a professional Ethiopian government digital service platform.
+1. Citizen
+2. Department Officer
+3. Admin
 
+Each actor must have a dedicated dashboard and role-based access permissions.
 
+## 2. Authentication and Authorization
 
-## 3. User Roles and Permissions
+Develop a secure authentication system with a professional login interface.
 
-Implement Role-Based Access Control (RBAC) with exactly THREE user roles.
+### Login Page
 
+The login page must contain:
 
+- Email Address input field.
+- Password input field.
+- Show/Hide Password functionality.
+- Remember Me checkbox.
+- Forgot Password link.
+- Login button.
+
+### Authentication Requirements
+
+- Authenticate users using email and password.
+- Validate email and password fields.
+- Display appropriate error messages for invalid credentials.
+- Redirect users to their respective dashboards based on their roles.
+- Implement role-based access control (RBAC).
+- Prevent unauthorized users from accessing restricted pages.
+- Provide secure logout functionality.
+- Maintain authenticated sessions.
+
+### Registration
+
+Provide a citizen registration page containing:
+
+- Full Name
+- Email Address
+- Phone Number
+- Password
+- Confirm Password
+
+Department Officers and Admin accounts should be created and managed by authorized administrators rather than through public registration.
+
+## 3. System Actors and Responsibilities
 
 ### A. Citizen
 
-Citizens should be able to:
-
-- Register and create an account.
-- Log in securely.
-- Browse available Woreda government services.
-- View service descriptions and requirements.
-- Select a service and preferred appointment date.
-- View available appointment time slots.
-- Book an appointment.
-- Receive appointment confirmation.
-- View upcoming and previous appointments.
-- Reschedule appointments when permitted.
-- Cancel appointments.
-- Track appointment status.
-- Receive notifications about appointment updates.
-- Download or print appointment confirmation.
-- Submit feedback about government services.
-- Manage personal profile information.
-
-Citizens should only access and manage their own appointments and personal information.
-
-### B. Administrator
-
-Administrators have system-wide management permissions.
-
-They should be able to:
-
-**Dashboard Management**
-- View overall system statistics.
-- Monitor appointments across all departments.
-- View appointment trends and system activities.
-- Monitor department performance.
-
-**User Management**
-- Manage citizen accounts.
-- Create and manage department officer accounts.
-- Activate and deactivate accounts.
-- Assign roles and permissions.
-- Manage user access.
-
-**Department Management**
-- Create departments.
-- Update department information.
-- Activate and deactivate departments.
-- Assign department officers.
-- Manage department configurations.
-
-**Service Management**
-- Create government services.
-- Update service information.
-- Configure service requirements.
-- Assign services to departments.
-- Activate and deactivate services.
-- Manage service categories.
-
-**Appointment Management**
-- View all appointments across departments.
-- Search and filter appointments.
-- View appointment details.
-- Approve or reject appointment requests when required.
-- Cancel or reschedule appointments when authorized.
-- Monitor appointment statuses.
-
-**Scheduling Management**
-- Configure department working days.
-- Define office opening and closing hours.
-- Configure appointment durations.
-- Define available time slots.
-- Set daily appointment capacity.
-- Configure holidays and office closures.
-- Configure advance booking limits.
-
-**Reports and Analytics**
-- Generate appointment reports.
-- Generate department performance reports.
-- View citizen registration statistics.
-- Analyze service utilization.
-- Export reports.
-
-**System Administration**
-- View audit logs.
-- Manage system settings.
-- Manage announcements.
-- Monitor system activities.
-
-### C. Department Officer
-
-Department Officers are responsible for managing government services and appointments within their assigned departments.
-
-They should have the following permissions:
-
-**1. Department Dashboard**
-- View department-specific dashboard statistics.
-- View today's appointments.
-- View upcoming appointments.
-- View pending appointment requests.
-- Monitor completed and cancelled appointments.
-- View waiting citizens.
-- Monitor department service performance.
-
-**2. Appointment Management**
-- View appointments assigned to their department.
-- Search appointments using appointment reference numbers or citizen information.
-- View detailed appointment information.
-- Confirm or reject appointment requests according to assigned permissions.
-- Reschedule appointments when authorized.
-- Cancel appointments when authorized.
-- Update appointment statuses.
-- Add internal notes to appointments.
-
-**3. Citizen Verification and Check-in**
-- Verify citizen appointment details.
-- Verify citizen information relevant to the requested service.
-- Mark citizens as checked in when they arrive at the office.
-- Manage walk-in registrations if the Administrator enables this permission.
-- Monitor waiting citizens.
-- Direct citizens to the appropriate service within their assigned department.
-
-**4. Queue Management**
-- View the department's waiting list.
-- Monitor checked-in citizens.
-- Manage the service queue.
-- Call the next citizen when ready.
-- Update the citizen's service status.
-- Mark service requests as completed.
-- Mark absent citizens as No Show.
-
-**5. Service Management**
-- View services assigned to their department.
-- View service descriptions and required documents.
-- Manage service availability when authorized.
-- Review citizen-submitted service information.
-
-**6. Department Reports**
-- View daily appointment reports.
-- View weekly and monthly appointment statistics.
-- View completed, pending, cancelled, and rejected appointments.
-- Monitor waiting times.
-- Generate department-level reports.
-
-**Important Department Officer Access Restrictions:**
-
-- Department Officers must only access appointments belonging to their assigned department.
-- They must not access other departments' private appointment information.
-- They cannot create or manage administrator accounts.
-- They cannot modify global system settings.
-- Their permissions must be configurable by the Administrator.
-- Walk-in registration must be optional and controlled by the Administrator.
-
-
-
-## 5. Citizen Dashboard
-
-Create a clean citizen dashboard with the following sections:
-
-- Dashboard Overview.
-- Book New Appointment.
-- My Appointments.
-- Upcoming Appointments.
-- Appointment History.
-- Notifications.
-- Profile Management.
-- Help and Support.
-
-Dashboard statistics:
-
-- Total Appointments.
-- Upcoming Appointments.
-- Completed Appointments.
-- Cancelled Appointments.
-
-Citizens should be able to view appointment details, cancel eligible appointments, reschedule appointments when permitted, and track their booking progress.
-
-## 6. Administrator Dashboard
-
-Create a comprehensive administrative dashboard with a modern sidebar layout.
-
-### Dashboard Overview
-
-Display summary cards:
-
-- Total Citizens.
-- Total Department Officers.
-- Total Departments.
-- Total Services.
-- Total Appointments.
-- Today's Appointments.
-- Pending Appointments.
-- Confirmed Appointments.
-- Completed Appointments.
-- Cancelled Appointments.
-
-Include:
-
-- Appointment trends using Line Charts.
-- Appointment distribution by department using Bar Charts.
-- Appointment status distribution using Pie Charts.
-- Recent appointment activities.
-- Upcoming appointments.
-- Department performance overview.
-
-### Administrator Sidebar Navigation
-
-Organize the sidebar into the following modules:
-
-**Main**
-- Dashboard.
-
-**User Management**
-- Citizens.
-- Department Officers.
-- Roles and Permissions.
-
-**Department Management**
-- All Departments.
-- Department Assignments.
-
-**Service Management**
-- Government Services.
-- Service Categories.
-- Service Requirements.
-
-**Appointment Management**
-- All Appointments.
-- Pending Requests.
-- Confirmed Appointments.
-- Today's Appointments.
-- Appointment Calendar.
-
-**Scheduling Management**
-- Working Days.
-- Office Hours.
-- Time Slots.
-- Daily Booking Limits.
-- Holidays and Closures.
-
-**Communication**
-- Notifications.
-- Announcements.
-
-**Reports and Analytics**
-- Appointment Reports.
-- Department Reports.
-- Citizen Reports.
-- Service Performance.
-
-**System Administration**
-- Audit Logs.
-- System Settings.
-- Profile Settings.
-
-## 7. Department Officer Dashboard
-
-Create a separate dashboard for Department Officers.
-
-The sidebar should include:
-
-**Main**
-- Dashboard.
-
-**Appointment Management**
-- All Department Appointments.
-- Today's Appointments.
-- Pending Requests.
-- Confirmed Appointments.
-- Appointment Calendar.
-
-**Citizen Management**
-- Citizen Verification.
-- Walk-in Registrations (only when permitted).
-
-**Queue Management**
-- Waiting Citizens.
-- Checked-in Citizens.
-- In Progress.
-- Completed Services.
-- No Show.
-
-**Department Services**
-- Assigned Services.
-- Service Requirements.
-
-**Reports**
-- Daily Reports.
-- Appointment Reports.
-- Service Performance.
-
-**Account**
-- Notifications.
-- Profile Settings.
-
-The Department Officer dashboard must display only information related to the officer's assigned department.
-
-## 8. Appointment Management and Workflow
-
-Implement the following appointment lifecycle:
-
-1. Citizen selects a department and government service.
-2. Citizen selects an available date and time slot.
-3. Citizen submits an appointment request.
-4. System validates the selected service and time slot.
-5. System generates a unique appointment reference number.
-6. Department Officer reviews the appointment if approval is required.
-7. Appointment is confirmed or rejected.
-8. Citizen receives a notification about the appointment decision.
-9. Citizen arrives at the Woreda office.
-10. Department Officer verifies the appointment details.
-11. Department Officer marks the citizen as checked in.
-12. Citizen enters the department's waiting queue.
-13. Department Officer starts processing the service.
-14. Appointment status changes to In Progress.
-15. After the service is provided, the Department Officer marks the appointment as Completed.
-
-Appointment statuses:
-
-- Pending.
-- Confirmed.
-- Rejected.
-- Checked In.
-- In Progress.
-- Completed.
-- Cancelled.
-- No Show.
-
-Ensure that appointment status transitions follow valid business rules.
-
-## 9. Scheduling and Availability Management
-
-Administrators should be able to configure:
-
-- Department working days.
-- Office opening and closing hours.
-- Appointment duration.
-- Break times.
-- Daily appointment capacity.
-- Maximum bookings per citizen.
-- Public holidays.
-- Temporary office closures.
-- Advance booking limits.
-
-Automatically calculate available time slots based on the configured schedule and existing appointments.
-
-Do not display unavailable or fully booked time slots to citizens.
-
-Prevent double booking through appropriate database transactions and concurrency controls.
-
-## 10. Queue Management
-
-Implement a department-level queue management system.
-
-Features:
-
-- Automatically generate queue numbers for checked-in appointments.
-- Display waiting citizens.
-- Display currently serving citizens.
-- Allow Department Officers to call the next citizen.
-- Allow officers to update service progress.
-- Track waiting time.
-- Mark services as completed.
-- Mark citizens as No Show.
-- Display queue statistics.
-
-Each department should maintain its own independent queue.
-
-## 11. Notification System
-
-Implement notifications for important appointment events.
-
-Examples:
-
-- Appointment successfully submitted.
-- Appointment confirmed.
-- Appointment rejected.
-- Appointment rescheduled.
-- Appointment cancelled.
-- Upcoming appointment reminder.
-- Citizen checked in.
-- Service completed.
-- Office closure announcement.
-
-Provide an in-app notification center with read/unread status.
-
-Design the system so that SMS and email notifications can be integrated in the future.
-
-## 12. UI/UX Design Requirements
-
-Create a modern, clean, professional government-service interface.
-
-Design guidelines:
-
-- Professional navy blue, white, and light gray color palette.
-- Consistent typography.
-- Accessible color contrast.
-- Clean dashboard layouts.
-- Modern cards with subtle shadows.
-- Clear appointment status badges.
-- Intuitive sidebar navigation.
-- Responsive tables.
-- Search, filtering, sorting, and pagination.
-- Loading states and skeleton loaders.
-- Empty states.
-- Confirmation dialogs for destructive actions.
-- Success and error notifications.
-- Responsive mobile, tablet, and desktop layouts.
-
-Avoid excessive animations, unnecessary gradients, and cluttered interfaces.
-
-## 13. Security and Non-Functional Requirements
-
-- Implement Role-Based Access Control (RBAC).
-- Enforce department-level data isolation.
-- Validate all user inputs.
-- Protect sensitive citizen information.
-- Use secure authentication and authorization.
-- Prevent unauthorized appointment access.
-- Implement server-side validation.
-- Prevent appointment double booking.
-- Use database transactions for critical operations.
-- Maintain audit logs for important administrative activities.
-- Ensure reliable database operations.
-- Support concurrent appointment bookings.
-- Provide good performance and scalability.
-- Design for accessibility.
-- Protect against common web vulnerabilities.
-
-## 14. Important Development Instructions
-
-Before implementation:
-
-1. Review the complete system requirements.
-2. Identify the three user roles and their permissions.
-3. Identify all system modules and their relationships.
-4. Define the appointment workflow.
-5. Define the queue management workflow.
-6. Design the database entities and relationships.
-7. Define department-level access restrictions.
-8. Identify reusable UI components.
-9. Organize the frontend using a feature-based folder structure.
-
-Do not create a frontend that only looks attractive.
-
-All buttons, forms, navigation links, filters, tables, dialogs, and dashboard interactions must have meaningful functionality.
-
-Use realistic sample data for the initial UI implementation.
-
-Implement the system module by module and maintain consistent design patterns throughout the application.
-
-Do not introduce a Receptionist role anywhere in the application, database role seeds, permissions, navigation, or documentation.
-
-The final result should look and behave like a production-ready Ethiopian Woreda digital government service platform.
+Citizens can access government services and manage their appointments.
+
+**Citizen Dashboard**
+
+Display:
+- Total Appointments
+- Pending Appointments
+- Approved Appointments
+- Completed Appointments
+- Rejected Appointments
+
+**Citizen Functionalities**
+
+1. Register and log in to the system.
+2. View available government departments.
+3. Browse services offered by each department.
+4. View available appointment dates and time slots.
+5. Book appointments by selecting:
+   - Department
+   - Required Service
+   - Appointment Date
+   - Available Time Slot
+   - Reason for Appointment
+6. Receive a unique appointment number after successful booking.
+7. View appointment details.
+8. Track appointment status:
+   - Pending
+   - Approved
+   - Rejected
+   - Checked In
+   - Completed
+   - Cancelled
+9. Cancel appointments when permitted.
+10. Reschedule appointments when permitted.
+11. View appointment history.
+12. Receive notifications about appointment updates.
+13. Update personal profile information.
+
+### B. Department Officer
+
+Department Officers are responsible for handling appointments belonging to their assigned departments.
+
+**Department Officer Dashboard**
+
+Display:
+- Today's Appointments
+- Pending Appointments
+- Approved Appointments
+- Checked-In Citizens
+- Completed Appointments
+- Rejected Appointments
+
+**Department Officer Functionalities**
+
+1. View today's appointments.
+2. View upcoming appointments.
+3. Search appointments using:
+   - Appointment Number
+   - Citizen Name
+   - Citizen Email
+   - Citizen Phone Number
+4. Verify citizen appointment details.
+5. Approve or reject appointment requests.
+6. Mark citizens as checked in when they arrive.
+7. Manage walk-in registrations if permitted.
+8. Direct citizens to the appropriate department.
+9. Monitor waiting citizens.
+10. Mark appointments as completed.
+11. View appointment history.
+12. Manage department-specific appointment availability when authorized.
+13. Receive notifications about new appointment requests.
+14. View appointment details and citizen information.
+
+**Important Permission Restriction:**
+
+Department Officers must only access appointments and citizen information associated with their assigned departments. They must not manage other departments or system-wide configurations.
+
+### C. Admin
+
+The Admin is responsible for managing and monitoring the entire Woreda Booking and Appointment Management System.
+
+**Admin Dashboard**
+
+Display:
+- Total Registered Citizens
+- Total Departments
+- Total Department Officers
+- Total Appointments
+- Pending Appointments
+- Approved Appointments
+- Completed Appointments
+- Cancelled Appointments
+
+Include charts for:
+- Appointment Trends
+- Appointments by Department
+- Appointment Status Distribution
+- Monthly Service Statistics
+
+**Admin Functionalities**
+
+1. Manage citizen accounts.
+2. Create, update, activate, and deactivate user accounts.
+3. Create and manage government departments.
+4. Create and manage department services.
+5. Register and manage Department Officers.
+6. Assign officers to specific departments.
+7. Configure appointment schedules.
+8. Configure available appointment time slots.
+9. Set appointment capacity limits.
+10. View and manage all appointments.
+11. Monitor department performance.
+12. View system-wide reports and statistics.
+13. Manage system notifications.
+14. View audit logs and administrative activities.
+15. Configure system settings.
+
+## 4. Main System Modules
+
+Organize the application into the following modules:
+
+1. Authentication and Authorization
+2. Citizen Management
+3. Department Management
+4. Service Management
+5. Department Officer Management
+6. Appointment Booking Management
+7. Appointment Schedule Management
+8. Check-In and Waiting Management
+9. Notification Management
+10. Reports and Analytics
+11. Audit Log Management
+12. User Profile Management
+
+## 5. Appointment Booking Workflow
+
+Implement the following appointment workflow:
+
+1. Citizen registers and logs in.
+2. Citizen selects a government department.
+3. Citizen selects the required service.
+4. Citizen chooses an available appointment date and time.
+5. Citizen submits an appointment request.
+6. System generates a unique appointment number.
+7. Department Officer reviews the appointment request.
+8. Department Officer approves or rejects the request.
+9. Citizen receives a notification about the decision.
+10. Citizen visits the government office on the scheduled date.
+11. Department Officer verifies the appointment number and citizen details.
+12. Department Officer marks the citizen as checked in.
+13. Citizen waits for the service.
+14. Department Officer completes the appointment after providing the service.
+
+## 6. Notification System
+
+Implement an in-application notification system.
+
+Notifications should be generated when:
+
+- An appointment is successfully submitted.
+- An appointment is approved.
+- An appointment is rejected.
+- An appointment is cancelled.
+- An appointment is rescheduled.
+- An appointment is approaching.
+
+Display unread notification counts and notification history.
+
+## 7. User Interface and Design Requirements
+
+Create a professional government-service interface with a clean, modern, and consistent design.
+
+### Design Guidelines
+
+- Use a modern dashboard layout.
+- Implement a responsive sidebar.
+- Include a top navigation bar.
+- Use professional typography.
+- Use consistent colors and spacing.
+- Provide clear status badges.
+- Use tables with search, filtering, sorting, and pagination.
+- Include confirmation dialogs for important actions.
+- Provide loading indicators and empty states.
+- Display meaningful validation and error messages.
+- Support desktop, tablet, and mobile devices.
+
+### Dashboard Layout
+
+Each role should have a different sidebar based on its permissions.
+
+**Citizen Sidebar**
+- Dashboard
+- Book Appointment
+- My Appointments
+- Appointment History
+- Notifications
+- My Profile
+- Logout
+
+**Department Officer Sidebar**
+- Dashboard
+- Today's Appointments
+- Appointment Requests
+- Check-In Management
+- Waiting Citizens
+- Appointment History
+- Notifications
+- My Profile
+- Logout
+
+**Admin Sidebar**
+- Dashboard
+- Citizen Management
+- Department Management
+- Service Management
+- Officer Management
+- Appointment Management
+- Schedule Management
+- Notifications
+- Reports and Analytics
+- Audit Logs
+- System Settings
+- My Profile
+- Logout
+
+## 8. Functional Requirements
+
+The system must:
+
+- Support three distinct user roles.
+- Enforce role-based permissions.
+- Allow citizens to book appointments.
+- Prevent double-booking of unavailable time slots.
+- Generate unique appointment numbers.
+- Allow department officers to process appointment requests.
+- Support citizen check-in and waiting management.
+- Allow administrators to manage departments, services, officers, and schedules.
+- Provide notifications for important appointment events.
+- Generate appointment reports and statistics.
+- Maintain audit logs for important administrative operations.
+
+## 9. Non-Functional Requirements
+
+- **Security:** Secure authentication, password hashing, authorization, and input validation.
+- **Performance:** Efficient database queries and responsive page loading.
+- **Scalability:** Support increasing numbers of citizens, departments, and appointments.
+- **Reliability:** Prevent duplicate bookings and inconsistent appointment records.
+- **Usability:** Simple and intuitive navigation for citizens and government employees.
+- **Maintainability:** Organized, modular, and reusable code.
+- **Responsiveness:** Support desktop, tablet, and mobile devices.
+- **Data Integrity:** Maintain accurate and consistent appointment information.
+
+## 10. Technical Implementation
+
+Use the following technology stack:
+
+**Frontend**
+- React.js
+- Vite
+- JavaScript (JSX)
+- Tailwind CSS
+- React Router
+- Axios
+- Recharts for dashboard analytics
+- Lucide React for icons
+
+**Backend**
+- Laravel
+- RESTful API architecture
+- Laravel Sanctum for authentication
+- Role-based authorization
+
+**Database**
+- PostgreSQL
+
+**Development Environment**
+- Docker
+- Docker Compose
+
+Organize the project using a modular, maintainable architecture with clear separation between frontend, backend, database, and API responsibilities.
+
+## 11. Important Development Instructions
+
+- Build functional interfaces rather than static mockups.
+- Implement all three actor dashboards.
+- Ensure that every sidebar menu item navigates to its correct page.
+- Implement working search, filtering, pagination, and form validation.
+- Enforce permissions on both frontend and backend.
+- Use realistic sample data during development.
+- Maintain consistent UI components across the application.
+- Do not introduce additional user roles beyond Citizen, Department Officer, and Admin.
+- Do not create a separate Receptionist role. Citizen verification, check-in, and waiting-citizen management are handled by authorized Department Officers.
+- Keep the system focused on Woreda-level government appointment and service management.
+
+**Final Objective:** Deliver a complete, functional, secure, and professional Woreda Booking and Appointment Management System that digitizes citizen appointment booking and enables government departments to manage their services efficiently.

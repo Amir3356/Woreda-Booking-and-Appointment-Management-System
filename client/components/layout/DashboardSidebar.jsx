@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  Building2,
   FileText,
   Calendar,
   Clock,
@@ -30,7 +29,6 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   const unreadNotifsCount = notifications.filter((n) => !n.isRead).length;
 
   const adminNav = [
-    { href: "/admin/departments", label: "Departments", icon: Building2 },
     { href: "/admin/services", label: "Government Services", icon: FileText },
     {
       href: "/admin/appointments",
@@ -92,6 +90,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   }
 
   const isAdmin = role === "ADMIN" || pathname?.startsWith("/admin");
+  const brandHref = role === "ADMIN" ? "/admin" : role === "OFFICER" ? "/officer" : "/citizen";
 
   return (
     <aside
@@ -106,7 +105,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
     >
       {/* Brand & Portal Header */}
       <div className="p-4 border-b border-white/10">
-        <Link href="/" className="flex items-center gap-2.5 group">
+        <Link href={brandHref} className="flex items-center gap-2.5 group">
           <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-900 flex items-center justify-center font-bold text-sm shadow">
             W
           </div>
