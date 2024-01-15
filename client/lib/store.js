@@ -72,6 +72,18 @@ export const useStore = create(
           ),
         }));
       },
+      deleteDepartment: (id) => {
+        set((state) => ({
+          departments: state.departments.filter((d) => d.id !== id),
+        }));
+        get().addAuditLog({
+          userName: get().currentUser?.fullName || "Admin",
+          userRole: "ADMIN",
+          action: "DELETE_DEPARTMENT",
+          entity: `Dept-${id}`,
+          details: `Deleted department record`,
+        });
+      },
 
       // Services State
       services: INITIAL_SERVICES,
