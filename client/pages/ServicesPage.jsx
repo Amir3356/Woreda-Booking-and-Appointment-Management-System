@@ -4,6 +4,7 @@ import { useState } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { useStore } from "@/lib/store";
+import mockData from "@/data/mock-data.json";
 import { formatETB } from "@/lib/utils";
 import Link from "next/link";
 import {
@@ -19,7 +20,9 @@ import {
 } from "lucide-react";
 
 export default function ServicesPage() {
-  const { services, departments } = useStore();
+  const { services: storeServices, departments: storeDepartments } = useStore();
+  const services = storeServices?.length ? storeServices : mockData.services;
+  const departments = storeDepartments?.length ? storeDepartments : mockData.departments;
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDept, setSelectedDept] = useState("ALL");
   const [activeModalService, setActiveModalService] = useState(null);

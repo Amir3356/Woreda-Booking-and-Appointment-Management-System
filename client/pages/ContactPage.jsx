@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+import mockData from "@/data/mock-data.json";
 import { Phone, Mail, MapPin, Clock, Send, CheckCircle2 } from "lucide-react";
 
 export default function ContactPage() {
@@ -71,6 +72,25 @@ export default function ContactPage() {
                   <p>Monday – Friday: 08:30 – 17:30</p>
                   <p className="text-[10px] text-slate-400">Lunch: 12:30 – 13:30 (Desks Closed)</p>
                 </div>
+              </div>
+            </div>
+
+            {/* Department Desk Contacts */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3 text-xs">
+              <h3 className="font-bold text-slate-900 text-sm border-b border-slate-100 pb-2">
+                Department Direct Lines
+              </h3>
+              <div className="space-y-2">
+                {mockData.departments.map((dept) => (
+                  <div key={dept.id} className="flex items-center justify-between text-slate-600 gap-2">
+                    <span className="font-medium truncate max-w-[130px]" title={dept.name}>
+                      {dept.name}
+                    </span>
+                    <span className="font-mono text-[10px] text-blue-700 shrink-0 font-semibold">
+                      {dept.contactPhone}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
