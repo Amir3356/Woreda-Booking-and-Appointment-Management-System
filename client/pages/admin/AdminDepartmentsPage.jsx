@@ -111,7 +111,7 @@ export default function AdminDepartmentsPage() {
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
                 <tr>
                   <th className="px-5 py-3.5">Department Name</th>
-                  <th className="px-5 py-3.5">Description</th>
+                  <th className="px-5 py-3.5">Responsibility</th>
                   <th className="px-5 py-3.5">Office</th>
                   <th className="px-5 py-3.5">Contact Phone</th>
                   <th className="px-5 py-3.5">Status</th>
@@ -147,7 +147,7 @@ export default function AdminDepartmentsPage() {
                           </div>
                         </td>
 
-                        {/* Description */}
+                        {/* Responsibility */}
                         <td className="px-5 py-3.5 text-slate-600 max-w-xs md:max-w-md">
                           <p className="line-clamp-2 text-xs leading-relaxed">
                             {dept.description || "No description provided"}
@@ -375,7 +375,7 @@ export default function AdminDepartmentsPage() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Description
+                  Responsibility (Description)
                 </label>
                 <textarea
                   rows={3}
