@@ -357,7 +357,8 @@
       "tokenNumber": "KBL-01",
       "citizenNotes": "First time applicant, have original school certificate and photos ready.",
       "officerNotes": "Documents pre-verified.",
-      "createdAt": "2026-11-01T08:30:00Z"
+      "createdAt": "2026-11-01T08:30:00Z",
+      "responsibleOfficer": "W/ro Tigist Mulugeta"
     },
     {
       "id": "apt-2",
@@ -377,7 +378,8 @@
       "citizenNotes": "Urgent for passport renewal application at immigration.",
       "officerNotes": "Arrived at 09:15 AM, verified ID.",
       "checkedInAt": "2026-11-02T09:15:00Z",
-      "createdAt": "2026-11-01T09:10:00Z"
+      "createdAt": "2026-11-01T09:10:00Z",
+      "responsibleOfficer": "W/ro Tigist Mulugeta"
     },
     {
       "id": "apt-3",
@@ -396,7 +398,8 @@
       "tokenNumber": null,
       "citizenNotes": "Retail shop license in Kebele 05.",
       "officerNotes": null,
-      "createdAt": "2026-11-01T10:00:00Z"
+      "createdAt": "2026-11-01T10:00:00Z",
+      "responsibleOfficer": "Ato Solomon Haile"
     },
     {
       "id": "apt-4",
@@ -415,7 +418,8 @@
       "tokenNumber": "LND-01",
       "citizenNotes": "Need boundary verification for inherited plot.",
       "officerNotes": "Scheduled for Desk 2.",
-      "createdAt": "2026-11-01T11:15:00Z"
+      "createdAt": "2026-11-01T11:15:00Z",
+      "responsibleOfficer": "Ato Yared Assefa"
     },
     {
       "id": "apt-5",
@@ -435,7 +439,8 @@
       "citizenNotes": "Annual trade clearance.",
       "officerNotes": "Clearance printed and sealed.",
       "completedAt": "2026-10-30T14:22:00Z",
-      "createdAt": "2026-10-28T09:00:00Z"
+      "createdAt": "2026-10-28T09:00:00Z",
+      "responsibleOfficer": "W/ro Hana Bekele"
     },
     {
       "id": "apt-6",
@@ -454,7 +459,8 @@
       "tokenNumber": "KBL-09",
       "citizenNotes": "Newborn child certificate.",
       "officerNotes": "Citizen did not arrive after 3 announcements.",
-      "createdAt": "2026-10-27T14:00:00Z"
+      "createdAt": "2026-10-27T14:00:00Z",
+      "responsibleOfficer": "W/ro Tigist Mulugeta"
     }
   ],
   "queue": [
@@ -626,5 +632,55 @@
     "15:30 PM",
     "16:00 PM",
     "16:30 PM"
+  ],
+  "provisionedAccounts": [
+    {
+      "fullName": "W/ro Tigist Mulugeta",
+      "email": "tigist.kbl@woreda.gov.et",
+      "password": "Password@123",
+      "role": "Department Officer"
+    },
+    {
+      "fullName": "Ato Yared Assefa",
+      "email": "yared.lnd@woreda.gov.et",
+      "password": "Password@123",
+      "role": "Department Officer"
+    },
+    {
+      "fullName": "Ato Solomon Haile",
+      "email": "solomon.trd@woreda.gov.et",
+      "password": "Password@123",
+      "role": "Department Officer"
+    },
+    {
+      "fullName": "W/ro Hana Bekele",
+      "email": "hana.tax@woreda.gov.et",
+      "password": "Password@123",
+      "role": "Department Officer"
+    },
+    {
+      "fullName": "Ato Mesfin Girma",
+      "email": "mesfin.soc@woreda.gov.et",
+      "password": "Password@123",
+      "role": "Department Officer"
+    },
+    {
+      "fullName": "W/ro Selamawit Desta",
+      "email": "selam.health@woreda.gov.et",
+      "password": "Password@123",
+      "role": "Department Officer"
+    },
+    {
+      "fullName": "Ato Berhanu Kebede",
+      "email": "berhanu.audit@woreda.gov.et",
+      "password": "Password@123",
+      "role": "Department Officer"
+    },
+    {
+      "fullName": "Ato Kibreab Demissie",
+      "email": "admin.kibreab@woreda.gov.et",
+      "password": "Password@123",
+      "role": "Central Administrator"
+    }
   ]
 }

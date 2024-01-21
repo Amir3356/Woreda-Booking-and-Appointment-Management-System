@@ -9,6 +9,7 @@ export const notifications = mockData.notifications;
 export const auditLogs = mockData.auditLogs;
 export const scheduleConfigs = mockData.scheduleConfigs;
 export const timeSlots = mockData.timeSlots;
+export const provisionedAccounts = mockData.provisionedAccounts;
 
 export { mockData };
 export default mockData;

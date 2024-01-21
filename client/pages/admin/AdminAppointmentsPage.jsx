@@ -16,6 +16,7 @@ import {
   XCircle,
   Clock,
   Eye,
+  UserCheck,
 } from "lucide-react";
 
 export default function AdminAppointmentsPage() {
@@ -23,6 +24,7 @@ export default function AdminAppointmentsPage() {
     appointments,
     departments,
     services,
+    users,
     updateAppointmentStatus,
     rescheduleAppointment,
   } = useStore();
@@ -78,12 +80,28 @@ export default function AdminAppointmentsPage() {
     setRescheduleTarget(null);
   };
 
+  const formatRequestDateTime = (dateString) => {
+    if (!dateString) return "N/A";
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString;
+    const dateStr = d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const timeStr = d.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${dateStr} • ${timeStr}`;
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">All Woreda Appointments</h2>
+          <h2 className="text-xl font-bold text-slate-900">Appointment Management</h2>
           <p className="text-xs text-slate-500">
             Cross-department master registry of all citizen appointments, statuses, and desk allocations.
           </p>
@@ -145,96 +163,92 @@ export default function AdminAppointmentsPage() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold text-[10px]">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
               <tr>
-                <th className="px-5 py-3">Reference #</th>
-                <th className="px-5 py-3">Citizen & Contact</th>
-                <th className="px-5 py-3">Department</th>
-                <th className="px-5 py-3">Service</th>
-                <th className="px-5 py-3">Date & Slot</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3 text-right">Actions</th>
+                <th className="px-5 py-3.5">
+                  <div>Appointment Number</div>
+                  <span className="text-[9px] font-normal text-slate-400 block normal-case">
+                    (is a Unique appointment reference)
+                  </span>
+                </th>
+                <th className="px-5 py-3.5">Citizen Name</th>
+                <th className="px-5 py-3.5">Department</th>
+                <th className="px-5 py-3.5">Service</th>
+                <th className="px-5 py-3.5">Appointment Date & Time</th>
+                <th className="px-5 py-3.5">Request Date&Time</th>
+                <th className="px-5 py-3.5">Status</th>
+                <th className="px-5 py-3.5">Responsible Officer</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-slate-400">
+                  <td colSpan={8} className="px-5 py-10 text-center text-slate-400">
                     No appointments found matching your filter criteria.
                   </td>
                 </tr>
               ) : (
-                filtered.map((apt) => (
-                  <tr key={apt.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-5 py-3.5 font-mono font-bold text-slate-900">
-                      <div>{apt.referenceNumber}</div>
-                      {apt.tokenNumber && (
-                        <span className="text-[10px] text-emerald-700 font-bold block">
-                          Token: {apt.tokenNumber}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5 font-medium text-slate-900">
-                      <div>{apt.citizenName}</div>
-                      <span className="text-[10px] text-slate-400 font-normal">{apt.citizenPhone}</span>
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-600">{apt.departmentName}</td>
-                    <td className="px-5 py-3.5 text-slate-800 font-medium">{apt.serviceName}</td>
-                    <td className="px-5 py-3.5 text-slate-600">
-                      <div>{formatDate(apt.date)}</div>
-                      <span className="text-[10px] text-blue-700 font-semibold">{apt.timeSlot}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge status={apt.status} />
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => setSelectedSlipApt(apt)}
-                          className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100"
-                          title="View Official Confirmation Slip"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                filtered.map((apt) => {
+                  const responsibleOfficer =
+                    apt.responsibleOfficer ||
+                    users?.find((u) => u.departmentId === apt.departmentId && u.role === "OFFICER")?.fullName ||
+                    "W/ro Tigist Mulugeta";
 
-                        {apt.status === "PENDING" && (
-                          <>
-                            <button
-                              onClick={() => handleApprove(apt.id)}
-                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                              title="Approve Appointment"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setRejectTargetId(apt.id);
-                                setRejectReason("");
-                              }}
-                              className="p-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100"
-                              title="Reject Appointment"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </>
+                  return (
+                    <tr
+                      key={apt.id}
+                      onClick={() => setSelectedSlipApt(apt)}
+                      className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                      title="Click to view official confirmation slip"
+                    >
+                      {/* Appointment Number (is a Unique appointment reference) */}
+                      <td className="px-5 py-3.5 font-mono font-bold text-slate-900">
+                        <div className="text-blue-900 hover:text-blue-700">{apt.referenceNumber}</div>
+                        {apt.tokenNumber && (
+                          <span className="text-[10px] text-emerald-700 font-bold block">
+                            Token: {apt.tokenNumber}
+                          </span>
                         )}
+                      </td>
 
-                        {apt.status !== "COMPLETED" && apt.status !== "CANCELLED" && (
-                          <button
-                            onClick={() => {
-                              setRescheduleTarget(apt);
-                              setNewDate(apt.date);
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-blue-700 rounded-lg hover:bg-slate-100"
-                            title="Reschedule"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      {/* Citizen Name */}
+                      <td className="px-5 py-3.5 font-medium text-slate-900">
+                        <div className="font-bold text-slate-900">{apt.citizenName}</div>
+                        <span className="text-[10px] text-slate-400 font-normal">{apt.citizenPhone}</span>
+                      </td>
+
+                      {/* Department */}
+                      <td className="px-5 py-3.5 text-slate-700 font-medium">{apt.departmentName}</td>
+
+                      {/* Service */}
+                      <td className="px-5 py-3.5 text-slate-800 font-medium">{apt.serviceName}</td>
+
+                      {/* Appointment Date & Time */}
+                      <td className="px-5 py-3.5 text-slate-600">
+                        <div className="font-medium text-slate-900">{formatDate(apt.date)}</div>
+                        <span className="text-[10px] text-blue-700 font-semibold">{apt.timeSlot}</span>
+                      </td>
+
+                      {/* Request Date&Time */}
+                      <td className="px-5 py-3.5 text-slate-600">
+                        <div className="font-medium text-slate-800">{formatRequestDateTime(apt.createdAt)}</div>
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-5 py-3.5">
+                        <StatusBadge status={apt.status} />
+                      </td>
+
+                      {/* Responsible Officer */}
+                      <td className="px-5 py-3.5 text-slate-700">
+                        <div className="flex items-center gap-1.5">
+                          <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="font-medium text-slate-900">{responsibleOfficer}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

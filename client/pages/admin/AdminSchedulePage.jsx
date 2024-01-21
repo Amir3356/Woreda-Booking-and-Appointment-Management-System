@@ -62,7 +62,7 @@ export default function AdminSchedulePage() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
-        <h2 className="text-xl font-bold text-slate-900">Schedule & Capacity Configuration</h2>
+        <h2 className="text-xl font-bold text-slate-900">Schedule Management</h2>
         <p className="text-xs text-slate-500">
           Define official municipal operating days, desk opening hours, time slot intervals, and public holiday blackout dates.
         </p>
