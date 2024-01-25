@@ -394,10 +394,29 @@ export default function AdminSchedulePage() {
         </button>
       </div>
 
-      {/* A. Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* A. Summary Cards - Displayed Horizontally */}
+      <div
+        className="grid-cols-4"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gap: "1rem",
+          width: "100%",
+        }}
+      >
         {/* Card 1: Total Schedules */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div
+          className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "1.25rem",
+            backgroundColor: "#ffffff",
+            borderRadius: "1rem",
+            border: "1px solid #e2e8f0",
+          }}
+        >
           <div>
             <span className="text-xs font-semibold text-slate-500 block">Total Schedules</span>
             <span className="text-2xl font-extrabold text-slate-900 mt-1 block">
@@ -411,7 +430,18 @@ export default function AdminSchedulePage() {
         </div>
 
         {/* Card 2: Active Schedules */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div
+          className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "1.25rem",
+            backgroundColor: "#ffffff",
+            borderRadius: "1rem",
+            border: "1px solid #e2e8f0",
+          }}
+        >
           <div>
             <span className="text-xs font-semibold text-slate-500 block">Active Schedules</span>
             <span className="text-2xl font-extrabold text-emerald-600 mt-1 block">
@@ -425,7 +455,18 @@ export default function AdminSchedulePage() {
         </div>
 
         {/* Card 3: Available Slots */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div
+          className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "1.25rem",
+            backgroundColor: "#ffffff",
+            borderRadius: "1rem",
+            border: "1px solid #e2e8f0",
+          }}
+        >
           <div>
             <span className="text-xs font-semibold text-slate-500 block">Available Slots</span>
             <span className="text-2xl font-extrabold text-blue-600 mt-1 block">
@@ -439,7 +480,18 @@ export default function AdminSchedulePage() {
         </div>
 
         {/* Card 4: Booked Slots */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div
+          className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "1.25rem",
+            backgroundColor: "#ffffff",
+            borderRadius: "1rem",
+            border: "1px solid #e2e8f0",
+          }}
+        >
           <div>
             <span className="text-xs font-semibold text-slate-500 block">Booked Slots</span>
             <span className="text-2xl font-extrabold text-indigo-600 mt-1 block">
@@ -656,7 +708,14 @@ export default function AdminSchedulePage() {
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Working Days
                 </label>
-                <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                <div
+                  className="grid-cols-7"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+                    gap: "0.5rem",
+                  }}
+                >
                   {ALL_DAYS.map((day) => {
                     const isChecked = form.workingDays.includes(day);
                     return (
@@ -683,7 +742,14 @@ export default function AdminSchedulePage() {
               </div>
 
               {/* Opening Time & Closing Time */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div
+                className="grid-cols-2"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: "0.75rem",
+                }}
+              >
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Opening Time
@@ -711,7 +777,14 @@ export default function AdminSchedulePage() {
               </div>
 
               {/* Slot Duration (minutes) & Daily Capacity */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div
+                className="grid-cols-2"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: "0.75rem",
+                }}
+              >
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Slot Duration (minutes)
@@ -748,7 +821,14 @@ export default function AdminSchedulePage() {
               </div>
 
               {/* Effective Start Date & Effective End Date (Optional) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div
+                className="grid-cols-2"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: "0.75rem",
+                }}
+              >
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Effective Start Date
