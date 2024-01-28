@@ -490,7 +490,6 @@ export default function AdminSchedulePage() {
                 <th className="px-5 py-3.5">Service</th>
                 <th className="px-5 py-3.5">Working Days</th>
                 <th className="px-5 py-3.5">Operating Hours</th>
-                <th className="px-5 py-3.5">Slot Duration</th>
                 <th className="px-5 py-3.5">Daily Capacity</th>
                 <th className="px-5 py-3.5">Status</th>
                 <th className="px-5 py-3.5 text-center">Actions</th>
@@ -499,7 +498,7 @@ export default function AdminSchedulePage() {
             <tbody className="divide-y divide-slate-100">
               {schedules.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-5 py-14 text-center text-slate-400">
+                  <td colSpan={8} className="px-5 py-14 text-center text-slate-400">
                     <Clock className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <p className="text-xs font-medium">No schedules configured</p>
                   </td>
@@ -536,11 +535,6 @@ export default function AdminSchedulePage() {
                       {/* Operating Hours */}
                       <td className="px-5 py-3.5 font-mono text-slate-700 font-medium">
                         {sch.openingTime} – {sch.closingTime}
-                      </td>
-
-                      {/* Slot Duration */}
-                      <td className="px-5 py-3.5 text-slate-600">
-                        <span className="font-semibold text-slate-900">{sch.slotDuration}</span> min
                       </td>
 
                       {/* Daily Capacity */}
@@ -901,19 +895,11 @@ export default function AdminSchedulePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pb-3 border-b border-slate-100">
-                <div>
-                  <span className="text-slate-400 text-[11px] block">Slot Duration</span>
-                  <span className="font-semibold text-slate-800">
-                    {selectedSchedule.slotDuration} minutes
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-[11px] block">Daily Capacity</span>
-                  <span className="font-semibold text-slate-800">
-                    {selectedSchedule.dailyCapacity} appointments/day
-                  </span>
-                </div>
+              <div className="pb-3 border-b border-slate-100">
+                <span className="text-slate-400 text-[11px] block">Daily Capacity</span>
+                <span className="font-semibold text-slate-800">
+                  {selectedSchedule.dailyCapacity} appointments/day
+                </span>
               </div>
 
               <div className="grid grid-cols-2 gap-4 pb-3 border-b border-slate-100">
