@@ -361,7 +361,6 @@ export default function AdminSchedulePage() {
   // Top summary card metrics as specified by the user
   const totalSchedulesCount = 24;
   const activeSchedulesCount = 20;
-  const bookedSlotsCount = 95;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -395,10 +394,10 @@ export default function AdminSchedulePage() {
 
       {/* A. Summary Cards - Displayed Horizontally */}
       <div
-        className="grid-cols-3"
+        className="grid-cols-2"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
           gap: "1rem",
           width: "100%",
         }}
@@ -450,31 +449,6 @@ export default function AdminSchedulePage() {
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shadow-xs">
             <CheckCircle2 className="w-5 h-5" />
-          </div>
-        </div>
-
-        {/* Card 3: Booked Slots */}
-        <div
-          className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "1.25rem",
-            backgroundColor: "#ffffff",
-            borderRadius: "1rem",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          <div>
-            <span className="text-xs font-semibold text-slate-500 block">Booked Slots</span>
-            <span className="text-2xl font-extrabold text-indigo-600 mt-1 block">
-              {bookedSlotsCount}
-            </span>
-            <span className="text-[11px] text-slate-400 mt-0.5 block">Reserved appointment slots</span>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shadow-xs">
-            <Users className="w-5 h-5" />
           </div>
         </div>
       </div>
