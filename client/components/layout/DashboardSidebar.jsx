@@ -30,6 +30,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   const unreadNotifsCount = notifications.filter((n) => !n.isRead).length;
 
   const adminNav = [
+    { href: "/admin/appointments", label: "Appointment Management", icon: Calendar },
     { href: "/admin/departments", label: "Department Management", icon: Building2 },
     { href: "/admin/services", label: "Service Management", icon: FileText },
     { href: "/admin/schedule", label: "Schedule Management", icon: Clock },
