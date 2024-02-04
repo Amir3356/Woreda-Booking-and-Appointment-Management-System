@@ -33,6 +33,17 @@ export default function OfficerAppointmentsPage() {
 
   const deptAppointments = appointments.filter((a) => a.departmentId === officerDeptId);
 
+  const formatRequestDate = (dateString) => {
+    if (!dateString) return "N/A";
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString;
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   const filtered = deptAppointments.filter((a) => {
     const matchesSearch =
       a.referenceNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -47,11 +58,10 @@ export default function OfficerAppointmentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">
-            {currentUser?.departmentName || "Department"} Appointments
-          </h2>
+          <h2 className="text-xl font-bold text-slate-900">Appointment Management</h2>
           <p className="text-xs text-slate-500">
-            Review requests, approve bookings, and process citizens arriving at your office.
+            {currentUser?.departmentName ? `${currentUser.departmentName} — ` : ""}
+            Review citizen requests, approve bookings, and process desk appointments.
           </p>
         </div>
 
@@ -96,52 +106,69 @@ export default function OfficerAppointmentsPage() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold text-[10px]">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
               <tr>
-                <th className="px-5 py-3">Reference #</th>
-                <th className="px-5 py-3">Citizen Name</th>
-                <th className="px-5 py-3">Service</th>
-                <th className="px-5 py-3">Date & Slot</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3 text-right">Desk Actions</th>
+                <th className="px-5 py-3.5">Appointment Number</th>
+                <th className="px-5 py-3.5">Citizen Name</th>
+                <th className="px-5 py-3.5">Service</th>
+                <th className="px-5 py-3.5">Scheduled Date & Time</th>
+                <th className="px-5 py-3.5">Request Date</th>
+                <th className="px-5 py-3.5">Status</th>
+                <th className="px-5 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-400">
+                  <td colSpan={7} className="px-5 py-10 text-center text-slate-400">
                     No appointments found matching this filter.
                   </td>
                 </tr>
               ) : (
                 filtered.map((apt) => (
                   <tr key={apt.id} className="hover:bg-slate-50/80 transition-colors">
+                    {/* Appointment Number */}
                     <td className="px-5 py-3.5 font-mono font-bold text-slate-900">
-                      <div>{apt.referenceNumber}</div>
+                      <div className="text-blue-900 hover:text-blue-700">{apt.referenceNumber}</div>
                       {apt.tokenNumber && (
                         <span className="text-[10px] text-emerald-700 font-bold block">
                           Token: {apt.tokenNumber}
                         </span>
                       )}
                     </td>
+
+                    {/* Citizen Name */}
                     <td className="px-5 py-3.5 font-medium text-slate-900">
-                      <div>{apt.citizenName}</div>
+                      <div className="font-bold text-slate-900">{apt.citizenName}</div>
                       <span className="text-[10px] text-slate-400 font-normal">{apt.citizenPhone}</span>
                     </td>
+
+                    {/* Service */}
                     <td className="px-5 py-3.5 text-slate-700 font-medium">{apt.serviceName}</td>
+
+                    {/* Scheduled Date & Time */}
                     <td className="px-5 py-3.5 text-slate-600">
-                      <div>{formatDate(apt.date)}</div>
+                      <div className="font-medium text-slate-900">{formatDate(apt.date)}</div>
                       <span className="text-[10px] text-blue-700 font-bold">{apt.timeSlot}</span>
                     </td>
+
+                    {/* Request Date */}
+                    <td className="px-5 py-3.5 text-slate-600 font-medium">
+                      {formatRequestDate(apt.createdAt)}
+                    </td>
+
+                    {/* Status */}
                     <td className="px-5 py-3.5">
                       <StatusBadge status={apt.status} />
                     </td>
+
+                    {/* Actions */}
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => setSelectedSlipApt(apt)}
-                          className="p-1.5 text-slate-400 hover:text-slate-800 rounded-lg hover:bg-slate-100"
-                          title="View Slip"
+                          className="p-1.5 text-slate-400 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors"
+                          title="View Confirmation Slip"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -150,15 +177,15 @@ export default function OfficerAppointmentsPage() {
                           <>
                             <button
                               onClick={() => updateAppointmentStatus(apt.id, "APPROVED", "Approved by desk officer")}
-                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                              title="Approve"
+                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                              title="Approve Appointment"
                             >
                               <Check className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => updateAppointmentStatus(apt.id, "REJECTED", "", "Paperwork incomplete")}
-                              className="p-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100"
-                              title="Reject"
+                              className="p-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors"
+                              title="Reject Appointment"
                             >
                               <X className="w-4 h-4" />
                             </button>
@@ -168,7 +195,7 @@ export default function OfficerAppointmentsPage() {
                         {apt.status === "APPROVED" && (
                           <button
                             onClick={() => updateAppointmentStatus(apt.id, "CHECKED_IN")}
-                            className="px-3 py-1 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs"
+                            className="px-3 py-1 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
                           >
                             Check In
                           </button>

@@ -39,6 +39,12 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   ];
 
   const officerNav = [
+    {
+      href: "/officer/appointments",
+      label: "Appointment Management",
+      icon: Calendar,
+      badge: pendingAppointmentsCount > 0 ? pendingAppointmentsCount : null,
+    },
     { href: "/officer/verify", label: "Citizen Check-In", icon: CheckCircle2 },
     { href: "/officer/reports", label: "Department Report", icon: BarChart3 },
   ];
