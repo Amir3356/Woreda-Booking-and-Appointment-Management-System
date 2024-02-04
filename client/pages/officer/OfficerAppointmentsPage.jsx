@@ -114,7 +114,7 @@ export default function OfficerAppointmentsPage() {
                 <th className="px-5 py-3.5">Scheduled Date & Time</th>
                 <th className="px-5 py-3.5">Request Date</th>
                 <th className="px-5 py-3.5">Status</th>
-                <th className="px-5 py-3.5 text-right">Actions</th>
+                <th className="px-5 py-3.5 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -162,44 +162,37 @@ export default function OfficerAppointmentsPage() {
                       <StatusBadge status={apt.status} />
                     </td>
 
-                    {/* Actions */}
-                    <td className="px-5 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                    {/* Actions: Approve and Reject buttons only */}
+                    <td className="px-5 py-3.5 text-center">
+                      <div className="flex items-center justify-center gap-2">
                         <button
-                          onClick={() => setSelectedSlipApt(apt)}
-                          className="p-1.5 text-slate-400 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors"
-                          title="View Confirmation Slip"
+                          type="button"
+                          onClick={() => updateAppointmentStatus(apt.id, "APPROVED", "Approved by desk officer")}
+                          disabled={apt.status === "APPROVED"}
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            apt.status === "APPROVED"
+                              ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60"
+                              : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 cursor-pointer shadow-xs"
+                          }`}
+                          title="Approve Appointment"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Approve</span>
                         </button>
-
-                        {apt.status === "PENDING" && (
-                          <>
-                            <button
-                              onClick={() => updateAppointmentStatus(apt.id, "APPROVED", "Approved by desk officer")}
-                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
-                              title="Approve Appointment"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => updateAppointmentStatus(apt.id, "REJECTED", "", "Paperwork incomplete")}
-                              className="p-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors"
-                              title="Reject Appointment"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-
-                        {apt.status === "APPROVED" && (
-                          <button
-                            onClick={() => updateAppointmentStatus(apt.id, "CHECKED_IN")}
-                            className="px-3 py-1 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
-                          >
-                            Check In
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => updateAppointmentStatus(apt.id, "REJECTED", "", "Paperwork incomplete")}
+                          disabled={apt.status === "REJECTED"}
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            apt.status === "REJECTED"
+                              ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60"
+                              : "bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 cursor-pointer shadow-xs"
+                          }`}
+                          title="Reject Appointment"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Reject</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
