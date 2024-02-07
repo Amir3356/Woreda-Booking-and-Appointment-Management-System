@@ -56,16 +56,30 @@ export default function OfficerAppointmentsPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">Appointment Management</h2>
-          <p className="text-xs text-slate-500">
+      <div
+        className="relative flex items-center w-full min-h-[48px]"
+        style={{ position: "relative", minHeight: "48px" }}
+      >
+        <div className="w-full text-center" style={{ textAlign: "center" }}>
+          <h2 className="text-xl font-bold text-slate-900" style={{ textAlign: "center" }}>
+            Appointment Management
+          </h2>
+          <p className="text-xs text-slate-500 mt-1" style={{ textAlign: "center" }}>
             {currentUser?.departmentName ? `${currentUser.departmentName} — ` : ""}
             Review citizen requests, approve bookings, and process desk appointments.
           </p>
         </div>
 
-        <span className="text-xs bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 font-semibold shadow-xs">
+        <span
+          className="text-xs bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 font-semibold shadow-xs"
+          style={{
+            position: "absolute",
+            right: 0,
+            top: "50%",
+            transform: "translateY(-50%)",
+            whiteSpace: "nowrap",
+          }}
+        >
           Total Assigned: {deptAppointments.length}
         </span>
       </div>
