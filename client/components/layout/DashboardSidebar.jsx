@@ -76,6 +76,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   }
 
   const isAdmin = role === "ADMIN" || pathname?.startsWith("/admin");
+  const isOfficer = role === "OFFICER" || pathname?.startsWith("/officer");
   const brandHref = role === "ADMIN" ? "/admin" : role === "OFFICER" ? "/officer/appointments" : "/citizen";
 
   return (
@@ -141,13 +142,15 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
       {/* Bottom Public Return & User Tag */}
       {!isAdmin && (
         <div className="p-3 border-t border-white/10 space-y-2">
-          <Link
-            href="/"
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Exit to Public Portal</span>
-          </Link>
+          {!isOfficer && (
+            <Link
+              href="/"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Exit to Public Portal</span>
+            </Link>
+          )}
 
           <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
