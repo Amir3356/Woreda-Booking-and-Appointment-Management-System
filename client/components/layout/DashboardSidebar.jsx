@@ -11,8 +11,6 @@ import {
   UserCog,
   ShieldAlert,
   Layers,
-  Bell,
-  User,
   ArrowLeft,
   ChevronRight,
   LogOut,
@@ -46,15 +44,6 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
 
   const citizenNav = [
     { href: "/citizen", label: "Overview", icon: LayoutDashboard },
-    { href: "/book", label: "Book Appointment", icon: Calendar },
-    { href: "/citizen/appointments", label: "My Appointments", icon: FileText },
-    {
-      href: "/citizen/notifications",
-      label: "Notifications",
-      icon: Bell,
-      badge: unreadNotifsCount > 0 ? unreadNotifsCount : null,
-    },
-    { href: "/citizen/profile", label: "Profile & Kebele ID", icon: User },
   ];
 
   let items = adminNav;
