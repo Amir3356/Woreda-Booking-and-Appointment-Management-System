@@ -29,7 +29,7 @@ export default function OfficerAppointmentsPage() {
 
   const officerDeptId = currentUser?.departmentId || "dept-1";
   const [timeFilter, setTimeFilter] = useState("TODAY");
-  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("PENDING");
   const [search, setSearch] = useState("");
   const [selectedSlipApt, setSelectedSlipApt] = useState(null);
 
@@ -66,7 +66,12 @@ export default function OfficerAppointmentsPage() {
       a.referenceNumber.toLowerCase().includes(search.toLowerCase()) ||
       a.citizenName.toLowerCase().includes(search.toLowerCase()) ||
       a.citizenPhone.includes(search);
-    const matchesStatus = statusFilter === "ALL" || a.status === statusFilter;
+    const matchesStatus =
+      statusFilter === "ALL"
+        ? true
+        : statusFilter === "REJECTED"
+        ? a.status === "REJECTED" || a.status === "REJECT"
+        : a.status === statusFilter;
 
     const todayStr = getTodayStr();
     const aptDate = (a.date || "").split("T")[0];
@@ -147,16 +152,11 @@ export default function OfficerAppointmentsPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
             >
-              <option value="ALL">All Statuses</option>
-              <option value="PENDING">Pending Review</option>
+              <option value="PENDING">Pending</option>
+              <option value="REJECTED">Reject</option>
               <option value="APPROVED">Approved</option>
-              <option value="CHECKED_IN">Checked In</option>
-              <option value="IN_PROGRESS">In Progress</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="CANCELLED">Cancelled</option>
-              <option value="NO_SHOW">No Show</option>
             </select>
           </div>
         </div>
