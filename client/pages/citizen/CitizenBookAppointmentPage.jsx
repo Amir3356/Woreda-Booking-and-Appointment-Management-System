@@ -368,13 +368,12 @@ export default function CitizenBookAppointmentPage() {
                 <th className="px-5 py-3.5 whitespace-nowrap">Department</th>
                 <th className="px-5 py-3.5 whitespace-nowrap">Service</th>
                 <th className="px-5 py-3.5 whitespace-nowrap">Availability</th>
-                <th className="px-5 py-3.5 text-center whitespace-nowrap"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredSlots.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-slate-400">
+                  <td colSpan={4} className="px-5 py-10 text-center text-slate-400">
                     No booking slots found matching this filter.
                   </td>
                 </tr>
@@ -385,7 +384,15 @@ export default function CitizenBookAppointmentPage() {
                   const isUnavailable = slot.actionValue === "Unavailable";
 
                   return (
-                    <tr key={slot.id} className="hover:bg-slate-50/70 transition-colors">
+                    <tr
+                      key={slot.id}
+                      onClick={() => isAvailable && handleOpenBooking(slot)}
+                      className={`transition-colors ${
+                        isAvailable
+                          ? "hover:bg-emerald-50/50 cursor-pointer"
+                          : "hover:bg-slate-50/70"
+                      }`}
+                    >
                       {/* Column 1: Appointment Date&Time */}
                       <td className="px-5 py-3.5">
                         <div className="font-bold text-slate-900">{slot.dateDisplay}</div>
@@ -429,42 +436,6 @@ export default function CitizenBookAppointmentPage() {
                             {slot.availabilityText}
                           </span>
                         </div>
-                      </td>
-
-                      {/* Column 5: Action (Values: Available, Unavailable, Full) */}
-                      <td className="px-5 py-3.5 text-center">
-                        {isAvailable && (
-                          <button
-                            onClick={() => handleOpenBooking(slot)}
-                            className="inline-flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
-                            title="Click to book this available appointment slot"
-                          >
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            <span>Available</span>
-                          </button>
-                        )}
-
-                        {isFull && (
-                          <button
-                            disabled
-                            className="inline-flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 font-bold text-xs cursor-not-allowed opacity-90"
-                            title="This slot capacity is currently full"
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>Full</span>
-                          </button>
-                        )}
-
-                        {isUnavailable && (
-                          <button
-                            disabled
-                            className="inline-flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 font-bold text-xs cursor-not-allowed opacity-90"
-                            title="This desk slot is currently unavailable"
-                          >
-                            <Ban className="w-3.5 h-3.5" />
-                            <span>Unavailable</span>
-                          </button>
-                        )}
                       </td>
                     </tr>
                   );
