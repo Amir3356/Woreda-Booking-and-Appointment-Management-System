@@ -243,7 +243,7 @@ export default function CitizenBookAppointmentPage() {
     setSlots((prev) =>
       prev.map((s) =>
         s.id === selectedSlot.id
-          ? { ...s, availabilityText: "Full (0 Slots Left)", actionValue: "Full" }
+          ? { ...s, actionValue: "Full" }
           : s
       )
     );
@@ -341,7 +341,7 @@ export default function CitizenBookAppointmentPage() {
             </select>
           </div>
 
-          {/* Action / Availability Filter */}
+          {/* Availability Filter */}
           <div className="flex items-center gap-1.5">
             <Filter className="w-3.5 h-3.5 text-slate-400" />
             <select
@@ -349,10 +349,10 @@ export default function CitizenBookAppointmentPage() {
               onChange={(e) => setActionFilter(e.target.value)}
               className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
             >
-              <option value="ALL">All Statuses</option>
-              <option value="Available">Available Only</option>
-              <option value="Full">Full Only</option>
-              <option value="Unavailable">Unavailable Only</option>
+              <option value="ALL">All Availability</option>
+              <option value="Available">Available</option>
+              <option value="Full">Full</option>
+              <option value="Unavailable">Unavailable</option>
             </select>
           </div>
         </div>
@@ -412,30 +412,26 @@ export default function CitizenBookAppointmentPage() {
                         <div className="font-semibold text-slate-900">{slot.service}</div>
                       </td>
 
-                      {/* Column 4: Availability */}
+                      {/* Column 4: Availability (Used only Available, Full, or Unavailable) */}
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              isAvailable
-                                ? "bg-emerald-500"
-                                : isFull
-                                ? "bg-rose-500"
-                                : "bg-slate-400"
-                            }`}
-                          ></span>
-                          <span
-                            className={`text-xs font-medium ${
-                              isAvailable
-                                ? "text-emerald-700 font-semibold"
-                                : isFull
-                                ? "text-rose-700 font-semibold"
-                                : "text-slate-500"
-                            }`}
-                          >
-                            {slot.availabilityText}
+                        {isAvailable && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            Available
                           </span>
-                        </div>
+                        )}
+                        {isFull && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                            Full
+                          </span>
+                        )}
+                        {isUnavailable && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                            Unavailable
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
