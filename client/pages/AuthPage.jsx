@@ -18,14 +18,13 @@ import {
 
 export default function AuthPage() {
   const router = useRouter();
-  const { setCurrentUser, addUser, departments } = useStore();
+  const { setCurrentUser, addUser, departments, users } = useStore();
 
   const [mode, setMode] = useState("signin"); // "signin" | "signup"
 
   // Sign In Form State
   const [signInEmail, setSignInEmail] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
-  const [signInRole, setSignInRole] = useState("Citizen");
 
   // Sign Up Form State
   const [signUpFullName, setSignUpFullName] = useState("");
@@ -69,7 +68,8 @@ export default function AuthPage() {
     setError("");
     setSuccessMsg("");
 
-    if (!signInEmail.trim()) {
+    const emailClean = signInEmail.trim().toLowerCase();
+    if (!emailClean) {
       setError("Please enter your email address.");
       return;
     }
@@ -80,23 +80,60 @@ export default function AuthPage() {
 
     setLoading(true);
 
-    const { targetRole, targetPath, deptName, deptId } = resolveRoleMeta(signInRole);
+    // Look up user from database / store by email
+    const matchedUser = (users || []).find(
+      (u) => u.email?.toLowerCase() === emailClean
+    );
 
-    let displayName = signInEmail.split("@")[0].replace(/[._-]/g, " ");
-    displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+    let authenticatedUser;
+    let targetPath = "/citizen";
 
-    const authenticatedUser = {
-      id: `usr-${Date.now()}`,
-      fullName: displayName || `${signInRole} User`,
-      email: signInEmail.trim(),
-      phone: "+251911000000",
-      nationalId: `ET-${targetRole.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
-      role: targetRole,
-      departmentId: deptId,
-      departmentName: deptName,
-      isActive: true,
-      address: "Kebele 03, Woreda Center",
-    };
+    if (matchedUser) {
+      authenticatedUser = matchedUser;
+      if (matchedUser.role === "ADMIN") {
+        targetPath = "/admin";
+      } else if (matchedUser.role === "OFFICER") {
+        targetPath = "/officer";
+      } else {
+        targetPath = "/citizen";
+      }
+    } else {
+      // Dynamic fallback for any other valid email
+      let targetRole = "CITIZEN";
+      let deptName = null;
+      let deptId = null;
+
+      if (emailClean.includes("admin")) {
+        targetRole = "ADMIN";
+        targetPath = "/admin";
+        deptName = "Woreda Central Administration";
+      } else if (emailClean.includes("officer") || emailClean.endsWith("@woreda.gov.et")) {
+        targetRole = "OFFICER";
+        targetPath = "/officer";
+        const matchedDept = departments?.[0];
+        deptName = matchedDept?.name || "Kebele Administration & Vital Events";
+        deptId = matchedDept?.id || "dept-1";
+      } else {
+        targetRole = "CITIZEN";
+        targetPath = "/citizen";
+      }
+
+      let displayName = emailClean.split("@")[0].replace(/[._-]/g, " ");
+      displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+
+      authenticatedUser = {
+        id: `usr-${Date.now()}`,
+        fullName: displayName || "Woreda User",
+        email: signInEmail.trim(),
+        phone: "+251911000000",
+        nationalId: `ET-${targetRole.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
+        role: targetRole,
+        departmentId: deptId,
+        departmentName: deptName,
+        isActive: true,
+        address: "Kebele 03, Woreda Center",
+      };
+    }
 
     setCurrentUser(authenticatedUser);
 
@@ -206,24 +243,6 @@ export default function AuthPage() {
                     placeholder="Enter email (e.g. name@woreda.gov.et)"
                     className="auth-input"
                   />
-                </div>
-              </div>
-
-              <div className="auth-form-group">
-                <label className="auth-label">
-                  Select Role *
-                </label>
-                <div className="auth-input-wrapper">
-                  <Shield className="auth-input-icon" />
-                  <select
-                    value={signInRole}
-                    onChange={(e) => setSignInRole(e.target.value)}
-                    className="auth-select"
-                  >
-                    <option value="Citizen">Citizen</option>
-                    <option value="Department Officer">Department Officer</option>
-                    <option value="Admin">Admin</option>
-                  </select>
                 </div>
               </div>
 
