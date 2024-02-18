@@ -1,9 +1,7 @@
-"use client";
-
 import { useState } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import mockData from "@/data/mock-data.json";
+import mockData from "@/data";
 import { Phone, Mail, MapPin, Clock, Send, CheckCircle2 } from "lucide-react";
 
 export default function ContactPage() {

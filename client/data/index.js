@@ -1,3 +1,4 @@
+// Mock data used across the app until the backend API is connected.
 import mockData from "./mock-data.json";
 
 export const departments = mockData.departments;
@@ -11,5 +12,4 @@ export const scheduleConfigs = mockData.scheduleConfigs;
 export const timeSlots = mockData.timeSlots;
 export const provisionedAccounts = mockData.provisionedAccounts;
 
-export { mockData };
 export default mockData;

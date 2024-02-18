@@ -1,10 +1,8 @@
-"use client";
-
 import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useStore } from "@/context";
 import StatusBadge from "@/components/shared/StatusBadge";
 import AppointmentSlip from "@/components/shared/AppointmentSlip";
-import { formatDate } from "@/lib/utils";
+import { formatDate } from "@/utils";
 import {
   Calendar,
   Search,
@@ -16,7 +14,7 @@ import {
   Building,
   Plus,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/ui/Link";
 
 export default function CitizenAppointmentsPage() {
   const {

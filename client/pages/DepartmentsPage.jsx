@@ -1,10 +1,8 @@
-"use client";
-
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { useStore } from "@/lib/store";
-import mockData from "@/data/mock-data.json";
-import Link from "next/link";
+import { useStore } from "@/context";
+import mockData from "@/data";
+import Link from "@/components/ui/Link";
 import {
   Building2,
   Phone,

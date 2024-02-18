@@ -1,6 +1,4 @@
-"use client";
-
-import { APPOINTMENT_STATUS_CONFIG } from "@/lib/utils";
+import { APPOINTMENT_STATUS_CONFIG } from "@/utils";
 
 export default function StatusBadge({ status, className = "" }) {
   const config = APPOINTMENT_STATUS_CONFIG[status] || {

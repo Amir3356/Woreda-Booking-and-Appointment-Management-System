@@ -1,9 +1,7 @@
-"use client";
-
-import Link from "next/link";
-import { useStore } from "@/lib/store";
+import Link from "@/components/ui/Link";
+import { useStore } from "@/context";
 import StatusBadge from "@/components/shared/StatusBadge";
-import { formatDate } from "@/lib/utils";
+import { formatDate } from "@/utils";
 import {
   Calendar,
   Clock,

@@ -7,8 +7,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./"),
-      "next/navigation": path.resolve(__dirname, "./shims/next-navigation.js"),
-      "next/link": path.resolve(__dirname, "./shims/next-link.jsx"),
     },
   },
   server: {

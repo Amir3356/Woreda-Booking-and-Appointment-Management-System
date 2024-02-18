@@ -1,9 +1,7 @@
-"use client";
-
 import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useStore } from "@/context";
 import StatusBadge from "@/components/shared/StatusBadge";
-import { formatDate } from "@/lib/utils";
+import { formatDate } from "@/utils";
 import {
   Layers,
   Users,
@@ -18,7 +16,7 @@ import {
   X,
   Plus,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/ui/Link";
 
 export default function OfficerDashboardPage() {
   const {

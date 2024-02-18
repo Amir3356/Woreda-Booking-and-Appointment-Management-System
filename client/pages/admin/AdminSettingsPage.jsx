@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { Settings, Save, CheckCircle2, Shield, BellRing, Database } from "lucide-react";
 

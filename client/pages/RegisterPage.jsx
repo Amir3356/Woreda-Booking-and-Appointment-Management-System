@@ -1,11 +1,9 @@
-"use client";
-
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useRouter } from "@/hooks";
+import Link from "@/components/ui/Link";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { useStore } from "@/lib/store";
+import { useStore } from "@/context";
 import { User, Phone, Mail, MapPin, Lock, Shield, CheckCircle } from "lucide-react";
 
 export default function RegisterPage() {

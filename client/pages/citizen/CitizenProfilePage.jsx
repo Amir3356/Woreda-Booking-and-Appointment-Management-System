@@ -1,7 +1,5 @@
-"use client";
-
 import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useStore } from "@/context";
 import { User, Phone, Mail, MapPin, Shield, CheckCircle2 } from "lucide-react";
 
 export default function CitizenProfilePage() {

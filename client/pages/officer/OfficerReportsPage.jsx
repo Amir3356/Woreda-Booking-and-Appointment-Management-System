@@ -1,6 +1,4 @@
-"use client";
-
-import { useStore } from "@/lib/store";
+import { useStore } from "@/context";
 import {
   BarChart3,
   Printer,
@@ -9,7 +7,7 @@ import {
   Clock,
   XCircle,
 } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate } from "@/utils";
 
 export default function OfficerReportsPage() {
   const { currentUser, appointments } = useStore();

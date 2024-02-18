@@ -1,0 +1,108 @@
+# WoredaCare — local development stack
+#   docker compose up --build
+# Frontend (client/) runs separately with `npm run dev` and talks to the gateway:
+#   VITE_API_BASE_URL=http://localhost:8080/api/v1
+
+name: woreda-booking
+
+x-service-env: &service-env
+  DATABASE_URL: postgres://${POSTGRES_USER:-woreda}:${POSTGRES_PASSWORD:-woreda}@postgres:5432/${POSTGRES_DB:-woreda}?sslmode=disable
+  JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks: [backend]
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-woreda}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-woreda}
+      POSTGRES_DB: ${POSTGRES_DB:-woreda}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  api-gateway:
+    build: ./server/api-gateway
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      AUTH_SERVICE_URL: http://auth-service:8081
+      USER_SERVICE_URL: http://user-service:8082
+      DEPARTMENT_SERVICE_URL: http://department-service:8083
+      APPOINTMENT_SERVICE_URL: http://appointment-service:8084
+      BOOKING_SERVICE_URL: http://booking-service:8085
+      AUDIT_SERVICE_URL: http://audit-service:8087
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - user-service
+      - department-service
+      - appointment-service
+      - booking-service
+      - audit-service
+    networks: [backend]
+
+  auth-service:
+    <<: *service-defaults
+    build: ./server/auth-service
+    environment:
+      <<: *service-env
+      PORT: "8081"
+
+  user-service:
+    <<: *service-defaults
+    build: ./server/user-service
+    environment:
+      <<: *service-env
+      PORT: "8082"
+
+  department-service:
+    <<: *service-defaults
+    build: ./server/department-service
+    environment:
+      <<: *service-env
+      PORT: "8083"
+
+  appointment-service:
+    <<: *service-defaults
+    build: ./server/appointment-service
+    environment:
+      <<: *service-env
+      PORT: "8084"
+
+  booking-service:
+    <<: *service-defaults
+    build: ./server/booking-service
+    environment:
+      <<: *service-env
+      PORT: "8085"
+
+  audit-service:
+    <<: *service-defaults
+    build: ./server/audit-service
+    environment:
+      <<: *service-env
+      PORT: "8087"
+
+volumes:
+  postgres-data:
+
+networks:
+  backend:

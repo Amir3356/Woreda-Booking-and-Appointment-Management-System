@@ -1,7 +1,5 @@
-"use client";
-
 import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useStore } from "@/context";
 import {
   Building2,
   Plus,
