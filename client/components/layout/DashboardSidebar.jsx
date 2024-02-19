@@ -1,7 +1,6 @@
 import Link from "@/components/ui/Link";
 import { usePathname } from "@/hooks";
 import {
-  LayoutDashboard,
   Building2,
   FileText,
   Calendar,
@@ -40,7 +39,6 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   ];
 
   const citizenNav = [
-    { href: "/citizen", label: "Overview", icon: LayoutDashboard },
     { href: "/citizen/book", label: "Book Appointment", icon: Calendar },
   ];
 
@@ -63,7 +61,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
 
   const isAdmin = role === "ADMIN" || pathname?.startsWith("/admin");
   const isOfficer = role === "OFFICER" || pathname?.startsWith("/officer");
-  const brandHref = role === "ADMIN" ? "/admin" : role === "OFFICER" ? "/officer/appointments" : "/citizen";
+  const brandHref = role === "ADMIN" ? "/admin" : role === "OFFICER" ? "/officer/appointments" : "/citizen/book";
 
   return (
     <aside

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useRouter } from "@/hooks";
 import { useStore } from "@/context";
+import { resolveUserSession, formatDisplayNameFromEmail } from "@/services";
 import {
   Building,
   User,
@@ -80,66 +81,25 @@ export default function AuthPage() {
 
     setLoading(true);
 
-    // Look up user from database / store by email
-    const matchedUser = (users || []).find(
-      (u) => u.email?.toLowerCase() === emailClean
-    );
-
-    let authenticatedUser;
-    let targetPath = "/citizen";
-
-    if (matchedUser) {
-      authenticatedUser = matchedUser;
-      if (matchedUser.role === "ADMIN") {
-        targetPath = "/admin";
-      } else if (matchedUser.role === "OFFICER") {
-        targetPath = "/officer";
-      } else {
-        targetPath = "/citizen";
-      }
-    } else {
-      // Dynamic fallback for any other valid email
-      let targetRole = "CITIZEN";
-      let deptName = null;
-      let deptId = null;
-
-      if (emailClean.includes("admin")) {
-        targetRole = "ADMIN";
-        targetPath = "/admin";
-        deptName = "Woreda Central Administration";
-      } else if (emailClean.includes("officer") || emailClean.endsWith("@woreda.gov.et")) {
-        targetRole = "OFFICER";
-        targetPath = "/officer";
-        const matchedDept = departments?.[0];
-        deptName = matchedDept?.name || "Kebele Administration & Vital Events";
-        deptId = matchedDept?.id || "dept-1";
-      } else {
-        targetRole = "CITIZEN";
-        targetPath = "/citizen";
-      }
-
-      let displayName = emailClean.split("@")[0].replace(/[._-]/g, " ");
-      displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
-
-      authenticatedUser = {
-        id: `usr-${Date.now()}`,
-        fullName: displayName || "Woreda User",
-        email: signInEmail.trim(),
-        phone: "+251911000000",
-        nationalId: `ET-${targetRole.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
-        role: targetRole,
-        departmentId: deptId,
-        departmentName: deptName,
-        isActive: true,
-        address: "Kebele 03, Woreda Center",
-      };
-    }
+    const session = resolveUserSession(signInEmail, users, departments);
+    const authenticatedUser = session.user || {
+      id: `usr-${Date.now()}`,
+      fullName: formatDisplayNameFromEmail(signInEmail),
+      email: signInEmail.trim(),
+      phone: "+251911000000",
+      nationalId: `ET-${session.role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
+      role: session.role,
+      departmentId: session.departmentId,
+      departmentName: session.departmentName,
+      isActive: true,
+      address: "Kebele 03, Woreda Center",
+    };
 
     setCurrentUser(authenticatedUser);
 
     setTimeout(() => {
       setLoading(false);
-      router.push(targetPath);
+      router.push(session.portalPath);
     }, 400);
   };
 
