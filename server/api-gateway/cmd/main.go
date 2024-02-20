@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/woreda/booking/api-gateway/config"
+	"github.com/woreda/booking/api-gateway/controller"
 	"github.com/woreda/booking/api-gateway/middleware"
 	"github.com/woreda/booking/api-gateway/routes"
 )
@@ -19,11 +20,17 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil)).With("service", "api-gateway")
 	cfg := config.Load()
 
-	mux := http.NewServeMux()
-	if err := routes.Register(mux, cfg.Services, logger); err != nil {
-		logger.Error("register routes", "err", err)
+	// Initialize GatewayController to receive and coordinate forwarding to microservices
+	ctrl, err := controller.New(cfg.Services, logger)
+	if err != nil {
+		logger.Error("initialize gateway controller", "err", err)
 		os.Exit(1)
 	}
+
+	// Define gateway endpoints and map them to the controller
+	mux := http.NewServeMux()
+	routes.Register(mux, ctrl)
+
 	handler := middleware.Chain(mux,
 		middleware.RequestID,
 		middleware.RateLimit(300, time.Minute),

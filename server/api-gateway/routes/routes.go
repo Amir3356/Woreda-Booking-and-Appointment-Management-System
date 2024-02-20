@@ -1,40 +1,48 @@
-// Package routes maps API path prefixes to upstream services.
+// Package routes defines gateway endpoints and maps them to controllers.
 package routes
 
 import (
-	"log/slog"
 	"net/http"
 
-	"github.com/woreda/booking/api-gateway/config"
-	"github.com/woreda/booking/api-gateway/proxy"
+	"github.com/woreda/booking/api-gateway/controller"
 )
 
-// Register wires every API.md module prefix onto the matching service proxy.
-func Register(mux *http.ServeMux, svc config.Services, logger *slog.Logger) error {
-	table := map[string]string{
-		"/api/v1/auth":             svc.Auth,
-		"/api/v1/citizen":          svc.User,
-		"/api/v1/admin/users":      svc.User,
-		"/api/v1/admin/settings":   svc.User,
-		"/api/v1/admin/audit-logs": svc.Audit,
-		"/api/v1/departments":      svc.Department,
-		"/api/v1/services":         svc.Department,
-		"/api/v1/appointments":     svc.Appointment,
-		"/api/v1/reports":          svc.Appointment,
-		"/api/v1/schedules":        svc.Booking,
-		"/api/v1/queue":            svc.Booking,
-	}
-	for prefix, target := range table {
-		p, err := proxy.New(target, logger)
-		if err != nil {
-			return err
-		}
-		mux.Handle(prefix, p)     // exact collection path
-		mux.Handle(prefix+"/", p) // subtree
-	}
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"message":"ok"}`))
-	})
-	return nil
+// Register defines all API Gateway endpoints and binds them to the GatewayController.
+func Register(mux *http.ServeMux, c *controller.GatewayController) {
+	// Authentication routes (/api/v1/auth) -> auth-service
+	mux.HandleFunc("/api/v1/auth", c.ForwardAuth)
+	mux.HandleFunc("/api/v1/auth/", c.ForwardAuth)
+
+	// Citizen profile, staff provisioning, and system settings -> user-service
+	mux.HandleFunc("/api/v1/citizen", c.ForwardUser)
+	mux.HandleFunc("/api/v1/citizen/", c.ForwardUser)
+	mux.HandleFunc("/api/v1/admin/users", c.ForwardUser)
+	mux.HandleFunc("/api/v1/admin/users/", c.ForwardUser)
+	mux.HandleFunc("/api/v1/admin/settings", c.ForwardUser)
+	mux.HandleFunc("/api/v1/admin/settings/", c.ForwardUser)
+
+	// Security audit logs -> audit-service
+	mux.HandleFunc("/api/v1/admin/audit-logs", c.ForwardAudit)
+	mux.HandleFunc("/api/v1/admin/audit-logs/", c.ForwardAudit)
+
+	// Departments and service catalog -> department-service
+	mux.HandleFunc("/api/v1/departments", c.ForwardDepartment)
+	mux.HandleFunc("/api/v1/departments/", c.ForwardDepartment)
+	mux.HandleFunc("/api/v1/services", c.ForwardDepartment)
+	mux.HandleFunc("/api/v1/services/", c.ForwardDepartment)
+
+	// Appointments lifecycle and reports -> appointment-service
+	mux.HandleFunc("/api/v1/appointments", c.ForwardAppointment)
+	mux.HandleFunc("/api/v1/appointments/", c.ForwardAppointment)
+	mux.HandleFunc("/api/v1/reports", c.ForwardAppointment)
+	mux.HandleFunc("/api/v1/reports/", c.ForwardAppointment)
+
+	// Operating schedules and live counter queue -> booking-service
+	mux.HandleFunc("/api/v1/schedules", c.ForwardBooking)
+	mux.HandleFunc("/api/v1/schedules/", c.ForwardBooking)
+	mux.HandleFunc("/api/v1/queue", c.ForwardBooking)
+	mux.HandleFunc("/api/v1/queue/", c.ForwardBooking)
+
+	// Gateway health probe
+	mux.HandleFunc("GET /healthz", c.HealthCheck)
 }

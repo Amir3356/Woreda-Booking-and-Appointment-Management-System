@@ -53,3 +53,4 @@ export function calculateDepartmentDailyCapacity(services = [], departmentId) {
   const deptServices = getDepartmentServices(services, departmentId, true);
   return deptServices.reduce((sum, s) => sum + (s.dailyQuota || 40), 0);
 }
+

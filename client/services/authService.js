@@ -115,3 +115,4 @@ export function resolveUserSession(email, usersList = [], departmentsList = []) 
     user: null,
   };
 }
+

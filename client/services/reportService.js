@@ -100,3 +100,4 @@ export function generateAppointmentsCSV(appointments = []) {
 
   return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
 }
+
