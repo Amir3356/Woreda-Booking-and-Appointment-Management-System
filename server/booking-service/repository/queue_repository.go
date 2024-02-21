@@ -2,11 +2,11 @@ package repository
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/woreda/booking/booking-service/model"
+	"github.com/woreda/booking/booking-service/utils"
 )
 
 // GetCheckInAppointment loads the appointment fields needed to verify a check-in.
@@ -41,7 +41,7 @@ func (r *Repository) IssueToken(ctx context.Context, a *model.CheckInAppointment
 		if err != nil {
 			return err
 		}
-		out.TokenNumber = fmt.Sprintf("%s-%02d", a.DepartmentCode, seq)
+		out.TokenNumber = utils.GenerateQueueToken(a.DepartmentCode, seq)
 		tag, err := tx.Exec(ctx, `
 			UPDATE appointments SET status = 'CHECKED_IN', token_number = $2, checked_in_at = CURRENT_TIMESTAMP
 			WHERE id = $1 AND status = 'APPROVED'`, a.ID, out.TokenNumber)

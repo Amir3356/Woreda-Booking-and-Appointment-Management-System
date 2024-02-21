@@ -3,15 +3,13 @@ package service
 
 import (
 	"context"
-	"regexp"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/woreda/booking/user-service/model"
+	"github.com/woreda/booking/user-service/utils"
 )
-
-var ethiopianPhone = regexp.MustCompile(`^\+2519\d{8}$`)
 
 // Repository is the persistence port this service needs (implemented by repository.Repository).
 type Repository interface {
@@ -43,7 +41,7 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, p model.Citi
 	if len(p.FullName) < 3 {
 		v.add("fullName", "Full name is required (min 3 characters).")
 	}
-	if !ethiopianPhone.MatchString(p.Phone) {
+	if !utils.IsValidEthiopianPhone(p.Phone) {
 		v.add("phone", "Phone number must match valid Ethiopian format (+2519XXXXXXXX).")
 	}
 	if err := v.err(); err != nil {
@@ -82,7 +80,7 @@ func (s *Service) Provision(ctx context.Context, req model.ProvisionRequest) (st
 	if len(strings.TrimSpace(req.FullName)) < 3 {
 		v.add("fullName", "Full name is required (min 3 characters).")
 	}
-	if !strings.Contains(req.Email, "@") {
+	if !utils.IsValidEmail(req.Email) {
 		v.add("email", "A valid email address is required.")
 	}
 	if len(req.Password) < 8 {

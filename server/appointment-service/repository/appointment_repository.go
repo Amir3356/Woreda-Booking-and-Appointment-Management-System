@@ -2,14 +2,13 @@ package repository
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/woreda/booking/appointment-service/model"
+	"github.com/woreda/booking/appointment-service/utils"
 )
 
 // Repository persists appointments.
@@ -92,7 +91,7 @@ func (r *Repository) Create(ctx context.Context, a *model.Appointment) error {
 			return err
 		}
 		a.ID = newID("apt")
-		a.ReferenceNumber = fmt.Sprintf("WRD-%s-%04d", strings.ReplaceAll(a.Date, "-", ""), time.Now().UnixNano()%10000)
+		a.ReferenceNumber = utils.GenerateReferenceNumber(time.Now())
 		return tx.QueryRow(ctx, `
 			INSERT INTO appointments (id, reference_number, citizen_id, citizen_name, citizen_phone, citizen_email,
 			       department_id, service_id, appointment_date, time_slot, status, citizen_notes)

@@ -95,3 +95,4 @@ func (c *GatewayController) HealthCheck(w http.ResponseWriter, _ *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"success":true,"service":"api-gateway","status":"healthy"}`))
 }
+

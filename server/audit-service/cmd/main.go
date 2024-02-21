@@ -17,7 +17,6 @@ import (
 	"github.com/woreda/booking/audit-service/repository"
 	"github.com/woreda/booking/audit-service/routes"
 	"github.com/woreda/booking/audit-service/service"
-	"github.com/woreda/booking/audit-service/consumer"
 )
 
 func main() {
@@ -47,13 +46,6 @@ func main() {
 	ctrl := controller.New(svc)
 	root := routes.Register(http.NewServeMux(), ctrl, cfg.JWTSecret, logger)
 
-	// Event consumer runs alongside the HTTP server and stops with ctx.
-	cons := consumer.NewLogConsumer(svc, logger)
-	go func() {
-		if err := cons.Start(ctx); err != nil {
-			logger.Error("consumer stopped", "err", err)
-		}
-	}()
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: root, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		logger.Info("listening", "addr", srv.Addr)

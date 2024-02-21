@@ -14,26 +14,6 @@ type FieldError struct {
 	Issue string `json:"issue"`
 }
 
-// Pagination is the meta.pagination object for paginated lists.
-type Pagination struct {
-	TotalItems  int  `json:"totalItems"`
-	Page        int  `json:"page"`
-	Limit       int  `json:"limit"`
-	TotalPages  int  `json:"totalPages"`
-	HasNextPage bool `json:"hasNextPage"`
-	HasPrevPage bool `json:"hasPrevPage"`
-}
-
-// NewPagination derives page metadata from a total count.
-func NewPagination(total, page, limit int) Pagination {
-	pages := 0
-	if limit > 0 {
-		pages = (total + limit - 1) / limit
-	}
-	return Pagination{TotalItems: total, Page: page, Limit: limit, TotalPages: pages,
-		HasNextPage: page < pages, HasPrevPage: page > 1}
-}
-
 func now() string { return time.Now().Format(time.RFC3339) }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
@@ -48,12 +28,6 @@ func OK(w http.ResponseWriter, status int, message string, data any) {
 		"success": true, "message": message, "data": data,
 		"meta": map[string]any{"timestamp": now(), "version": "v1"},
 	})
-}
-
-// OKWithMeta writes a success envelope with extra meta keys (e.g. "pagination", "cursor").
-func OKWithMeta(w http.ResponseWriter, message string, data any, meta map[string]any) {
-	meta["timestamp"] = now()
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": message, "data": data, "meta": meta})
 }
 
 // Fail writes the standard error envelope.

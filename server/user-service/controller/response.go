@@ -14,26 +14,6 @@ type FieldError struct {
 	Issue string `json:"issue"`
 }
 
-// Pagination is the meta.pagination object for paginated lists.
-type Pagination struct {
-	TotalItems  int  `json:"totalItems"`
-	Page        int  `json:"page"`
-	Limit       int  `json:"limit"`
-	TotalPages  int  `json:"totalPages"`
-	HasNextPage bool `json:"hasNextPage"`
-	HasPrevPage bool `json:"hasPrevPage"`
-}
-
-// NewPagination derives page metadata from a total count.
-func NewPagination(total, page, limit int) Pagination {
-	pages := 0
-	if limit > 0 {
-		pages = (total + limit - 1) / limit
-	}
-	return Pagination{TotalItems: total, Page: page, Limit: limit, TotalPages: pages,
-		HasNextPage: page < pages, HasPrevPage: page > 1}
-}
-
 func now() string { return time.Now().Format(time.RFC3339) }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
