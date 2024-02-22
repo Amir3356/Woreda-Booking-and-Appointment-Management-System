@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useStore } from "@/context";
-import AppointmentSlip from "@/components/shared/AppointmentSlip";
+import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 import {
   Calendar,
   Clock,

@@ -1,8 +1,8 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "@/hooks";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
-import AppointmentSlip from "@/components/shared/AppointmentSlip";
+import Navbar from "@/layout/Navbar";
+import Footer from "@/layout/Footer";
+import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 import { useStore } from "@/context";
 import { formatETB, formatDate } from "@/utils";
 import {

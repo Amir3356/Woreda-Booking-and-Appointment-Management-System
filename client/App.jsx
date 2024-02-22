@@ -1,6 +1,9 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
+// Layouts
+import { AdminLayout, OfficerLayout, CitizenLayout } from "@/layout";
+
 // Public pages
 import AuthPage from "@/pages/AuthPage";
 import RegisterPage from "@/pages/RegisterPage";
@@ -11,8 +14,7 @@ import ContactPage from "@/pages/ContactPage";
 import BookPage from "@/pages/BookPage";
 import TrackPage from "@/pages/TrackPage";
 
-// Admin layout & pages
-import AdminLayout from "@/pages/admin/AdminLayout";
+// Admin pages
 import AdminDashboardPage from "@/pages/admin/AdminDashboardPage";
 import AdminAppointmentsPage from "@/pages/admin/AdminAppointmentsPage";
 import AdminDepartmentsPage from "@/pages/admin/AdminDepartmentsPage";
@@ -24,16 +26,14 @@ import AdminReportsPage from "@/pages/admin/AdminReportsPage";
 import AdminAuditPage from "@/pages/admin/AdminAuditPage";
 import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
 
-// Officer layout & pages
-import OfficerLayout from "@/pages/officer/OfficerLayout";
+// Officer pages
 import OfficerDashboardPage from "@/pages/officer/OfficerDashboardPage";
 import OfficerAppointmentsPage from "@/pages/officer/OfficerAppointmentsPage";
 import OfficerQueuePage from "@/pages/officer/OfficerQueuePage";
 import OfficerVerifyPage from "@/pages/officer/OfficerVerifyPage";
 import OfficerReportsPage from "@/pages/officer/OfficerReportsPage";
 
-// Citizen layout & pages
-import CitizenLayout from "@/pages/citizen/CitizenLayout";
+// Citizen pages
 import CitizenDashboardPage from "@/pages/citizen/CitizenDashboardPage";
 import CitizenBookAppointmentPage from "@/pages/citizen/CitizenBookAppointmentPage";
 import CitizenAppointmentsPage from "@/pages/citizen/CitizenAppointmentsPage";

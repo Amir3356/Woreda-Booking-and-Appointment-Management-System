@@ -1,5 +1,5 @@
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
+import Navbar from "@/layout/Navbar";
+import Footer from "@/layout/Footer";
 import { useStore } from "@/context";
 import mockData from "@/data";
 import Link from "@/components/ui/Link";

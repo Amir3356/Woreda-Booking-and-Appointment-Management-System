@@ -13,6 +13,14 @@
     "strict": false,
     "baseUrl": ".",
     "paths": {
+      "@/layout/*": ["./layout/*"],
+      "@/layout": ["./layout"],
+      "@/features/*": ["./features/*"],
+      "@/features": ["./features"],
+      "@/components/*": ["./components/*"],
+      "@/components": ["./components"],
+      "@/pages/*": ["./pages/*"],
+      "@/pages": ["./pages"],
       "@/*": ["./*"]
     }
   },

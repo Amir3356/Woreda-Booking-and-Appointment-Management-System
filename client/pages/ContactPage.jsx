@@ -1,6 +1,6 @@
 import { useState } from "react";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
+import Navbar from "@/layout/Navbar";
+import Footer from "@/layout/Footer";
 import mockData from "@/data";
 import { Phone, Mail, MapPin, Clock, Send, CheckCircle2 } from "lucide-react";
 

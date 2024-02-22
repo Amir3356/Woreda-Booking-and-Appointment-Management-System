@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
-import DashboardSidebar from "@/components/layout/DashboardSidebar";
-import DashboardHeader from "@/components/layout/DashboardHeader";
+import DashboardSidebar from "./DashboardSidebar";
+import DashboardHeader from "./DashboardHeader";
 
 export default function OfficerLayout({ children }) {
   return (

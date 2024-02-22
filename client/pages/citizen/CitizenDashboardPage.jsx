@@ -1,6 +1,6 @@
 import Link from "@/components/ui/Link";
 import { useStore } from "@/context";
-import StatusBadge from "@/components/shared/StatusBadge";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { formatDate } from "@/utils";
 import {
   Calendar,
@@ -14,7 +14,7 @@ import {
   Building,
 } from "lucide-react";
 import { useState } from "react";
-import AppointmentSlip from "@/components/shared/AppointmentSlip";
+import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 
 export default function CitizenDashboardPage() {
   const { currentUser, appointments, services } = useStore();

@@ -1,9 +1,9 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "@/hooks";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
-import StatusBadge from "@/components/shared/StatusBadge";
-import AppointmentSlip from "@/components/shared/AppointmentSlip";
+import Navbar from "@/layout/Navbar";
+import Footer from "@/layout/Footer";
+import StatusBadge from "@/components/ui/StatusBadge";
+import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 import { useStore } from "@/context";
 import { formatDate, formatETB } from "@/utils";
 import {

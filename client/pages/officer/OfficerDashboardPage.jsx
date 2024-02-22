@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useStore } from "@/context";
-import StatusBadge from "@/components/shared/StatusBadge";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { formatDate } from "@/utils";
 import {
   Layers,

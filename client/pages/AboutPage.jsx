@@ -1,5 +1,5 @@
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
+import Navbar from "@/layout/Navbar";
+import Footer from "@/layout/Footer";
 import mockData from "@/data";
 import { Building, ShieldCheck, Clock, Users, CheckCircle2, FileText } from "lucide-react";
 import Link from "@/components/ui/Link";

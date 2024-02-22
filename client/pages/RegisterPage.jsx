@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useRouter } from "@/hooks";
 import Link from "@/components/ui/Link";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
+import Navbar from "@/layout/Navbar";
+import Footer from "@/layout/Footer";
 import { useStore } from "@/context";
 import { User, Phone, Mail, MapPin, Lock, Shield, CheckCircle } from "lucide-react";
 

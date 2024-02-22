@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useStore } from "@/context";
 import { appointments as INITIAL_APPOINTMENTS } from "@/data";
-import StatusBadge from "@/components/shared/StatusBadge";
-import AppointmentSlip from "@/components/shared/AppointmentSlip";
+import StatusBadge from "@/components/ui/StatusBadge";
+import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 import { formatDate } from "@/utils";
 import {
   Calendar,
