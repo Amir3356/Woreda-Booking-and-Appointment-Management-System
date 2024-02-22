@@ -153,8 +153,8 @@ This RESTful API is structured strictly around the **features, client workflows,
 - **Request Body**:
   ```json
   {
-    "email": "admin@woreda.gov.et",
-    "password": "Password@123",
+    "email": "amirsiraj1995@gmail.com",
+    "password": "AEHJSS36",
     "role": "Central Administrator" // Optional client-side role context
   }
   ```
@@ -167,8 +167,8 @@ This RESTful API is structured strictly around the **features, client workflows,
       "token": "eyJhbGciOi...",
       "user": {
         "id": "usr-admin",
-        "fullName": "Ato Kibreab Demissie",
-        "email": "admin@woreda.gov.et",
+        "fullName": "Amir Siraj",
+        "email": "amirsiraj1995@gmail.com",
         "role": "ADMIN",
         "departmentId": null,
         "departmentName": "Woreda Central Administration"

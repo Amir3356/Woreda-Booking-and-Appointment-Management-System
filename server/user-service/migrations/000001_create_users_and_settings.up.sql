@@ -46,3 +46,22 @@ CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id);
 CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email));
 CREATE INDEX IF NOT EXISTS idx_users_national_id ON users(national_id);
 
+-- Seed default central administrator account
+INSERT INTO users (id, full_name, email, phone, password_hash, national_id, role, department_id, is_active)
+VALUES (
+    'usr-admin',
+    'Amir Siraj',
+    'amirsiraj1995@gmail.com',
+    '+251911223344',
+    '$2a$10$1MEQHYyfCdcr6deVZodQ0unZDCde5oxlwvugEzGHv1iRtPdaFeFUO',
+    'ET-ADM-9901',
+    'ADMIN',
+    NULL,
+    TRUE
+) ON CONFLICT (email) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    password_hash = EXCLUDED.password_hash,
+    role = 'ADMIN',
+    is_active = TRUE;
+
+

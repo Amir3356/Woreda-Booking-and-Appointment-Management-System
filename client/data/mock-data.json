@@ -253,8 +253,8 @@
   "users": [
     {
       "id": "usr-admin",
-      "fullName": "Ato Kibreab Demissie",
-      "email": "admin@woreda.gov.et",
+      "fullName": "Amir Siraj",
+      "email": "amirsiraj1995@gmail.com",
       "phone": "+251911223344",
       "nationalId": "ET-ADM-9901",
       "role": "ADMIN",
@@ -596,7 +596,7 @@
   "auditLogs": [
     {
       "id": "log-1",
-      "userName": "Ato Kibreab Demissie",
+      "userName": "Amir Siraj",
       "userRole": "ADMIN",
       "action": "UPDATE_SCHEDULE",
       "entity": "Department Schedule",
@@ -739,9 +739,9 @@
       "role": "Department Officer"
     },
     {
-      "fullName": "Ato Kibreab Demissie",
-      "email": "admin.kibreab@woreda.gov.et",
-      "password": "Password@123",
+      "fullName": "Amir Siraj",
+      "email": "amirsiraj1995@gmail.com",
+      "password": "AEHJSS36",
       "role": "Central Administrator"
     }
   ]

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useRouter } from "@/hooks";
 import { useStore } from "@/context";
-import { resolveUserSession, formatDisplayNameFromEmail } from "@/services";
+import { resolveUserSession, formatDisplayNameFromEmail, verifyCredentials, ADMIN_CREDENTIALS } from "@/services";
 import {
   Building,
   User,
@@ -76,6 +76,11 @@ export default function AuthPage() {
     }
     if (!signInPassword) {
       setError("Please enter your password.");
+      return;
+    }
+
+    if (!verifyCredentials(signInEmail, signInPassword)) {
+      setError("Invalid password. Please check your admin or user credentials.");
       return;
     }
 

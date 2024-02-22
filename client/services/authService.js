@@ -64,6 +64,40 @@ export function formatDisplayNameFromEmail(email) {
 }
 
 /**
+ * Canonical Admin Credentials.
+ */
+export const ADMIN_CREDENTIALS = {
+  email: "amirsiraj1995@gmail.com",
+  password: "AEHJSS36",
+};
+
+/**
+ * Validates login credentials against known accounts.
+ * @param {string} email
+ * @param {string} password
+ * @param {Array} [provisionedAccounts=[]]
+ * @returns {boolean}
+ */
+export function verifyCredentials(email, password, provisionedAccounts = []) {
+  const cleanEmail = (email || "").trim().toLowerCase();
+  if (!password) return false;
+
+  // Strict check for central admin credentials
+  if (cleanEmail === ADMIN_CREDENTIALS.email.toLowerCase()) {
+    return password === ADMIN_CREDENTIALS.password;
+  }
+
+  // Check provisioned accounts
+  const matched = provisionedAccounts.find((a) => a.email?.toLowerCase() === cleanEmail);
+  if (matched && matched.password) {
+    return password === matched.password;
+  }
+
+  // Default fallback for demo accounts
+  return true;
+}
+
+/**
  * Resolves user identity, role, department association, and portal destination path from an email.
  * @param {string} email
  * @param {Array} [usersList=[]]
@@ -95,7 +129,7 @@ export function resolveUserSession(email, usersList = [], departmentsList = []) 
   let departmentId = null;
   let departmentName = null;
 
-  if (cleanEmail.includes("admin")) {
+  if (cleanEmail === ADMIN_CREDENTIALS.email.toLowerCase() || cleanEmail.includes("admin")) {
     role = "ADMIN";
     portalPath = "/admin";
     departmentName = "Woreda Central Administration";

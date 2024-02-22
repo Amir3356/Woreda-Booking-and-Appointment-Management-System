@@ -17,8 +17,8 @@ export default function RoleSwitcher() {
   let activeUser = currentUser;
   if (isAdmin && (!currentUser || currentUser?.role !== "ADMIN")) {
     activeUser = {
-      fullName: currentUser?.role === "ADMIN" ? currentUser.fullName : "Ato Kibreab Demissie",
-      email: currentUser?.role === "ADMIN" ? currentUser.email : "admin@woreda.gov.et",
+      fullName: currentUser?.role === "ADMIN" ? currentUser.fullName : "Amir Siraj",
+      email: currentUser?.role === "ADMIN" ? currentUser.email : "amirsiraj1995@gmail.com",
       role: "ADMIN",
     };
   } else if (isOfficer && (!currentUser || currentUser?.role !== "OFFICER")) {
