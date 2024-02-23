@@ -1,67 +1,47 @@
 import { useState } from "react";
 import { useRouter } from "@/hooks";
 import { useStore } from "@/context";
-import { resolveUserSession, formatDisplayNameFromEmail, verifyCredentials, ADMIN_CREDENTIALS } from "@/services";
+import {
+  resolveUserSession,
+  verifyCredentials,
+  isValidEmail,
+} from "@/services";
+import { EthiopianFlag } from "@/components/ui";
 import {
   Building,
   User,
   Mail,
   Lock,
-  Shield,
+  Eye,
+  EyeOff,
   Phone,
   ArrowRight,
   ShieldCheck,
   AlertCircle,
-  UserPlus,
-  LogIn,
   CheckCircle2,
 } from "lucide-react";
 
 export default function AuthPage() {
   const router = useRouter();
-  const { setCurrentUser, addUser, departments, users } = useStore();
+  const { setCurrentUser, addUser, departments, users, provisionedAccounts } = useStore();
 
   const [mode, setMode] = useState("signin"); // "signin" | "signup"
 
   // Sign In Form State
   const [signInEmail, setSignInEmail] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
 
-  // Sign Up Form State
+  // Sign Up Form State (Citizen only)
   const [signUpFullName, setSignUpFullName] = useState("");
   const [signUpEmail, setSignUpEmail] = useState("");
-  const [signUpRole, setSignUpRole] = useState("Citizen");
-  const [signUpDeptId, setSignUpDeptId] = useState("dept-1");
+  const [signUpPhone, setSignUpPhone] = useState("+251 9");
   const [signUpPassword, setSignUpPassword] = useState("");
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
 
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Helper for role mapping
-  const resolveRoleMeta = (roleString, deptIdParam) => {
-    let targetRole = "CITIZEN";
-    let targetPath = "/citizen";
-    let deptName = null;
-    let deptId = null;
-
-    if (roleString === "Admin") {
-      targetRole = "ADMIN";
-      targetPath = "/admin";
-      deptName = "Woreda Central Administration";
-    } else if (roleString === "Department Officer") {
-      targetRole = "OFFICER";
-      targetPath = "/officer";
-      const matchedDept = departments.find((d) => d.id === deptIdParam) || departments[0];
-      deptName = matchedDept?.name || "Kebele Administration & Vital Events";
-      deptId = matchedDept?.id || "dept-1";
-    } else {
-      targetRole = "CITIZEN";
-      targetPath = "/citizen";
-    }
-
-    return { targetRole, targetPath, deptName, deptId };
-  };
 
   // Handle Sign In
   const handleSignIn = (e) => {
@@ -79,28 +59,27 @@ export default function AuthPage() {
       return;
     }
 
-    if (!verifyCredentials(signInEmail, signInPassword)) {
-      setError("Invalid password. Please check your admin or user credentials.");
+    // 1. Strict credential check against Admin, provisioned staff, and registered users
+    const isValid = verifyCredentials(signInEmail, signInPassword, users, provisionedAccounts);
+    if (!isValid) {
+      setError("Invalid email or password.");
+      return;
+    }
+
+    // 2. Resolve user session
+    const session = resolveUserSession(signInEmail, users, departments, provisionedAccounts);
+    if (!session || !session.user) {
+      setError("No registered account found for this email.");
+      return;
+    }
+
+    if (session.user.isActive === false) {
+      setError("This account is currently deactivated. Please contact administration.");
       return;
     }
 
     setLoading(true);
-
-    const session = resolveUserSession(signInEmail, users, departments);
-    const authenticatedUser = session.user || {
-      id: `usr-${Date.now()}`,
-      fullName: formatDisplayNameFromEmail(signInEmail),
-      email: signInEmail.trim(),
-      phone: "+251911000000",
-      nationalId: `ET-${session.role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
-      role: session.role,
-      departmentId: session.departmentId,
-      departmentName: session.departmentName,
-      isActive: true,
-      address: "Kebele 03, Woreda Center",
-    };
-
-    setCurrentUser(authenticatedUser);
+    setCurrentUser(session.user);
 
     setTimeout(() => {
       setLoading(false);
@@ -108,20 +87,46 @@ export default function AuthPage() {
     }, 400);
   };
 
-  // Handle Sign Up
+  // Handle Sign Up (Public self-registration for Citizens ONLY)
   const handleSignUp = (e) => {
     e.preventDefault();
     setError("");
     setSuccessMsg("");
 
-    if (!signUpFullName.trim()) {
-      setError("Please enter your fullname.");
+    const fullNameClean = signUpFullName.trim();
+    const emailClean = signUpEmail.trim().toLowerCase();
+    const phoneClean = signUpPhone.trim();
+
+    if (!fullNameClean) {
+      setError("Please enter your full legal name.");
       return;
     }
-    if (!signUpEmail.trim()) {
-      setError("Please enter your email address.");
+    if (!emailClean || !isValidEmail(emailClean)) {
+      setError("Please enter a valid email address.");
       return;
     }
+
+    // Strict Role Policy: Department Officers and Admins CANNOT self-register
+    if (
+      emailClean.endsWith("@woreda.gov.et") ||
+      emailClean.includes("admin") ||
+      emailClean.includes("officer")
+    ) {
+      setError(
+        "Department Officer and Administrator accounts cannot self-register. Official staff credentials are created exclusively by the Central Administrator in Account Provision."
+      );
+      return;
+    }
+
+    // Duplicate account verification
+    const alreadyExists =
+      (users || []).some((u) => u.email?.toLowerCase() === emailClean) ||
+      (provisionedAccounts || []).some((a) => a.email?.toLowerCase() === emailClean);
+    if (alreadyExists) {
+      setError("An account with this email address already exists. Please sign in.");
+      return;
+    }
+
     if (!signUpPassword || signUpPassword.length < 6) {
       setError("Password must be at least 6 characters long.");
       return;
@@ -129,29 +134,27 @@ export default function AuthPage() {
 
     setLoading(true);
 
-    const { targetRole, targetPath, deptName, deptId } = resolveRoleMeta(
-      signUpRole,
-      signUpDeptId
-    );
-
+    // Register strictly as CITIZEN
     const newUser = addUser({
-      fullName: signUpFullName.trim(),
-      email: signUpEmail.trim(),
-      phone: "+251911000000",
-      role: targetRole,
-      departmentId: deptId,
-      departmentName: deptName,
-      nationalId: `ET-${targetRole.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
+      fullName: fullNameClean,
+      email: emailClean,
+      password: signUpPassword,
+      phone: phoneClean || "+251911000000",
+      role: "CITIZEN",
+      departmentId: null,
+      departmentName: null,
+      nationalId: `ET-CIT-${Math.floor(1000 + Math.random() * 9000)}`,
       address: "Kebele 03, Woreda Center",
+      isActive: true,
     });
 
     setCurrentUser(newUser);
-    setSuccessMsg("Account registered successfully! Redirecting...");
+    setSuccessMsg("Citizen account registered successfully! Redirecting...");
 
     setTimeout(() => {
       setLoading(false);
-      router.push(targetPath);
-    }, 600);
+      router.push("/citizen");
+    }, 500);
   };
 
 
@@ -218,13 +221,42 @@ export default function AuthPage() {
                 <div className="auth-input-wrapper">
                   <Lock className="auth-input-icon" />
                   <input
-                    type="password"
+                    type={showSignInPassword ? "text" : "password"}
                     required
                     value={signInPassword}
                     onChange={(e) => setSignInPassword(e.target.value)}
                     placeholder="••••••••"
                     className="auth-input"
+                    style={{ paddingRight: "2.75rem" }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignInPassword(!showSignInPassword)}
+                    className="auth-password-toggle"
+                    style={{
+                      position: "absolute",
+                      right: "0.75rem",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "none",
+                      border: "none",
+                      padding: "0.25rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      color: "#94a3b8",
+                      zIndex: 5,
+                    }}
+                    title={showSignInPassword ? "Hide password" : "Show password"}
+                    aria-label={showSignInPassword ? "Hide password" : "Show password"}
+                  >
+                    {showSignInPassword ? (
+                      <EyeOff className="w-4 h-4 text-slate-500 hover:text-slate-700 transition-colors" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-slate-400 hover:text-slate-600 transition-colors" />
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -259,7 +291,7 @@ export default function AuthPage() {
             <form onSubmit={handleSignUp} className="auth-form">
               <div className="auth-form-group">
                 <label className="auth-label">
-                  Fullname *
+                  Full Legal Name *
                 </label>
                 <div className="auth-input-wrapper">
                   <User className="auth-input-icon" />
@@ -293,40 +325,22 @@ export default function AuthPage() {
 
               <div className="auth-form-group">
                 <label className="auth-label">
-                  Register As Role *
+                  Phone Number
                 </label>
                 <div className="auth-input-wrapper">
-                  <Shield className="auth-input-icon" />
-                  <select
-                    value={signUpRole}
-                    onChange={(e) => setSignUpRole(e.target.value)}
-                    className="auth-select"
-                  >
-                    <option value="Citizen">Citizen</option>
-                    <option value="Department Officer">Department Officer</option>
-                    <option value="Admin">Admin</option>
-                  </select>
+                  <span className="auth-input-icon flex items-center justify-center">
+                    <EthiopianFlag className="w-5 h-3.5 shadow-xs" />
+                  </span>
+                  <input
+                    type="tel"
+                    required
+                    value={signUpPhone}
+                    onChange={(e) => setSignUpPhone(e.target.value)}
+                    placeholder="+251 9XX XXX XXX"
+                    className="auth-input"
+                  />
                 </div>
               </div>
-
-              {signUpRole === "Department Officer" && (
-                <div className="auth-form-group">
-                  <label className="auth-label">
-                    Assigned Department Office *
-                  </label>
-                  <select
-                    value={signUpDeptId}
-                    onChange={(e) => setSignUpDeptId(e.target.value)}
-                    className="auth-select"
-                  >
-                    {departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
 
               <div className="auth-form-group">
                 <label className="auth-label">
@@ -335,13 +349,42 @@ export default function AuthPage() {
                 <div className="auth-input-wrapper">
                   <Lock className="auth-input-icon" />
                   <input
-                    type="password"
+                    type={showSignUpPassword ? "text" : "password"}
                     required
                     value={signUpPassword}
                     onChange={(e) => setSignUpPassword(e.target.value)}
                     placeholder="••••••••"
                     className="auth-input"
+                    style={{ paddingRight: "2.75rem" }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                    className="auth-password-toggle"
+                    style={{
+                      position: "absolute",
+                      right: "0.75rem",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "none",
+                      border: "none",
+                      padding: "0.25rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      color: "#94a3b8",
+                      zIndex: 5,
+                    }}
+                    title={showSignUpPassword ? "Hide password" : "Show password"}
+                    aria-label={showSignUpPassword ? "Hide password" : "Show password"}
+                  >
+                    {showSignUpPassword ? (
+                      <EyeOff className="w-4 h-4 text-slate-500 hover:text-slate-700 transition-colors" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-slate-400 hover:text-slate-600 transition-colors" />
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -350,8 +393,7 @@ export default function AuthPage() {
                 disabled={loading}
                 className="auth-btn-submit auth-btn-signup"
               >
-                <span>{loading ? "Creating Account..." : "Sign Up"}</span>
-                <UserPlus className="w-4 h-4 text-white" />
+                <span>{loading ? "Signing Up..." : "Sign Up"}</span>
               </button>
 
               <div className="auth-toggle-box">

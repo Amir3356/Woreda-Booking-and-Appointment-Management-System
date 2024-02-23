@@ -1,19 +1,18 @@
 import { useStore } from "@/context";
-import {
-  BarChart3,
-  Printer,
-  Calendar,
-  CheckCircle2,
-  Clock,
-  XCircle,
-} from "lucide-react";
-import { formatDate } from "@/utils";
+import { Printer } from "lucide-react";
 
 export default function OfficerReportsPage() {
   const { currentUser, appointments } = useStore();
 
-  const officerDeptId = currentUser?.departmentId || "dept-1";
-  const deptAppointments = appointments.filter((a) => a.departmentId === officerDeptId);
+  const officerDeptId = currentUser?.departmentId;
+  const deptAppointments = appointments.filter((a) => {
+    if (!officerDeptId) return true;
+    return (
+      a.departmentId === officerDeptId ||
+      (currentUser?.departmentName &&
+        a.departmentName?.toLowerCase() === currentUser.departmentName?.toLowerCase())
+    );
+  });
 
   const completed = deptAppointments.filter((a) => a.status === "COMPLETED");
   const noShows = deptAppointments.filter((a) => a.status === "NO_SHOW");

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useStore } from "@/context";
-import mockData from "@/data";
 import {
   Plus,
   Trash2,
@@ -16,7 +15,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-const ROLE_OPTIONS = ["Department Officer", "Central Administrator"];
+const ROLE_OPTIONS = ["Department Officer"];
 
 const ROLE_BADGE = {
   "Department Officer": "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -25,11 +24,29 @@ const ROLE_BADGE = {
   ADMIN: "bg-purple-100 text-purple-700 border-purple-200",
 };
 
-export default function AccountProvisionPage() {
-  const { addUser } = useStore();
+const LEGACY_MOCK_EMAILS = new Set([
+  "tigist.kbl@woreda.gov.et",
+  "yared.lnd@woreda.gov.et",
+  "solomon.trd@woreda.gov.et",
+  "hana.tax@woreda.gov.et",
+  "mesfin.soc@woreda.gov.et",
+  "selam.health@woreda.gov.et",
+  "berhanu.audit@woreda.gov.et",
+  "amirsiraj1995@gmail.com",
+]);
 
-  // Provisioned accounts list (initialized with static mock data)
-  const [accounts, setAccounts] = useState(mockData.provisionedAccounts || []);
+export default function AccountProvisionPage() {
+  const {
+    provisionedAccounts,
+    addProvisionedAccount,
+    updateProvisionedAccount,
+    deleteProvisionedAccount,
+    departments,
+  } = useStore();
+
+  const accounts = (provisionedAccounts || []).filter(
+    (acc) => !LEGACY_MOCK_EMAILS.has(acc.email?.toLowerCase())
+  );
 
   // Search filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,7 +62,13 @@ export default function AccountProvisionPage() {
   const [successMsg, setSuccessMsg] = useState("");
   const [error, setError] = useState("");
 
-  const emptyForm = { fullName: "", email: "", password: "", role: "Department Officer" };
+  const emptyForm = {
+    fullName: "",
+    email: "",
+    password: "",
+    role: "Department Officer",
+    departmentId: departments[0]?.id || "dept-1",
+  };
   const [form, setForm] = useState(emptyForm);
 
   // Filtered accounts based on search query
@@ -90,7 +113,11 @@ export default function AccountProvisionPage() {
   };
 
   const openEdit = (acc) => {
-    setForm({ ...acc });
+    setForm({
+      ...acc,
+      role: acc.role === "OFFICER" ? "Department Officer" : (acc.role || "Department Officer"),
+      departmentId: acc.departmentId || departments[0]?.id || "dept-1",
+    });
     setEditingEmail(acc.email);
     setShowPassword(false);
     setError("");
@@ -121,25 +148,19 @@ export default function AccountProvisionPage() {
 
     if (editingEmail !== null) {
       // Edit existing
-      const updated = accounts.map((a) =>
-        a.email.toLowerCase() === editingEmail.toLowerCase() ? { ...form } : a
-      );
-      setAccounts(updated);
-      setSuccessMsg("Account updated successfully.");
-    } else {
-      // Add new — also push to global store
-      addUser({
+      updateProvisionedAccount(editingEmail, {
+        ...form,
         fullName: form.fullName.trim(),
         email: form.email.trim(),
-        phone: "+251911000000",
-        role: form.role === "Central Administrator" ? "ADMIN" : "OFFICER",
-        departmentId: "dept-1",
-        departmentName: "Kebele Administration & Vital Events",
-        nationalId: `ET-OFF-${Math.floor(1000 + Math.random() * 9000)}`,
-        address: "Kebele 03, Woreda Center",
-        isActive: true,
       });
-      setAccounts([form, ...accounts]);
+      setSuccessMsg("Account updated successfully.");
+    } else {
+      // Add new — push to global store (provisionedAccounts + users synchronized)
+      addProvisionedAccount({
+        ...form,
+        fullName: form.fullName.trim(),
+        email: form.email.trim(),
+      });
       setSuccessMsg("Account provisioned successfully.");
     }
 
@@ -148,9 +169,11 @@ export default function AccountProvisionPage() {
   };
 
   const handleDelete = (emailToDelete) => {
-    setAccounts(accounts.filter((a) => a.email !== emailToDelete));
-    setSuccessMsg("Account removed.");
-    setTimeout(() => setSuccessMsg(""), 3000);
+    if (window.confirm(`Are you sure you want to remove the account for "${emailToDelete}"?`)) {
+      deleteProvisionedAccount(emailToDelete);
+      setSuccessMsg("Account removed successfully.");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    }
   };
 
   return (
@@ -237,18 +260,22 @@ export default function AccountProvisionPage() {
               {paginatedAccounts.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-16 text-center">
-                    <div className="flex flex-col items-center gap-2 text-slate-400">
-                      <Shield className="w-8 h-8 text-slate-300" />
-                      <p className="text-sm font-medium">
-                        {accounts.length === 0
-                          ? "No accounts provisioned yet"
-                          : "No matching accounts found"}
-                      </p>
-                      <p className="text-xs">
-                        {accounts.length === 0
-                          ? 'Click "Create User" to get started'
-                          : "Try adjusting your search query or role filter"}
-                      </p>
+                    <div className="flex flex-col items-center gap-3 text-slate-400">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                        <Shield className="w-6 h-6 text-slate-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-700">
+                          {accounts.length === 0
+                            ? "No accounts provisioned yet"
+                            : "No matching accounts found"}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                          {accounts.length === 0
+                            ? "Department Officers and Administrators provisioned by Central Administration will appear here."
+                            : "Try adjusting your search query to find accounts."}
+                        </p>
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -471,6 +498,25 @@ export default function AccountProvisionPage() {
                   ))}
                 </select>
               </div>
+
+              {form.role === "Department Officer" && departments && departments.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Assigned Department *
+                  </label>
+                  <select
+                    value={form.departmentId || departments[0]?.id}
+                    onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-white cursor-pointer"
+                  >
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="flex gap-2 pt-2">
                 <button

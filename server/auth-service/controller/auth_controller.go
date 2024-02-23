@@ -8,6 +8,21 @@ import (
 	"github.com/woreda/booking/auth-service/service"
 )
 
+// AuthCookieName is the standard cookie name for the JWT access token.
+const AuthCookieName = "woreda_token"
+
+func setTokenCookie(w http.ResponseWriter, token string, maxAge int) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     AuthCookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: false,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   false,
+	})
+}
+
 // Controller serves /api/v1/auth.
 type Controller struct{ svc *service.AuthService }
 
@@ -26,6 +41,7 @@ func (ctl *Controller) Register(w http.ResponseWriter, r *http.Request) {
 		fail(w, r, err)
 		return
 	}
+	setTokenCookie(w, res.Token, 7*24*3600)
 	OK(w, http.StatusCreated, "Citizen account registered successfully.", res)
 }
 
@@ -41,6 +57,7 @@ func (ctl *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		fail(w, r, err)
 		return
 	}
+	setTokenCookie(w, res.Token, 7*24*3600)
 	OK(w, http.StatusOK, "Authentication successful.", res)
 }
 
@@ -60,5 +77,6 @@ func (ctl *Controller) Logout(w http.ResponseWriter, r *http.Request) {
 		fail(w, r, err)
 		return
 	}
+	setTokenCookie(w, "", -1)
 	OK(w, http.StatusOK, "Logged out successfully.", nil)
 }

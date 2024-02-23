@@ -16,9 +16,7 @@ import {
   ArrowLeft,
   AlertCircle,
   FileCheck2,
-  Sparkles,
   Phone,
-  Mail,
   MapPin,
 } from "lucide-react";
 import Link from "@/components/ui/Link";

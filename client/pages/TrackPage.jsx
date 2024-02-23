@@ -5,20 +5,14 @@ import Footer from "@/layout/Footer";
 import StatusBadge from "@/components/ui/StatusBadge";
 import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 import { useStore } from "@/context";
-import { formatDate, formatETB } from "@/utils";
+import { formatDate } from "@/utils";
 import {
   Search,
-  Calendar,
-  Clock,
-  Building,
-  User,
   AlertCircle,
   CheckCircle,
-  FileText,
   XCircle,
   RefreshCw,
   Printer,
-  ChevronRight,
 } from "lucide-react";
 
 function TrackContent() {

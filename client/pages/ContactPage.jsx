@@ -1,10 +1,11 @@
 import { useState } from "react";
 import Navbar from "@/layout/Navbar";
 import Footer from "@/layout/Footer";
-import mockData from "@/data";
+import { useStore } from "@/context";
 import { Phone, Mail, MapPin, Clock, Send, CheckCircle2 } from "lucide-react";
 
 export default function ContactPage() {
+  const { departments = [] } = useStore();
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", message: "", category: "General Inquiry" });
 
@@ -79,16 +80,20 @@ export default function ContactPage() {
                 Department Direct Lines
               </h3>
               <div className="space-y-2">
-                {mockData.departments.map((dept) => (
-                  <div key={dept.id} className="flex items-center justify-between text-slate-600 gap-2">
-                    <span className="font-medium truncate max-w-[130px]" title={dept.name}>
-                      {dept.name}
-                    </span>
-                    <span className="font-mono text-[10px] text-blue-700 shrink-0 font-semibold">
-                      {dept.contactPhone}
-                    </span>
-                  </div>
-                ))}
+                {departments.length === 0 ? (
+                  <p className="text-slate-400 text-[11px] italic">No department lines configured yet.</p>
+                ) : (
+                  departments.map((dept) => (
+                    <div key={dept.id} className="flex items-center justify-between text-slate-600 gap-2">
+                      <span className="font-medium truncate max-w-[130px]" title={dept.name}>
+                        {dept.name}
+                      </span>
+                      <span className="font-mono text-[10px] text-blue-700 shrink-0 font-semibold">
+                        {dept.contactPhone}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

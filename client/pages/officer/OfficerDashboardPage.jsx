@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { useStore } from "@/context";
 import StatusBadge from "@/components/ui/StatusBadge";
-import { formatDate } from "@/utils";
 import {
-  Layers,
   Users,
   Clock,
   CheckCircle2,
@@ -11,10 +9,8 @@ import {
   Megaphone,
   ArrowRight,
   FileCheck2,
-  AlertCircle,
   Check,
   X,
-  Plus,
 } from "lucide-react";
 import Link from "@/components/ui/Link";
 
@@ -28,11 +24,21 @@ export default function OfficerDashboardPage() {
     updateAppointmentStatus,
   } = useStore();
 
-  const officerDeptId = currentUser?.departmentId || "dept-1";
+  const officerDeptId = currentUser?.departmentId;
 
-  // Filter scoped to officer's assigned department
-  const deptAppointments = appointments.filter((a) => a.departmentId === officerDeptId);
-  const deptQueue = queue.filter((q) => q.departmentId === officerDeptId);
+  // Filter scoped to officer's assigned department (or all if unassigned)
+  const deptAppointments = appointments.filter((a) => {
+    if (!officerDeptId) return true;
+    return (
+      a.departmentId === officerDeptId ||
+      (currentUser?.departmentName &&
+        a.departmentName?.toLowerCase() === currentUser.departmentName?.toLowerCase())
+    );
+  });
+  const deptQueue = queue.filter((q) => {
+    if (!officerDeptId) return true;
+    return q.departmentId === officerDeptId;
+  });
 
   const servingCitizen = deptQueue.find((q) => q.status === "SERVING");
   const waitingCount = deptQueue.filter((q) => q.status === "WAITING").length;

@@ -7,9 +7,6 @@ import {
   Clock,
   UserCog,
   ShieldAlert,
-  Layers,
-  ChevronRight,
-  LogOut,
 } from "lucide-react";
 import { useStore } from "@/context";
 

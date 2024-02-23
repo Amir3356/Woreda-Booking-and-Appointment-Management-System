@@ -4,205 +4,123 @@ import {
   Calendar,
   Clock,
   Plus,
+  CheckCircle,
   CheckCircle2,
-  XCircle,
-  Eye,
   Edit2,
   Trash2,
   X,
-  Layers,
-  Users,
-  Check,
+  Search,
+  Filter,
   Circle,
-  Building2,
-  FileText,
+  AlertTriangle,
 } from "lucide-react";
-
-// Initial benchmark schedule items reflecting user specifications and municipal departments
-const INITIAL_SCHEDULES = [
-  {
-    id: "SCH-001",
-    department: "Health",
-    service: "Medical Certificate",
-    workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-    workingDaysDisplay: "Mon–Fri",
-    openingTime: "08:00",
-    closingTime: "17:00",
-    slotDuration: 20,
-    dailyCapacity: 25,
-    effectiveStartDate: "2026-01-01",
-    effectiveEndDate: "",
-    status: "Active",
-  },
-  {
-    id: "SCH-002",
-    department: "Finance",
-    service: "Tax Clearance",
-    workingDays: ["Mon", "Tue", "Wed", "Thu"],
-    workingDaysDisplay: "Mon–Thu",
-    openingTime: "08:30",
-    closingTime: "16:30",
-    slotDuration: 30,
-    dailyCapacity: 20,
-    effectiveStartDate: "2026-01-01",
-    effectiveEndDate: "",
-    status: "Active",
-  },
-  {
-    id: "SCH-003",
-    department: "Education",
-    service: "Student Registration",
-    workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-    workingDaysDisplay: "Mon–Fri",
-    openingTime: "08:00",
-    closingTime: "16:00",
-    slotDuration: 20,
-    dailyCapacity: 30,
-    effectiveStartDate: "2026-01-01",
-    effectiveEndDate: "",
-    status: "Active",
-  },
-  {
-    id: "SCH-004",
-    department: "Civil Registration",
-    service: "Birth Certificate",
-    workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-    workingDaysDisplay: "Mon–Fri",
-    openingTime: "08:30",
-    closingTime: "17:00",
-    slotDuration: 15,
-    dailyCapacity: 40,
-    effectiveStartDate: "2026-01-01",
-    effectiveEndDate: "",
-    status: "Active",
-  },
-  {
-    id: "SCH-005",
-    department: "Kebele Administration & Vital Events",
-    service: "Kebele Digital ID Registration",
-    workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-    workingDaysDisplay: "Mon–Fri",
-    openingTime: "08:30",
-    closingTime: "17:30",
-    slotDuration: 30,
-    dailyCapacity: 45,
-    effectiveStartDate: "2026-01-01",
-    effectiveEndDate: "",
-    status: "Active",
-  },
-  {
-    id: "SCH-006",
-    department: "Land Administration & Urban Development",
-    service: "Landholding Rights Verification",
-    workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-    workingDaysDisplay: "Mon–Fri",
-    openingTime: "08:30",
-    closingTime: "17:00",
-    slotDuration: 45,
-    dailyCapacity: 20,
-    effectiveStartDate: "2026-01-01",
-    effectiveEndDate: "",
-    status: "Active",
-  },
-  {
-    id: "SCH-007",
-    department: "Trade, Industry & Enterprise Development",
-    service: "Annual Trade License Renewal",
-    workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-    workingDaysDisplay: "Mon–Fri",
-    openingTime: "08:30",
-    closingTime: "16:30",
-    slotDuration: 30,
-    dailyCapacity: 25,
-    effectiveStartDate: "2026-01-01",
-    effectiveEndDate: "",
-    status: "Active",
-  },
-  {
-    id: "SCH-008",
-    department: "Revenue & Tax Administration",
-    service: "Annual Business Tax Declaration",
-    workingDays: ["Mon", "Tue", "Wed", "Thu"],
-    workingDaysDisplay: "Mon–Thu",
-    openingTime: "08:30",
-    closingTime: "17:00",
-    slotDuration: 30,
-    dailyCapacity: 35,
-    effectiveStartDate: "2026-01-01",
-    effectiveEndDate: "",
-    status: "Active",
-  },
-  {
-    id: "SCH-009",
-    department: "Social Affairs & Community Welfare",
-    service: "Social Protection & Pension Registry",
-    workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-    workingDaysDisplay: "Mon–Fri",
-    openingTime: "08:30",
-    closingTime: "17:00",
-    slotDuration: 30,
-    dailyCapacity: 20,
-    effectiveStartDate: "2026-01-01",
-    effectiveEndDate: "",
-    status: "Active",
-  },
-  {
-    id: "SCH-010",
-    department: "Sanitation & Environmental Protection",
-    service: "Municipal Commercial Sanitation Clearance",
-    workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-    workingDaysDisplay: "Mon–Fri",
-    openingTime: "08:30",
-    closingTime: "16:30",
-    slotDuration: 20,
-    dailyCapacity: 20,
-    effectiveStartDate: "2026-01-01",
-    effectiveEndDate: "",
-    status: "Inactive",
-  },
-];
 
 const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-const DEFAULT_DEPARTMENTS = [
-  "Health",
-  "Finance",
-  "Education",
-  "Civil Registration",
+const DEFAULT_FALLBACK_DEPTS = [
   "Kebele Administration & Vital Events",
   "Land Administration & Urban Development",
   "Trade, Industry & Enterprise Development",
   "Revenue & Tax Administration",
-  "Social Affairs & Community Welfare",
-  "Sanitation & Environmental Protection",
+  "Social Welfare & Community Services",
+  "Public Health & Sanitation Desk",
+  "General Municipal Desk",
 ];
 
-const DEFAULT_SERVICES = [
-  "Medical Certificate",
-  "Tax Clearance",
-  "Student Registration",
-  "Birth Certificate",
-  "Kebele Digital ID Registration",
-  "Landholding Rights Verification",
-  "Annual Trade License Renewal",
-  "Annual Business Tax Declaration",
-  "Social Protection & Pension Registry",
-  "Municipal Commercial Sanitation Clearance",
-];
+const DEFAULT_SERVICES_BY_DEPT = {
+  "Kebele Administration & Vital Events": [
+    "Kebele Digital ID Registration & Issuance",
+    "Residence Certificate (Melkeya)",
+    "Vital Statistics (Birth, Death, Marriage)",
+  ],
+  "Land Administration & Urban Development": [
+    "Landholding Rights Verification & Mapping",
+    "Building Permit Pre-Check & Site Inspection",
+    "Title Deed Transfer & Cadastral Updates",
+  ],
+  "Trade, Industry & Enterprise Development": [
+    "Annual Trade License Renewal",
+    "Micro & Small Enterprise (MSE) Registration",
+    "Commercial Grade Inspection Certification",
+  ],
+  "Revenue & Tax Administration": [
+    "Taxpayer Identification & Assessment",
+    "Municipal Business Tax Clearance",
+    "Property Tax Assessment & Filing",
+  ],
+  "Social Welfare & Community Services": [
+    "Safety Net & Social Assistance Enrollment",
+    "Elderly & Disability Support Certification",
+  ],
+  "Public Health & Sanitation Desk": [
+    "Sanitation Inspection & Clearance",
+    "Food Handlers Health Certification",
+  ],
+  "General Municipal Desk": [
+    "General Public Consultation & Appointments",
+    "Document Certification & Authentication",
+    "Public Grievance & Inquiries",
+  ],
+};
 
 export default function AdminSchedulePage() {
-  const { departments, services } = useStore();
+  const {
+    departments,
+    services,
+    schedules: storeSchedules,
+    addSchedule,
+    updateSchedule,
+    deleteSchedule,
+    toggleScheduleStatus,
+  } = useStore();
 
-  const [schedules, setSchedules] = useState(INITIAL_SCHEDULES);
+  const schedules = storeSchedules || [];
+
+  // Filter & Search states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [deptFilter, setDeptFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+
+  // Modal states
   const [modalOpen, setModalOpen] = useState(false);
-  const [viewModalOpen, setViewModalOpen] = useState(false);
-  const [selectedSchedule, setSelectedSchedule] = useState(null);
   const [editingSchedule, setEditingSchedule] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [successMsg, setSuccessMsg] = useState("");
 
-  // Form State matching Create Appointment Schedule modal
+  const triggerToast = (msg) => {
+    setSuccessMsg(msg);
+    setTimeout(() => {
+      setSuccessMsg("");
+    }, 3500);
+  };
+
+  // Derive available department options (real departments or fallbacks)
+  const realDeptNames = (departments || []).map((d) => d.name);
+  const availableDeptNames = realDeptNames.length > 0 ? realDeptNames : DEFAULT_FALLBACK_DEPTS;
+
+  // Helper to get available services for a given department name
+  const getServicesForDept = (deptName) => {
+    const matchedDept = (departments || []).find((d) => d.name === deptName);
+    const storeDeptServices = (services || [])
+      .filter((s) => (matchedDept ? s.departmentId === matchedDept.id : s.departmentName === deptName))
+      .map((s) => s.name);
+
+    if (storeDeptServices.length > 0) {
+      return storeDeptServices;
+    }
+    return DEFAULT_SERVICES_BY_DEPT[deptName] || [
+      "General Public Consultation & Appointments",
+      "Document Certification & Authentication",
+    ];
+  };
+
+  // Form State
+  const initialDept = availableDeptNames[0] || "";
+  const initialSrv = getServicesForDept(initialDept)[0] || "";
+
   const emptyForm = {
-    department: "",
-    service: "",
+    department: initialDept,
+    service: initialSrv,
     workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
     openingTime: "08:00",
     closingTime: "17:00",
@@ -215,22 +133,20 @@ export default function AdminSchedulePage() {
 
   const [form, setForm] = useState(emptyForm);
 
-  // Available options merging store and defaults
-  const deptOptions = Array.from(
-    new Set([
-      ...DEFAULT_DEPARTMENTS,
-      ...(departments || []).map((d) => d.name),
-    ])
-  );
+  // Available services for the current form department
+  const formServiceOptions = getServicesForDept(form.department);
 
-  const serviceOptions = Array.from(
-    new Set([
-      ...DEFAULT_SERVICES,
-      ...(services || []).map((s) => s.name),
-    ])
-  );
+  // Handle department change in form
+  const handleDeptChange = (newDept) => {
+    const nextServices = getServicesForDept(newDept);
+    setForm((prev) => ({
+      ...prev,
+      department: newDept,
+      service: nextServices[0] || "",
+    }));
+  };
 
-  // Working days helper to generate clean display like "Mon–Fri"
+  // Format working days for display (e.g. "Mon–Fri")
   const formatDaysDisplay = (days) => {
     if (!days || days.length === 0) return "None";
     if (days.length === 7) return "Daily (Mon–Sun)";
@@ -269,15 +185,21 @@ export default function AdminSchedulePage() {
 
   const handleOpenCreate = () => {
     setEditingSchedule(null);
-    setForm(emptyForm);
+    const defDept = availableDeptNames[0] || "";
+    const defSrv = getServicesForDept(defDept)[0] || "";
+    setForm({
+      ...emptyForm,
+      department: defDept,
+      service: defSrv,
+    });
     setModalOpen(true);
   };
 
   const handleOpenEdit = (sch) => {
     setEditingSchedule(sch);
     setForm({
-      department: sch.department,
-      service: sch.service,
+      department: sch.department || availableDeptNames[0] || "",
+      service: sch.service || "",
       workingDays: sch.workingDays || ["Mon", "Tue", "Wed", "Thu", "Fri"],
       openingTime: sch.openingTime || "08:00",
       closingTime: sch.closingTime || "17:00",
@@ -290,25 +212,17 @@ export default function AdminSchedulePage() {
     setModalOpen(true);
   };
 
-  const handleOpenView = (sch) => {
-    setSelectedSchedule(sch);
-    setViewModalOpen(true);
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    deleteSchedule?.(deleteTarget.id);
+    triggerToast(`Schedule ${deleteTarget.id} deleted successfully.`);
+    setDeleteTarget(null);
   };
 
-  const handleDelete = (id) => {
-    if (confirm("Are you sure you want to delete this schedule?")) {
-      setSchedules((prev) => prev.filter((s) => s.id !== id));
-    }
-  };
-
-  const handleToggleStatus = (id) => {
-    setSchedules((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? { ...s, status: s.status === "Active" ? "Inactive" : "Active" }
-          : s
-      )
-    );
+  const handleToggleStatus = (sch) => {
+    toggleScheduleStatus?.(sch.id);
+    const nextStatus = sch.status === "Active" ? "Inactive" : "Active";
+    triggerToast(`Schedule ${sch.id} marked as ${nextStatus}.`);
   };
 
   const toggleDayInForm = (day) => {
@@ -330,35 +244,57 @@ export default function AdminSchedulePage() {
 
     const workingDaysDisplay = formatDaysDisplay(form.workingDays);
 
+    // Map relational departmentId and serviceId
+    const matchedDept = (departments || []).find((d) => d.name === form.department);
+    const matchedSrv = (services || []).find((s) => s.name === form.service);
+    const departmentId = matchedDept ? matchedDept.id : `dept-${form.department.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10)}`;
+    const serviceId = matchedSrv ? matchedSrv.id : `srv-${form.service.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10)}`;
+
     if (editingSchedule) {
-      setSchedules((prev) =>
-        prev.map((s) =>
-          s.id === editingSchedule.id
-            ? {
-                ...s,
-                ...form,
-                workingDaysDisplay,
-              }
-            : s
-        )
-      );
+      updateSchedule?.(editingSchedule.id, {
+        ...form,
+        departmentId,
+        serviceId,
+        workingDaysDisplay,
+      });
+      triggerToast(`Schedule ${editingSchedule.id} updated successfully.`);
     } else {
-      const nextNum = schedules.length + 1;
-      const newId = `SCH-${String(nextNum).padStart(3, "0")}`;
+      // Generate guaranteed unique schedule ID that avoids legacy mock IDs
+      const uniqueSuffix = Date.now().toString().slice(-5);
+      const newId = `SCH-${uniqueSuffix}`;
       const newSchedule = {
         id: newId,
         ...form,
+        departmentId,
+        serviceId,
         workingDaysDisplay,
       };
-      setSchedules((prev) => [newSchedule, ...prev]);
+      addSchedule?.(newSchedule);
+      triggerToast(`Schedule ${newId} created successfully.`);
     }
 
     setModalOpen(false);
   };
 
-  // Top summary card metrics as specified by the user
-  const totalSchedulesCount = 24;
-  const activeSchedulesCount = 20;
+  // Filtered schedules
+  const filteredSchedules = schedules.filter((sch) => {
+    const matchesSearch =
+      (sch.service && sch.service.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (sch.department && sch.department.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (sch.id && sch.id.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesDept =
+      deptFilter === "ALL" || sch.department?.toLowerCase() === deptFilter.toLowerCase();
+
+    const matchesStatus =
+      statusFilter === "ALL" || sch.status?.toLowerCase() === statusFilter.toLowerCase();
+
+    return matchesSearch && matchesDept && matchesStatus;
+  });
+
+  // Dynamic summary card metrics based on actual schedules
+  const totalSchedulesCount = schedules.length;
+  const activeSchedulesCount = schedules.filter((s) => s.status === "Active").length;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -370,7 +306,7 @@ export default function AdminSchedulePage() {
         <div className="w-full text-center">
           <h2 className="text-xl font-bold text-slate-900">Schedule Management</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Configure working days, operating hours, slot duration, and daily capacity.
+            Configure working days, operating hours, and daily capacity.
           </p>
         </div>
 
@@ -389,6 +325,14 @@ export default function AdminSchedulePage() {
           <span>Create Schedule</span>
         </button>
       </div>
+
+      {/* Success Toast Notification */}
+      {successMsg && (
+        <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold shadow-xs animate-in fade-in duration-150">
+          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{successMsg}</span>
+        </div>
+      )}
 
       {/* A. Summary Cards - Displayed Horizontally */}
       <div
@@ -418,7 +362,7 @@ export default function AdminSchedulePage() {
             <span className="text-2xl font-extrabold text-slate-900 mt-1 block">
               {totalSchedulesCount}
             </span>
-            <span className="text-[11px] text-slate-400 mt-0.5 block">Registered schedules</span>
+            <span className="text-[11px] text-slate-400 mt-0.5 block">Configured schedules</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-800 flex items-center justify-center font-bold shadow-xs">
             <Calendar className="w-5 h-5" />
@@ -451,6 +395,63 @@ export default function AdminSchedulePage() {
         </div>
       </div>
 
+      {/* Filter and Search Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full md:w-80">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search by schedule ID, service, or department..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+          />
+        </div>
+
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          {/* Department Filter */}
+          <div className="flex items-center gap-2">
+            <Filter className="w-3.5 h-3.5 text-slate-400" />
+            <select
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+              className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="ALL">All Departments</option>
+              {availableDeptNames.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="Active">Active Only</option>
+            <option value="Inactive">Inactive Only</option>
+          </select>
+
+          {(searchTerm || deptFilter !== "ALL" || statusFilter !== "ALL") && (
+            <button
+              onClick={() => {
+                setSearchTerm("");
+                setDeptFilter("ALL");
+                setStatusFilter("ALL");
+              }}
+              className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-1 cursor-pointer"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* B. Schedule List Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
@@ -468,15 +469,30 @@ export default function AdminSchedulePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {schedules.length === 0 ? (
+              {filteredSchedules.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-14 text-center text-slate-400">
-                    <Clock className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-xs font-medium">No schedules configured</p>
+                  <td colSpan={8} className="px-5 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3 text-slate-400">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                        <Clock className="w-6 h-6 text-slate-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-700">
+                          {schedules.length === 0
+                            ? "No schedules configured yet"
+                            : "No schedules match the selected filters"}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                          {schedules.length === 0
+                            ? "Configure municipal service operating hours, slot intervals, and daily quotas by clicking 'Create Schedule'."
+                            : "Try adjusting your search keywords or resetting the department and status filters."}
+                        </p>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ) : (
-                schedules.map((sch) => {
+                filteredSchedules.map((sch) => {
                   const isActive = sch.status === "Active";
                   return (
                     <tr key={sch.id} className="hover:bg-slate-50/80 transition-colors">
@@ -518,7 +534,7 @@ export default function AdminSchedulePage() {
                       <td className="px-5 py-3.5">
                         <button
                           type="button"
-                          onClick={() => handleToggleStatus(sch.id)}
+                          onClick={() => handleToggleStatus(sch)}
                           className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
                             isActive
                               ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
@@ -535,19 +551,9 @@ export default function AdminSchedulePage() {
                         </button>
                       </td>
 
-                      {/* Actions: View, Edit, Delete */}
+                      {/* Actions: Edit, Delete */}
                       <td className="px-5 py-3.5 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          {/* View */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenView(sch)}
-                            className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-all cursor-pointer"
-                            title="View Schedule"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-
                           {/* Edit */}
                           <button
                             type="button"
@@ -561,7 +567,7 @@ export default function AdminSchedulePage() {
                           {/* Delete */}
                           <button
                             type="button"
-                            onClick={() => handleDelete(sch.id)}
+                            onClick={() => setDeleteTarget(sch)}
                             className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all cursor-pointer"
                             title="Delete Schedule"
                           >
@@ -589,7 +595,7 @@ export default function AdminSchedulePage() {
                   {editingSchedule ? "Edit Appointment Schedule" : "Create Appointment Schedule"}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Configure department service operating hours, slot duration, and daily limits.
+                  Configure department service operating hours and daily limits.
                 </p>
               </div>
               <button
@@ -611,11 +617,10 @@ export default function AdminSchedulePage() {
                 <select
                   required
                   value={form.department}
-                  onChange={(e) => setForm({ ...form, department: e.target.value })}
+                  onChange={(e) => handleDeptChange(e.target.value)}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">Select department</option>
-                  {deptOptions.map((dept) => (
+                  {availableDeptNames.map((dept) => (
                     <option key={dept} value={dept}>
                       {dept}
                     </option>
@@ -634,8 +639,7 @@ export default function AdminSchedulePage() {
                   onChange={(e) => setForm({ ...form, service: e.target.value })}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">Select service</option>
-                  {serviceOptions.map((srv) => (
+                  {formServiceOptions.map((srv) => (
                     <option key={srv} value={srv}>
                       {srv}
                     </option>
@@ -719,7 +723,7 @@ export default function AdminSchedulePage() {
               {/* Daily Capacity */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Daily Capacity
+                  Daily Capacity (Slots)
                 </label>
                 <input
                   type="number"
@@ -819,102 +823,35 @@ export default function AdminSchedulePage() {
         </div>
       )}
 
-      {/* View Schedule Details Modal */}
-      {viewModalOpen && selectedSchedule && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 my-8 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <span className="font-mono font-bold text-xs bg-slate-100 text-slate-800 px-2.5 py-1 rounded-md border border-slate-200">
-                  {selectedSchedule.id}
-                </span>
-                <h3 className="text-base font-bold text-slate-900">Schedule Details</h3>
-              </div>
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-sm w-full p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Delete Schedule</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Are you sure you want to delete schedule{" "}
+                <span className="font-semibold text-slate-800">{deleteTarget.id}</span> ({deleteTarget.service})?
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setViewModalOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                Cancel
               </button>
-            </div>
-
-            <div className="space-y-3.5 py-4 text-xs">
-              <div className="grid grid-cols-2 gap-4 pb-3 border-b border-slate-100">
-                <div>
-                  <span className="text-slate-400 text-[11px] block">Department</span>
-                  <span className="font-bold text-slate-900">{selectedSchedule.department}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-[11px] block">Service</span>
-                  <span className="font-bold text-slate-900">{selectedSchedule.service}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 pb-3 border-b border-slate-100">
-                <div>
-                  <span className="text-slate-400 text-[11px] block">Working Days</span>
-                  <span className="font-semibold text-slate-800">
-                    {selectedSchedule.workingDaysDisplay ||
-                      formatDaysDisplay(selectedSchedule.workingDays)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-[11px] block">Operating Hours</span>
-                  <span className="font-mono font-semibold text-slate-800">
-                    {selectedSchedule.openingTime} – {selectedSchedule.closingTime}
-                  </span>
-                </div>
-              </div>
-
-              <div className="pb-3 border-b border-slate-100">
-                <span className="text-slate-400 text-[11px] block">Daily Capacity</span>
-                <span className="font-semibold text-slate-800">
-                  {selectedSchedule.dailyCapacity} appointments/day
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 pb-3 border-b border-slate-100">
-                <div>
-                  <span className="text-slate-400 text-[11px] block">Effective Start Date</span>
-                  <span className="font-semibold text-slate-800">
-                    {selectedSchedule.effectiveStartDate || "Immediate"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-[11px] block">Effective End Date</span>
-                  <span className="font-semibold text-slate-800">
-                    {selectedSchedule.effectiveEndDate || "Open-ended (No expiry)"}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <span className="text-slate-400 text-[11px] block mb-1">Status</span>
-                <span
-                  className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
-                    selectedSchedule.status === "Active"
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : "bg-slate-100 text-slate-600 border-slate-300"
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      selectedSchedule.status === "Active" ? "bg-emerald-500" : "bg-slate-400"
-                    }`}
-                  />
-                  {selectedSchedule.status}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-3 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setViewModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
               >
-                Close
+                Yes, Delete
               </button>
             </div>
           </div>

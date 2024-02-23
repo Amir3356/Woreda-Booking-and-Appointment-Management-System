@@ -2,7 +2,6 @@ import { useState } from "react";
 import Navbar from "@/layout/Navbar";
 import Footer from "@/layout/Footer";
 import { useStore } from "@/context";
-import mockData from "@/data";
 import { formatETB } from "@/utils";
 import Link from "@/components/ui/Link";
 import {
@@ -10,26 +9,21 @@ import {
   Filter,
   Calendar,
   Clock,
-  Building,
-  FileCheck2,
   AlertCircle,
   X,
-  ArrowRight,
 } from "lucide-react";
 
 export default function ServicesPage() {
-  const { services: storeServices, departments: storeDepartments } = useStore();
-  const services = storeServices?.length ? storeServices : mockData.services;
-  const departments = storeDepartments?.length ? storeDepartments : mockData.departments;
+  const { services = [], departments = [] } = useStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDept, setSelectedDept] = useState("ALL");
   const [activeModalService, setActiveModalService] = useState(null);
 
   const filteredServices = services.filter((service) => {
     const matchesSearch =
-      service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      service.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      service.code.toLowerCase().includes(searchQuery.toLowerCase());
+      (service.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (service.description || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (service.code || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesDept = selectedDept === "ALL" || service.departmentId === selectedDept;
     return matchesSearch && matchesDept;
   });
@@ -94,64 +88,82 @@ export default function ServicesPage() {
         </div>
 
         {/* Services Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredServices.map((service) => {
-            const dept = departments.find((d) => d.id === service.departmentId);
-            return (
-              <div
-                key={service.id}
-                className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between hover:shadow-md transition-shadow group"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-mono">
-                      {service.code}
-                    </span>
-                    <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      {service.durationMinutes} mins
-                    </span>
+        {filteredServices.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center max-w-xl mx-auto shadow-xs">
+            <AlertCircle className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+            <h3 className="text-sm font-bold text-slate-800">No Public Services Found</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              {searchQuery || selectedDept !== "ALL"
+                ? "No services match your search query or department filter."
+                : "No municipal public services are currently registered."}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredServices.map((service) => {
+              const dept = departments.find((d) => d.id === service.departmentId);
+              return (
+                <div
+                  key={service.id}
+                  className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between hover:shadow-md transition-shadow group"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-mono">
+                        {service.code}
+                      </span>
+                      <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" />
+                        {service.durationMinutes} mins
+                      </span>
+                    </div>
+
+                    <h3 className="font-bold text-slate-900 text-base mb-2 group-hover:text-blue-700 transition-colors">
+                      {service.name}
+                    </h3>
+
+                    {service.description ? (
+                      <p className="text-xs text-slate-600 line-clamp-3 mb-4 leading-relaxed">
+                        {service.description}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic mb-4 leading-relaxed">
+                        Official municipal public service
+                      </p>
+                    )}
+
+                    <div className="space-y-1.5 text-xs text-slate-500 border-t border-slate-100 pt-3">
+                      <div className="flex justify-between">
+                        <span>Department:</span>
+                        <span className="font-semibold text-slate-800 text-right">{dept?.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Statutory Fee:</span>
+                        <span className="font-bold text-emerald-700">{formatETB(service.feeETB)}</span>
+                      </div>
+                    </div>
                   </div>
 
-                  <h3 className="font-bold text-slate-900 text-base mb-2 group-hover:text-blue-700 transition-colors">
-                    {service.name}
-                  </h3>
-
-                  <p className="text-xs text-slate-600 line-clamp-3 mb-4 leading-relaxed">
-                    {service.description}
-                  </p>
-
-                  <div className="space-y-1.5 text-xs text-slate-500 border-t border-slate-100 pt-3">
-                    <div className="flex justify-between">
-                      <span>Department:</span>
-                      <span className="font-semibold text-slate-800 text-right">{dept?.name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Statutory Fee:</span>
-                      <span className="font-bold text-emerald-700">{formatETB(service.feeETB)}</span>
-                    </div>
+                  <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-2">
+                    <button
+                      onClick={() => setActiveModalService(service)}
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors text-center"
+                    >
+                      View Checklist
+                    </button>
+                    <Link
+                      href={`/book?serviceId=${service.id}&deptId=${service.departmentId}`}
+                      className="flex-1 px-3 py-2 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-semibold transition-colors text-center flex items-center justify-center gap-1"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Book Desk</span>
+                    </Link>
                   </div>
                 </div>
-
-                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-2">
-                  <button
-                    onClick={() => setActiveModalService(service)}
-                    className="flex-1 px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors text-center"
-                  >
-                    View Checklist
-                  </button>
-                  <Link
-                    href={`/book?serviceId=${service.id}&deptId=${service.departmentId}`}
-                    className="flex-1 px-3 py-2 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-semibold transition-colors text-center flex items-center justify-center gap-1"
-                  >
-                    <Calendar className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Book Desk</span>
-                  </Link>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Service Details & Requirements Modal */}
         {activeModalService && (

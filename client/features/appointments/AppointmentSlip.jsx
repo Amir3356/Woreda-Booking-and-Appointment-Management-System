@@ -1,4 +1,4 @@
-import { Printer, Download, CheckCircle, Clock, MapPin, FileText, QrCode, Building, AlertCircle } from "lucide-react";
+import { Printer, Clock, FileText, Building, AlertCircle } from "lucide-react";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatDate, formatETB } from "@/utils";
 
@@ -122,6 +122,22 @@ export default function AppointmentSlip({ appointment, service }) {
                 <li key={idx}>{doc}</li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* Officer Status / Note Notice */}
+        {(appointment.rejectionReason || appointment.officerNotes) && (
+          <div
+            className={`rounded-xl p-3.5 border text-xs ${
+              appointment.status === "REJECTED"
+                ? "bg-rose-50 border-rose-200 text-rose-800"
+                : "bg-blue-50 border-blue-200 text-blue-800"
+            }`}
+          >
+            <div className="font-bold mb-0.5">
+              {appointment.status === "REJECTED" ? "Officer Rejection Reason:" : "Desk Officer Note:"}
+            </div>
+            <p>{appointment.rejectionReason || appointment.officerNotes}</p>
           </div>
         )}
 

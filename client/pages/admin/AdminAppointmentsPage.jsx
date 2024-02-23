@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useStore } from "@/context";
-import { appointments as INITIAL_APPOINTMENTS } from "@/data";
 import StatusBadge from "@/components/ui/StatusBadge";
 import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 import { formatDate } from "@/utils";
@@ -8,13 +7,6 @@ import {
   Calendar,
   Search,
   Filter,
-  Check,
-  X,
-  RefreshCw,
-  Printer,
-  XCircle,
-  Clock,
-  Eye,
   UserCheck,
 } from "lucide-react";
 
@@ -34,12 +26,7 @@ export default function AdminAppointmentsPage() {
   const [search, setSearch] = useState("");
   const [selectedSlipApt, setSelectedSlipApt] = useState(null);
 
-  // Guarantee upcoming and today sample appointments are available
-  const existingIds = new Set(appointments.map((a) => a.id));
-  const effectiveAppointments = [
-    ...appointments,
-    ...INITIAL_APPOINTMENTS.filter((a) => !existingIds.has(a.id)),
-  ];
+  const effectiveAppointments = appointments || [];
 
   // Reject dialog state
   const [rejectTargetId, setRejectTargetId] = useState(null);

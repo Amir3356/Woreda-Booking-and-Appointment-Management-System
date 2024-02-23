@@ -1,10 +1,12 @@
 import Navbar from "@/layout/Navbar";
 import Footer from "@/layout/Footer";
-import mockData from "@/data";
-import { Building, ShieldCheck, Clock, Users, CheckCircle2, FileText } from "lucide-react";
+import { useStore } from "@/context";
+import { Building, ShieldCheck, Clock, Users, CheckCircle2 } from "lucide-react";
 import Link from "@/components/ui/Link";
 
 export default function AboutPage() {
+  const { departments = [], services = [], users = [] } = useStore();
+  const officerCount = users.filter((u) => u.role === "OFFICER").length;
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Navbar />
@@ -57,20 +59,18 @@ export default function AboutPage() {
             </div>
           </div>
 
-          {/* Static Mock Data Highlights */}
+          {/* Dynamic System Highlights */}
           <div className="grid grid-cols-3 gap-3 p-4 bg-blue-50/50 rounded-xl border border-blue-100 text-center">
             <div>
-              <p className="text-xl font-black text-blue-900">{mockData.departments?.length || 6}</p>
+              <p className="text-xl font-black text-blue-900">{departments.length}</p>
               <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Woreda Departments</p>
             </div>
             <div>
-              <p className="text-xl font-black text-blue-900">{mockData.services?.length || 15}</p>
+              <p className="text-xl font-black text-blue-900">{services.length}</p>
               <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Public Services</p>
             </div>
             <div>
-              <p className="text-xl font-black text-blue-900">
-                {mockData.users?.filter((u) => u.role === "OFFICER")?.length || 6}
-              </p>
+              <p className="text-xl font-black text-blue-900">{officerCount}</p>
               <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Desk Officers</p>
             </div>
           </div>

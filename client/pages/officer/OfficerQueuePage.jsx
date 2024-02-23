@@ -1,14 +1,9 @@
 import { useState } from "react";
 import { useStore } from "@/context";
 import {
-  Layers,
   Megaphone,
-  CheckCircle2,
-  XCircle,
   Clock,
-  User,
   Volume2,
-  Sparkles,
 } from "lucide-react";
 
 export default function OfficerQueuePage() {
@@ -19,8 +14,11 @@ export default function OfficerQueuePage() {
     callNextCitizen,
   } = useStore();
 
-  const officerDeptId = currentUser?.departmentId || "dept-1";
-  const deptQueue = queue.filter((q) => q.departmentId === officerDeptId);
+  const officerDeptId = currentUser?.departmentId;
+  const deptQueue = queue.filter((q) => {
+    if (!officerDeptId) return true;
+    return q.departmentId === officerDeptId;
+  });
 
   const currentlyServing = deptQueue.find((q) => q.status === "SERVING");
   const waitingList = deptQueue.filter((q) => q.status === "WAITING");

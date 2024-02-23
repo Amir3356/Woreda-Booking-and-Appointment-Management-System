@@ -2,14 +2,9 @@ import { useState } from "react";
 import { useStore } from "@/context";
 import StatusBadge from "@/components/ui/StatusBadge";
 import {
-  FileCheck2,
   Search,
   CheckCircle2,
-  AlertCircle,
-  QrCode,
   Printer,
-  User,
-  Clock,
   Layers,
 } from "lucide-react";
 import { formatDate } from "@/utils";

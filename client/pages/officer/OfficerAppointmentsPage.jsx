@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useStore } from "@/context";
-import { appointments as INITIAL_APPOINTMENTS } from "@/data";
 import StatusBadge from "@/components/ui/StatusBadge";
 import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 import { formatDate } from "@/utils";
@@ -8,12 +7,7 @@ import {
   Calendar,
   Search,
   Filter,
-  Check,
-  X,
-  RefreshCw,
-  Printer,
-  CheckCircle2,
-  Eye,
+  AlertCircle,
 } from "lucide-react";
 
 export default function OfficerAppointmentsPage() {
@@ -21,24 +15,24 @@ export default function OfficerAppointmentsPage() {
     currentUser,
     appointments,
     services,
-    updateAppointmentStatus,
-    rescheduleAppointment,
   } = useStore();
 
-  const officerDeptId = currentUser?.departmentId || "dept-1";
-  const [timeFilter, setTimeFilter] = useState("TODAY");
-  const [statusFilter, setStatusFilter] = useState("PENDING");
+  const [timeFilter, setTimeFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [search, setSearch] = useState("");
   const [selectedSlipApt, setSelectedSlipApt] = useState(null);
 
-  // Guarantee upcoming and today sample appointments are available
-  const existingIds = new Set(appointments.map((a) => a.id));
-  const effectiveAppointments = [
-    ...appointments,
-    ...INITIAL_APPOINTMENTS.filter((a) => !existingIds.has(a.id)),
-  ];
+  const effectiveAppointments = appointments || [];
 
-  const deptAppointments = effectiveAppointments.filter((a) => a.departmentId === officerDeptId);
+  // Scoped to officer's assigned department (or all if unassigned)
+  const deptAppointments = effectiveAppointments.filter((a) => {
+    if (!currentUser?.departmentId) return true;
+    return (
+      a.departmentId === currentUser.departmentId ||
+      (currentUser.departmentName &&
+        a.departmentName?.toLowerCase() === currentUser.departmentName?.toLowerCase())
+    );
+  });
 
   const formatRequestDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -59,11 +53,15 @@ export default function OfficerAppointmentsPage() {
     return `${year}-${month}-${day}`;
   };
 
+  const todayStr = getTodayStr();
+
   const filtered = deptAppointments.filter((a) => {
     const matchesSearch =
       a.referenceNumber.toLowerCase().includes(search.toLowerCase()) ||
       a.citizenName.toLowerCase().includes(search.toLowerCase()) ||
-      a.citizenPhone.includes(search);
+      a.citizenPhone.includes(search) ||
+      (a.serviceName && a.serviceName.toLowerCase().includes(search.toLowerCase()));
+
     const matchesStatus =
       statusFilter === "ALL"
         ? true
@@ -71,7 +69,6 @@ export default function OfficerAppointmentsPage() {
         ? a.status === "REJECTED" || a.status === "REJECT"
         : a.status === statusFilter;
 
-    const todayStr = getTodayStr();
     const aptDate = (a.date || "").split("T")[0];
     let matchesTime = true;
     if (timeFilter === "TODAY") {
@@ -87,23 +84,23 @@ export default function OfficerAppointmentsPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
+      {/* Centered Page Header with Action Badge at Right Edge */}
       <div
-        className="relative flex items-center w-full min-h-[48px]"
-        style={{ position: "relative", minHeight: "48px" }}
+        className="relative flex items-center justify-center w-full min-h-[48px]"
+        style={{ position: "relative", minHeight: "48px", width: "100%" }}
       >
-        <div className="w-full text-center" style={{ textAlign: "center" }}>
+        <div className="w-full text-center" style={{ textAlign: "center", width: "100%" }}>
           <h2 className="text-xl font-bold text-slate-900" style={{ textAlign: "center" }}>
             Appointment Management
           </h2>
           <p className="text-xs text-slate-500 mt-1" style={{ textAlign: "center" }}>
             {currentUser?.departmentName ? `${currentUser.departmentName} — ` : ""}
-            Review citizen requests, approve bookings, and process desk appointments.
+            Review citizen bookings and scheduled appointments for your department.
           </p>
         </div>
 
         <span
-          className="text-xs bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 font-semibold shadow-xs"
+          className="text-xs bg-white px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 font-bold shadow-xs shrink-0"
           style={{
             position: "absolute",
             right: 0,
@@ -112,11 +109,11 @@ export default function OfficerAppointmentsPage() {
             whiteSpace: "nowrap",
           }}
         >
-          Total Assigned: {deptAppointments.length}
+          Assigned: {deptAppointments.length}
         </span>
       </div>
 
-      {/* Filter and Search */}
+      {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
         <div className="relative w-full md:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -124,7 +121,7 @@ export default function OfficerAppointmentsPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search citizen, reference number..."
+            placeholder="Search citizen, phone, reference..."
             className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
           />
         </div>
@@ -138,9 +135,9 @@ export default function OfficerAppointmentsPage() {
               onChange={(e) => setTimeFilter(e.target.value)}
               className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
             >
-              <option value="TODAY">Today's Appointments</option>
-              <option value="UPCOMING">Upcoming Appointments</option>
-              <option value="ALL">All Appointments</option>
+              <option value="ALL">All Dates</option>
+              <option value="TODAY">Today's Visits</option>
+              <option value="UPCOMING">Upcoming Visits</option>
             </select>
           </div>
 
@@ -152,106 +149,96 @@ export default function OfficerAppointmentsPage() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
             >
-              <option value="PENDING">Pending</option>
-              <option value="REJECTED">Reject</option>
+              <option value="ALL">All Statuses</option>
+              <option value="PENDING">Pending Approval</option>
               <option value="APPROVED">Approved</option>
+              <option value="CHECKED_IN">Checked In</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="CANCELLED">Cancelled</option>
             </select>
           </div>
         </div>
       </div>
 
-      {/* Table */}
+      {/* Appointments Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
               <tr>
-                <th className="px-5 py-3.5">Appointment Number</th>
                 <th className="px-5 py-3.5">Citizen Name</th>
-                <th className="px-5 py-3.5">Service</th>
+                <th className="px-5 py-3.5">Requested Service</th>
                 <th className="px-5 py-3.5">Scheduled Date & Time</th>
-                <th className="px-5 py-3.5">Request Date</th>
+                <th className="px-5 py-3.5">Booked On</th>
                 <th className="px-5 py-3.5">Status</th>
-                <th className="px-5 py-3.5 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-slate-400">
-                    No appointments found matching this filter.
+                  <td colSpan={5} className="px-5 py-12 text-center text-slate-400">
+                    <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="font-semibold text-slate-700">No appointments found</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      No citizen appointments match your selected filter criteria.
+                    </p>
                   </td>
                 </tr>
               ) : (
                 filtered.map((apt) => (
-                  <tr key={apt.id} className="hover:bg-slate-50/80 transition-colors">
-                    {/* Appointment Number */}
-                    <td className="px-5 py-3.5 font-mono font-bold text-slate-900">
-                      <div className="text-blue-900 hover:text-blue-700">{apt.referenceNumber}</div>
+                  <tr
+                    key={apt.id}
+                    className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                    onClick={() => setSelectedSlipApt(apt)}
+                    title="Click to preview official appointment confirmation slip"
+                  >
+                    {/* Citizen Details */}
+                    <td className="px-5 py-3.5 font-medium text-slate-900">
+                      <div className="font-bold text-slate-900">{apt.citizenName}</div>
+                      <div className="text-[11px] font-mono text-blue-900 font-semibold mt-0.5">
+                        {apt.referenceNumber}
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-normal">{apt.citizenPhone}</span>
                       {apt.tokenNumber && (
-                        <span className="text-[10px] text-emerald-700 font-bold block">
+                        <span className="text-[10px] text-emerald-700 font-bold block mt-0.5">
                           Token: {apt.tokenNumber}
                         </span>
                       )}
                     </td>
 
-                    {/* Citizen Name */}
-                    <td className="px-5 py-3.5 font-medium text-slate-900">
-                      <div className="font-bold text-slate-900">{apt.citizenName}</div>
-                      <span className="text-[10px] text-slate-400 font-normal">{apt.citizenPhone}</span>
-                    </td>
-
                     {/* Service */}
-                    <td className="px-5 py-3.5 text-slate-700 font-medium">{apt.serviceName}</td>
+                    <td className="px-5 py-3.5 text-slate-700 font-medium">
+                      <div>{apt.serviceName}</div>
+                      {apt.citizenNotes && (
+                        <span className="text-[10px] text-slate-400 truncate block max-w-xs" title={apt.citizenNotes}>
+                          "{apt.citizenNotes}"
+                        </span>
+                      )}
+                    </td>
 
                     {/* Scheduled Date & Time */}
                     <td className="px-5 py-3.5 text-slate-600">
-                      <div className="font-medium text-slate-900">{formatDate(apt.date)}</div>
+                      <div className="font-semibold text-slate-900">{formatDate(apt.date)}</div>
                       <span className="text-[10px] text-blue-700 font-bold">{apt.timeSlot}</span>
                     </td>
 
-                    {/* Request Date */}
-                    <td className="px-5 py-3.5 text-slate-600 font-medium">
+                    {/* Booked Date */}
+                    <td className="px-5 py-3.5 text-slate-500 font-medium">
                       {formatRequestDate(apt.createdAt)}
                     </td>
 
                     {/* Status */}
                     <td className="px-5 py-3.5">
                       <StatusBadge status={apt.status} />
-                    </td>
-
-                    {/* Actions: Approve and Reject buttons only */}
-                    <td className="px-5 py-3.5 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => updateAppointmentStatus(apt.id, "APPROVED", "Approved by desk officer")}
-                          disabled={apt.status === "APPROVED"}
-                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                            apt.status === "APPROVED"
-                              ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60"
-                              : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 cursor-pointer shadow-xs"
-                          }`}
-                          title="Approve Appointment"
+                      {apt.rejectionReason && (
+                        <span
+                          className="text-[10px] text-rose-600 block mt-0.5 truncate max-w-[130px]"
+                          title={apt.rejectionReason}
                         >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Approve</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => updateAppointmentStatus(apt.id, "REJECTED", "", "Paperwork incomplete")}
-                          disabled={apt.status === "REJECTED"}
-                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                            apt.status === "REJECTED"
-                              ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60"
-                              : "bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 cursor-pointer shadow-xs"
-                          }`}
-                          title="Reject Appointment"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                          <span>Reject</span>
-                        </button>
-                      </div>
+                          Reason: {apt.rejectionReason}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -261,13 +248,13 @@ export default function OfficerAppointmentsPage() {
         </div>
       </div>
 
-      {/* Slip Modal */}
+      {/* Slip Modal View */}
       {selectedSlipApt && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
           <div className="relative max-w-2xl w-full">
             <button
               onClick={() => setSelectedSlipApt(null)}
-              className="absolute -top-10 right-0 text-white font-bold text-xs bg-slate-800 px-3 py-1.5 rounded-lg no-print"
+              className="absolute -top-10 right-0 text-white font-bold text-xs bg-slate-800 px-3 py-1.5 rounded-lg no-print cursor-pointer"
             >
               ✕ Close
             </button>
@@ -281,4 +268,3 @@ export default function OfficerAppointmentsPage() {
     </div>
   );
 }
-

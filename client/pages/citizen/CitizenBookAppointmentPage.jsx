@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useStore } from "@/context";
 import AppointmentSlip from "@/features/appointments/AppointmentSlip";
+import { EthiopianFlag } from "@/components/ui";
 import {
   Calendar,
   Clock,
@@ -9,157 +10,58 @@ import {
   Search,
   Filter,
   CheckCircle,
-  XCircle,
-  Ban,
   X,
   User,
   Phone,
-  FileCheck2,
-  Sparkles,
-  Printer,
-  ChevronRight,
 } from "lucide-react";
 
-// Initial schedule benchmark slots available for citizen booking
-const INITIAL_BOOKING_SLOTS = [
-  {
-    id: "slot-1",
-    date: "2026-11-03",
-    dateDisplay: "Nov 3, 2026",
-    time: "09:00 AM",
-    departmentId: "dept-1",
-    department: "Kebele Administration & Vital Events",
-    serviceId: "srv-1",
-    service: "Kebele Digital ID Registration & Issuance",
-    availabilityText: "18 Slots Available",
-    actionValue: "Available",
-  },
-  {
-    id: "slot-2",
-    date: "2026-11-03",
-    dateDisplay: "Nov 3, 2026",
-    time: "10:30 AM",
-    departmentId: "dept-1",
-    department: "Kebele Administration & Vital Events",
-    serviceId: "srv-2",
-    service: "Residence Certificate (Melkeya)",
-    availabilityText: "Full (0 Slots Left)",
-    actionValue: "Full",
-  },
-  {
-    id: "slot-3",
-    date: "2026-11-03",
-    dateDisplay: "Nov 3, 2026",
-    time: "11:30 AM",
-    departmentId: "dept-2",
-    department: "Land Administration & Urban Development",
-    serviceId: "srv-5",
-    service: "Landholding Rights Verification & Mapping",
-    availabilityText: "12 Slots Available",
-    actionValue: "Available",
-  },
-  {
-    id: "slot-4",
-    date: "2026-11-03",
-    dateDisplay: "Nov 3, 2026",
-    time: "14:00 PM",
-    departmentId: "dept-2",
-    department: "Land Administration & Urban Development",
-    serviceId: "srv-6",
-    service: "Building Permit Pre-Check & Site Inspection",
-    availabilityText: "Desk Closed (Holiday)",
-    actionValue: "Unavailable",
-  },
-  {
-    id: "slot-5",
-    date: "2026-11-04",
-    dateDisplay: "Nov 4, 2026",
-    time: "08:30 AM",
-    departmentId: "dept-3",
-    department: "Trade, Industry & Enterprise Development",
-    serviceId: "srv-7",
-    service: "Annual Trade License Renewal",
-    availabilityText: "22 Slots Available",
-    actionValue: "Available",
-  },
-  {
-    id: "slot-6",
-    date: "2026-11-04",
-    dateDisplay: "Nov 4, 2026",
-    time: "10:00 AM",
-    departmentId: "dept-3",
-    department: "Trade, Industry & Enterprise Development",
-    serviceId: "srv-8",
-    service: "Micro & Small Enterprise (MSE) Registration",
-    availabilityText: "Full (0 Slots Left)",
-    actionValue: "Full",
-  },
-  {
-    id: "slot-7",
-    date: "2026-11-04",
-    dateDisplay: "Nov 4, 2026",
-    time: "11:30 AM",
-    departmentId: "dept-4",
-    department: "Revenue & Tax Administration",
-    serviceId: "srv-9",
-    service: "Woreda Tax Clearance Certificate",
-    availabilityText: "15 Slots Available",
-    actionValue: "Available",
-  },
-  {
-    id: "slot-8",
-    date: "2026-11-04",
-    dateDisplay: "Nov 4, 2026",
-    time: "14:30 PM",
-    departmentId: "dept-4",
-    department: "Revenue & Tax Administration",
-    serviceId: "srv-10",
-    service: "Business Turnover Tax Assessment",
-    availabilityText: "Unavailable (Counter Under Maintenance)",
-    actionValue: "Unavailable",
-  },
-  {
-    id: "slot-9",
-    date: "2026-11-05",
-    dateDisplay: "Nov 5, 2026",
-    time: "09:00 AM",
-    departmentId: "dept-1",
-    department: "Kebele Administration & Vital Events",
-    serviceId: "srv-3",
-    service: "Vital Event: Birth Certificate Registration",
-    availabilityText: "25 Slots Available",
-    actionValue: "Available",
-  },
-  {
-    id: "slot-10",
-    date: "2026-11-05",
-    dateDisplay: "Nov 5, 2026",
-    time: "11:00 AM",
-    departmentId: "dept-5",
-    department: "Social Affairs & Community Development",
-    serviceId: "srv-11",
-    service: "Elderly & Vulnerable Citizen Direct Assistance",
-    availabilityText: "10 Slots Available",
-    actionValue: "Available",
-  },
-  {
-    id: "slot-11",
-    date: "2026-11-05",
-    dateDisplay: "Nov 5, 2026",
-    time: "14:00 PM",
-    departmentId: "dept-5",
-    department: "Social Affairs & Community Development",
-    serviceId: "srv-12",
-    service: "Community Mediation & Civil Dispute Record",
-    availabilityText: "Full (0 Slots Left)",
-    actionValue: "Full",
-  },
-];
-
 export default function CitizenBookAppointmentPage() {
-  const { currentUser, bookAppointment, departments } = useStore();
+  const { currentUser, bookAppointment, departments = [], services = [] } = useStore();
 
-  const [slots, setSlots] = useState(INITIAL_BOOKING_SLOTS);
+  const [slots, setSlots] = useState(() => {
+    if (!services || services.length === 0) return [];
+    return services.map((srv) => {
+      const dept = departments.find((d) => d.id === srv.departmentId);
+      return {
+        id: `slot-${srv.id}`,
+        date: "2026-11-03",
+        dateDisplay: "Nov 3, 2026",
+        time: "09:00 AM",
+        departmentId: srv.departmentId,
+        department: dept?.name || "Municipal Department",
+        serviceId: srv.id,
+        service: srv.name,
+        availabilityText: "Available",
+        actionValue: "Available",
+      };
+    });
+  });
+
+  useEffect(() => {
+    if (services && services.length > 0) {
+      setSlots((prev) => {
+        if (prev.length > 0) return prev;
+        return services.map((srv) => {
+          const dept = departments.find((d) => d.id === srv.departmentId);
+          return {
+            id: `slot-${srv.id}`,
+            date: "2026-11-03",
+            dateDisplay: "Nov 3, 2026",
+            time: "09:00 AM",
+            departmentId: srv.departmentId,
+            department: dept?.name || "Municipal Department",
+            serviceId: srv.id,
+            service: srv.name,
+            availabilityText: "Available",
+            actionValue: "Available",
+          };
+        });
+      });
+    } else {
+      setSlots([]);
+    }
+  }, [services, departments]);
+
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("ALL");
   const [actionFilter, setActionFilter] = useState("ALL");
@@ -170,6 +72,94 @@ export default function CitizenBookAppointmentPage() {
   const [citizenPhone, setCitizenPhone] = useState(currentUser?.phone || "+251911223344");
   const [citizenNotes, setCitizenNotes] = useState("");
   const [bookingSuccessApt, setBookingSuccessApt] = useState(null);
+
+  // Modal Dropdown Collections
+  const modalDepartments = departments && departments.length > 0 ? departments : [];
+
+  const availableServicesForDept =
+    services && services.length > 0
+      ? services.filter((s) => s.departmentId === selectedSlot?.departmentId)
+      : [];
+
+  const safeServices =
+    availableServicesForDept.length > 0
+      ? availableServicesForDept
+      : selectedSlot?.serviceId
+      ? [{ id: selectedSlot.serviceId, name: selectedSlot.service || "General Public Service" }]
+      : [];
+
+  const availableDates = [
+    { date: "2026-11-03", dateDisplay: "Nov 3, 2026" },
+    { date: "2026-11-04", dateDisplay: "Nov 4, 2026" },
+    { date: "2026-11-05", dateDisplay: "Nov 5, 2026" },
+    { date: "2026-11-06", dateDisplay: "Nov 6, 2026" },
+    { date: "2026-11-09", dateDisplay: "Nov 9, 2026" },
+  ];
+
+  const availableTimeSlots = [
+    "08:30 AM",
+    "09:00 AM",
+    "10:00 AM",
+    "10:30 AM",
+    "11:00 AM",
+    "11:30 AM",
+    "14:00 PM",
+    "14:30 PM",
+    "15:30 PM",
+  ];
+
+  const handleDepartmentChange = (deptId) => {
+    const matchedDept = modalDepartments.find((d) => d.id === deptId);
+    const deptName = matchedDept ? matchedDept.name : "Municipal Department";
+    const servicesForNewDept = (services || []).filter((s) => s.departmentId === deptId);
+    const firstService =
+      servicesForNewDept[0] || {
+        id: `srv-${deptId}`,
+        name: `${deptName} Service`,
+      };
+
+    setSelectedSlot((prev) => ({
+      ...prev,
+      departmentId: deptId,
+      department: deptName,
+      serviceId: firstService.id,
+      service: firstService.name,
+      availabilityText: "Available",
+      actionValue: "Available",
+    }));
+  };
+
+  const handleServiceChange = (serviceId) => {
+    const matchedService = (services || []).find((s) => s.id === serviceId);
+    const serviceName = matchedService ? matchedService.name : "Public Service";
+
+    setSelectedSlot((prev) => ({
+      ...prev,
+      serviceId,
+      service: serviceName,
+      availabilityText: "Available",
+      actionValue: "Available",
+    }));
+  };
+
+  const handleDateChange = (dateVal) => {
+    const matchedDate = availableDates.find((d) => d.date === dateVal) || {
+      date: dateVal,
+      dateDisplay: dateVal,
+    };
+    setSelectedSlot((prev) => ({
+      ...prev,
+      date: matchedDate.date,
+      dateDisplay: matchedDate.dateDisplay,
+    }));
+  };
+
+  const handleTimeChange = (timeVal) => {
+    setSelectedSlot((prev) => ({
+      ...prev,
+      time: timeVal,
+    }));
+  };
 
   // Filter slots
   const filteredSlots = slots.filter((slot) => {
@@ -196,6 +186,30 @@ export default function CitizenBookAppointmentPage() {
     setCitizenName(currentUser?.fullName || "Abebe Bikila");
     setCitizenPhone(currentUser?.phone || "+251911223344");
     setCitizenNotes("");
+  };
+
+  const handleOpenNewBooking = () => {
+    const firstAvailable = slots.find((s) => s.actionValue === "Available") || slots[0];
+    if (firstAvailable) {
+      handleOpenBooking(firstAvailable);
+    } else if (departments.length > 0) {
+      const firstDept = departments[0];
+      const deptServices = (services || []).filter((s) => s.departmentId === firstDept.id);
+      const firstService =
+        deptServices[0] || services[0] || { id: "srv-gen", name: "General Public Service" };
+      handleOpenBooking({
+        id: `slot-${Date.now()}`,
+        date: "2026-11-03",
+        dateDisplay: "Nov 3, 2026",
+        time: "09:00 AM",
+        departmentId: firstDept.id,
+        department: firstDept.name,
+        serviceId: firstService.id,
+        service: firstService.name,
+        availabilityText: "Available",
+        actionValue: "Available",
+      });
+    }
   };
 
   const handleConfirmBooking = (e) => {
@@ -252,19 +266,34 @@ export default function CitizenBookAppointmentPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Centered Page Header */}
+      {/* Centered Page Header with Action Button at Right Edge */}
       <div
         className="relative flex items-center justify-center w-full min-h-[48px]"
-        style={{ position: "relative", minHeight: "48px", textAlign: "center" }}
+        style={{ position: "relative", minHeight: "48px", width: "100%" }}
       >
-        <div className="w-full text-center" style={{ textAlign: "center" }}>
+        <div className="w-full text-center" style={{ textAlign: "center", width: "100%" }}>
           <h2 className="text-xl font-bold text-slate-900" style={{ textAlign: "center" }}>
             Book Appointment
           </h2>
-          <p className="text-xs text-slate-500 mt-1" style={{ textAlign: "center" }}>
-            Browse available municipal service slots and book your in-person office schedule.
+          <p className="text-xs text-slate-500 mt-0.5" style={{ textAlign: "center" }}>
+            Browse available municipal service slots and reserve your in-person office schedule.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={handleOpenNewBooking}
+          className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-all cursor-pointer shrink-0"
+          style={{
+            position: "absolute",
+            right: 0,
+            top: "50%",
+            transform: "translateY(-50%)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <Calendar className="w-4 h-4 text-amber-300" />
+          <span>Book Appointment</span>
+        </button>
       </div>
 
       {/* Summary Cards */}
@@ -442,108 +471,206 @@ export default function CitizenBookAppointmentPage() {
 
       {/* Booking Confirmation Modal */}
       {selectedSlot && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                  <Calendar className="w-4 h-4" />
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200/90 max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 my-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shadow-2xs">
+                  <Calendar className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">Confirm Appointment Booking</h3>
-                  <p className="text-[11px] text-slate-500">
-                    Municipal Appointment Desk Reservation
+                  <h3 className="font-extrabold text-slate-900 text-base">Book Municipal Appointment</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Select department, service, slot, and confirm your visit details
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedSlot(null)}
-                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                title="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleConfirmBooking} className="mt-4 space-y-4">
-              {/* Selected Slot Brief */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Service:</span>
-                  <span className="font-bold text-slate-900">{selectedSlot.service}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Department:</span>
-                  <span className="font-medium text-slate-700">{selectedSlot.department}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Scheduled Date & Time:</span>
-                  <span className="font-bold text-blue-700">
-                    {selectedSlot.dateDisplay} at {selectedSlot.time}
+            <form onSubmit={handleConfirmBooking} className="mt-6 space-y-6">
+              {/* Section 1: Service & Appointment Slot Selection */}
+              <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-5">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-emerald-600" />
+                    <span>1. Service & Appointment Slot</span>
                   </span>
+                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                    {selectedSlot.availabilityText || "Slots Available"}
+                  </span>
+                </div>
+
+                {/* Department Dropdown */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2">
+                    Municipal Department *
+                  </label>
+                  <div className="relative">
+                    <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <select
+                      value={selectedSlot.departmentId}
+                      onChange={(e) => handleDepartmentChange(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs"
+                    >
+                      {modalDepartments.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Public Service Dropdown */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2">
+                    Public Service *
+                  </label>
+                  <div className="relative">
+                    <FileText className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <select
+                      value={selectedSlot.serviceId}
+                      onChange={(e) => handleServiceChange(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs"
+                    >
+                      {safeServices.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Date & Time Slot Grid with Ample Gaps */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">
+                      Appointment Date *
+                    </label>
+                    <div className="relative">
+                      <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <select
+                        value={selectedSlot.date}
+                        onChange={(e) => handleDateChange(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs"
+                      >
+                        {availableDates.map((d) => (
+                          <option key={d.date} value={d.date}>
+                            {d.dateDisplay}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">
+                      Available Time Slot *
+                    </label>
+                    <div className="relative">
+                      <Clock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <select
+                        value={selectedSlot.time}
+                        onChange={(e) => handleTimeChange(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs"
+                      >
+                        {availableTimeSlots.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Citizen Details Inputs */}
-              <div className="space-y-3">
+              {/* Section 2: Citizen Applicant Details */}
+              <div className="space-y-4 pt-2 border-t border-slate-100">
+                <div className="pb-1">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                    <User className="w-4 h-4 text-emerald-600" />
+                    <span>2. Citizen Applicant Details</span>
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Official booking identification for gate check-in and queue ticket issuance
+                  </p>
+                </div>
+
+                {/* Full Legal Name */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Citizen Full Name
+                  <label className="block text-xs font-semibold text-slate-700 mb-2">
+                    Citizen Full Name *
                   </label>
                   <div className="relative">
-                    <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
                       required
                       value={citizenName}
                       onChange={(e) => setCitizenName(e.target.value)}
                       placeholder="e.g. Abebe Bikila"
-                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 focus:outline-none bg-white shadow-2xs"
                     />
                   </div>
                 </div>
 
+                {/* Phone Number with Ethiopian Flag */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Phone Number
+                  <label className="block text-xs font-semibold text-slate-700 mb-2">
+                    Phone Number *
                   </label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <div className="relative flex items-center">
+                    <span className="absolute left-3.5 flex items-center pointer-events-none">
+                      <EthiopianFlag className="w-5 h-3.5 shadow-2xs rounded-xs" />
+                    </span>
                     <input
-                      type="text"
+                      type="tel"
                       required
                       value={citizenPhone}
                       onChange={(e) => setCitizenPhone(e.target.value)}
-                      placeholder="+251 9..."
-                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                      placeholder="+251 9XX XXX XXX"
+                      className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 focus:outline-none bg-white shadow-2xs"
                     />
                   </div>
                 </div>
 
+                {/* Purpose / Notes */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-2">
                     Purpose / Notes for Desk Officer (Optional)
                   </label>
                   <textarea
-                    rows={2}
+                    rows={3}
                     value={citizenNotes}
                     onChange={(e) => setCitizenNotes(e.target.value)}
-                    placeholder="Briefly state your purpose or documents prepared..."
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                    placeholder="Briefly state your purpose, reason for visit, or documents prepared for this visit..."
+                    className="w-full p-3 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 focus:outline-none bg-white shadow-2xs"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setSelectedSlot(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow transition-colors cursor-pointer flex items-center gap-1.5"
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-2"
                 >
                   <CheckCircle className="w-4 h-4" />
                   <span>Confirm Booking</span>

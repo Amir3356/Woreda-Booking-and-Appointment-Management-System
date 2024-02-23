@@ -1,8 +1,19 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, Navigate } from "react-router-dom";
+import { useStore } from "@/context";
+import { getJwtCookie, parseJwtToken } from "@/services";
 import DashboardSidebar from "./DashboardSidebar";
 import DashboardHeader from "./DashboardHeader";
 
 export default function AdminLayout({ children }) {
+  const { currentUser } = useStore();
+  const token = getJwtCookie();
+  const claims = parseJwtToken(token);
+
+  // Enforce valid JWT in browser cookie with ADMIN role
+  if (!token || !claims || claims.role !== "ADMIN" || !currentUser || currentUser.role !== "ADMIN") {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
     <div className="dashboard-shell min-h-screen flex bg-slate-100" style={{ backgroundColor: "#f1f5f9" }}>
       <DashboardSidebar role="ADMIN" />

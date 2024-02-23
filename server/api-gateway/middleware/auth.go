@@ -79,7 +79,12 @@ func Auth(secret string) Middleware {
 func parseBearer(r *http.Request, key []byte) (*Claims, error) {
 	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok || raw == "" {
-		return nil, errors.New("missing bearer token")
+		// Fallback: check JWT stored in browser cookie "woreda_token"
+		if cookie, err := r.Cookie("woreda_token"); err == nil && cookie.Value != "" {
+			raw = cookie.Value
+		} else {
+			return nil, errors.New("missing bearer token")
+		}
 	}
 	claims := &Claims{}
 	_, err := jwt.ParseWithClaims(raw, claims, func(*jwt.Token) (any, error) { return key, nil },

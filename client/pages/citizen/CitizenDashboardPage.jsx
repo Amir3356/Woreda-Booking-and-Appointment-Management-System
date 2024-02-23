@@ -10,8 +10,6 @@ import {
   FileText,
   ArrowRight,
   Printer,
-  Sparkles,
-  Building,
 } from "lucide-react";
 import { useState } from "react";
 import AppointmentSlip from "@/features/appointments/AppointmentSlip";

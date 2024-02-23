@@ -1,16 +1,9 @@
 import { useState } from "react";
 import { useStore } from "@/context";
 import {
-  BarChart3,
   Download,
   Printer,
-  Calendar,
-  Building2,
-  FileCheck2,
-  TrendingUp,
-  Percent,
 } from "lucide-react";
-import { formatDate } from "@/utils";
 
 export default function AdminReportsPage() {
   const { appointments, departments, services } = useStore();

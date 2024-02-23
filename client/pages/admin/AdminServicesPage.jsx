@@ -1,14 +1,11 @@
 import { useState } from "react";
 import { useStore } from "@/context";
-import { formatETB } from "@/utils";
 import {
   FileText,
   Plus,
   Search,
   Filter,
-  Clock,
   CheckCircle,
-  XCircle,
   Edit2,
   X,
   Trash2,
@@ -27,25 +24,15 @@ export default function AdminServicesPage() {
   const [selectedDeptFilter, setSelectedDeptFilter] = useState("ALL");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
+  const [successMsg, setSuccessMsg] = useState("");
 
   const [form, setForm] = useState({
     name: "",
-    code: "",
-    departmentId: departments[0]?.id || "",
-    description: "",
-    durationMinutes: 30,
-    dailyQuota: 40,
-    feeETB: 0,
-    processingDays: "Same day",
-    requiredDocuments: ["Valid Kebele ID", "Proof of Residence"],
+    departmentId: departments[0]?.id || "dept-general",
   });
 
-  const [newDocItem, setNewDocItem] = useState("");
-
-  const filteredServices = services.filter((s) => {
-    const matchesSearch =
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.code.toLowerCase().includes(search.toLowerCase());
+  const filteredServices = (services || []).filter((s) => {
+    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase());
     const matchesDept = selectedDeptFilter === "ALL" || s.departmentId === selectedDeptFilter;
     return matchesSearch && matchesDept;
   });
@@ -54,14 +41,7 @@ export default function AdminServicesPage() {
     setEditingService(null);
     setForm({
       name: "",
-      code: "",
-      departmentId: departments[0]?.id || "",
-      description: "",
-      durationMinutes: 30,
-      dailyQuota: 40,
-      feeETB: 0,
-      processingDays: "Same day",
-      requiredDocuments: ["Valid Kebele Identification Card", "Passport photograph"],
+      departmentId: departments[0]?.id || "dept-general",
     });
     setModalOpen(true);
   };
@@ -70,44 +50,51 @@ export default function AdminServicesPage() {
     setEditingService(srv);
     setForm({
       name: srv.name,
-      code: srv.code,
-      departmentId: srv.departmentId,
-      description: srv.description,
-      durationMinutes: srv.durationMinutes,
-      dailyQuota: srv.dailyQuota,
-      feeETB: srv.feeETB,
-      processingDays: srv.processingDays || "Same day",
-      requiredDocuments: srv.requiredDocuments || [],
+      departmentId: srv.departmentId || departments[0]?.id || "dept-general",
     });
     setModalOpen(true);
   };
 
-  const handleAddDoc = () => {
-    if (!newDocItem.trim()) return;
-    setForm({
-      ...form,
-      requiredDocuments: [...form.requiredDocuments, newDocItem.trim()],
-    });
-    setNewDocItem("");
-  };
-
-  const handleRemoveDoc = (index) => {
-    setForm({
-      ...form,
-      requiredDocuments: form.requiredDocuments.filter((_, i) => i !== index),
-    });
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name || !form.departmentId) return;
+    if (!form.name.trim()) return;
+
+    const targetDeptId = form.departmentId || departments[0]?.id || "dept-general";
+    const payload = {
+      name: form.name.trim(),
+      departmentId: targetDeptId,
+      code: editingService?.code || `SRV-${Date.now().toString().slice(-4)}`,
+      durationMinutes: editingService?.durationMinutes || 30,
+      dailyQuota: editingService?.dailyQuota || 40,
+      feeETB: editingService?.feeETB || 0,
+      processingDays: editingService?.processingDays || "Same day",
+      requiredDocuments: editingService?.requiredDocuments || ["Valid Kebele ID"],
+    };
 
     if (editingService) {
-      updateService(editingService.id, form);
+      updateService(editingService.id, payload);
+      setSuccessMsg(`Service "${payload.name}" updated successfully.`);
     } else {
-      addService(form);
+      addService(payload);
+      setSuccessMsg(`Service "${payload.name}" created successfully.`);
     }
+    setTimeout(() => setSuccessMsg(""), 3500);
     setModalOpen(false);
+    setEditingService(null);
+  };
+
+  const handleDelete = (service) => {
+    if (window.confirm(`Are you sure you want to delete "${service.name}"?`)) {
+      deleteService(service.id);
+      setSuccessMsg(`Service "${service.name}" deleted.`);
+      setTimeout(() => setSuccessMsg(""), 3500);
+    }
+  };
+
+  const handleToggleStatus = (service) => {
+    toggleServiceStatus(service.id);
+    setSuccessMsg(`Service "${service.name}" is now ${!service.isActive ? "ACTIVE" : "INACTIVE"}.`);
+    setTimeout(() => setSuccessMsg(""), 3000);
   };
 
   return (
@@ -137,6 +124,14 @@ export default function AdminServicesPage() {
         </button>
       </div>
 
+      {/* Toast Notification */}
+      {successMsg && (
+        <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold shadow-xs animate-in fade-in duration-150">
+          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{successMsg}</span>
+        </div>
+      )}
+
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative w-full md:w-80">
@@ -145,7 +140,7 @@ export default function AdminServicesPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search service by name or code..."
+            placeholder="Search service by name..."
             className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
           />
         </div>
@@ -163,6 +158,9 @@ export default function AdminServicesPage() {
                 {d.name}
               </option>
             ))}
+            {departments.length === 0 && (
+              <option value="dept-general">General Municipal Desk</option>
+            )}
           </select>
         </div>
       </div>
@@ -182,9 +180,20 @@ export default function AdminServicesPage() {
             <tbody className="divide-y divide-slate-100">
               {filteredServices.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-12 text-center text-slate-400">
-                    <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-xs font-medium">No services found matching your criteria</p>
+                  <td colSpan={4} className="px-5 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3 text-slate-400">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                        <FileText className="w-6 h-6 text-slate-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-700">
+                          No services added yet
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                          Public services and department counter designations configured by Central Administration will appear here.
+                        </p>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -193,19 +202,14 @@ export default function AdminServicesPage() {
                   return (
                     <tr key={service.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-5 py-3.5 font-bold text-slate-900 max-w-xs">
-                        <div>{service.name}</div>
-                        {service.description && (
-                          <span className="text-[10px] text-slate-400 line-clamp-1 font-normal block mt-0.5">
-                            {service.description}
-                          </span>
-                        )}
+                        {service.name}
                       </td>
                       <td className="px-5 py-3.5 text-slate-600 font-medium">
-                        {dept?.name || "N/A"}
+                        {dept?.name || (service.departmentId === "dept-general" ? "General Municipal Desk" : "General Administration")}
                       </td>
                       <td className="px-5 py-3.5">
                         <button
-                          onClick={() => toggleServiceStatus(service.id)}
+                          onClick={() => handleToggleStatus(service)}
                           className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
                             service.isActive
                               ? "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -225,7 +229,7 @@ export default function AdminServicesPage() {
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => deleteService(service.id)}
+                            onClick={() => handleDelete(service)}
                             className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all cursor-pointer"
                             title="Delete Service"
                           >
@@ -245,14 +249,17 @@ export default function AdminServicesPage() {
       {/* Add / Edit Service Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative my-8">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative my-8 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-base text-slate-900">
                 {editingService ? "Edit Service" : "Create New Government Service"}
               </h3>
               <button
-                onClick={() => setModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+                onClick={() => {
+                  setModalOpen(false);
+                  setEditingService(null);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -260,139 +267,55 @@ export default function AdminServicesPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Service Name *</label>
+                <label className="block font-bold text-slate-700 mb-1.5">Service Name *</label>
                 <input
                   type="text"
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="e.g. Birth Certificate Registration"
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Service Code *</label>
-                  <input
-                    type="text"
-                    required
-                    value={form.code}
-                    onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                    placeholder="KBL-BRT"
-                    className="w-full px-3 py-2 border rounded-lg font-mono uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Department *</label>
-                  <select
-                    value={form.departmentId}
-                    onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg bg-white"
-                  >
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Duration (Min)</label>
-                  <input
-                    type="number"
-                    min="10"
-                    step="5"
-                    value={form.durationMinutes}
-                    onChange={(e) => setForm({ ...form, durationMinutes: parseInt(e.target.value) || 30 })}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Daily Quota</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={form.dailyQuota}
-                    onChange={(e) => setForm({ ...form, dailyQuota: parseInt(e.target.value) || 40 })}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Fee (ETB)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.feeETB}
-                    onChange={(e) => setForm({ ...form, feeETB: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-              </div>
-
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Description</label>
-                <textarea
-                  rows={2}
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg"
-                />
-              </div>
-
-              {/* Required Documents Checklist Builder */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Required Documents Checklist
-                </label>
-                <div className="space-y-1.5 mb-2">
-                  {form.requiredDocuments.map((doc, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 rounded bg-slate-50 border border-slate-200">
-                      <span>{doc}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveDoc(idx)}
-                        className="text-rose-500 hover:text-rose-700"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                <label className="block font-bold text-slate-700 mb-1.5">Assigned Department *</label>
+                <select
+                  value={form.departmentId}
+                  onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-white cursor-pointer"
+                >
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
                   ))}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newDocItem}
-                    onChange={(e) => setNewDocItem(e.target.value)}
-                    placeholder="Add document item..."
-                    className="flex-1 px-3 py-1.5 border rounded-lg"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddDoc}
-                    className="px-3 py-1.5 bg-slate-800 text-white font-bold rounded-lg"
-                  >
-                    Add
-                  </button>
-                </div>
+                  {(!departments.some((d) => d.id === form.departmentId) || departments.length === 0) && (
+                    <option value={form.departmentId || "dept-general"}>
+                      {form.departmentId === "dept-general" || !form.departmentId
+                        ? "General Municipal Service Desk"
+                        : "General Administration"}
+                    </option>
+                  )}
+                </select>
               </div>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+                  onClick={() => {
+                    setModalOpen(false);
+                    setEditingService(null);
+                  }}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#0b2545] hover:bg-[#133b5c] text-white font-bold rounded-lg shadow"
+                  className="px-4 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-all cursor-pointer"
                 >
-                  {editingService ? "Update Service" : "Save Service"}
+                  {editingService ? "Save Changes" : "Create Service"}
                 </button>
               </div>
             </form>
@@ -402,4 +325,3 @@ export default function AdminServicesPage() {
     </div>
   );
 }
-

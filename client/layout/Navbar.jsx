@@ -1,16 +1,7 @@
 import Link from "@/components/ui/Link";
 import { usePathname } from "@/hooks";
 import { useState } from "react";
-import {
-  Calendar,
-  Search,
-  Building,
-  Menu,
-  X,
-  Shield,
-  Layers,
-  ArrowRight,
-} from "lucide-react";
+import { Calendar, Building, Menu, X } from "lucide-react";
 import RoleSwitcher from "@/components/ui/RoleSwitcher";
 import { useStore } from "@/context";
 

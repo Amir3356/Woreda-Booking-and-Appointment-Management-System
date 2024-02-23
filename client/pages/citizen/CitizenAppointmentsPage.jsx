@@ -6,7 +6,6 @@ import { formatDate } from "@/utils";
 import {
   Calendar,
   Search,
-  Filter,
   Printer,
   RefreshCw,
   XCircle,
@@ -188,8 +187,14 @@ export default function CitizenAppointmentsPage() {
                 </div>
 
                 {apt.officerNotes && (
-                  <p className="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200 inline-block">
+                  <p className="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200 inline-block mr-2">
                     Officer Note: {apt.officerNotes}
+                  </p>
+                )}
+
+                {apt.rejectionReason && (
+                  <p className="text-[11px] text-rose-800 bg-rose-50 p-2 rounded-lg border border-rose-200 inline-block">
+                    Rejection Reason: {apt.rejectionReason}
                   </p>
                 )}
               </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useStore } from "@/context";
-import { User, Phone, Mail, MapPin, Shield, CheckCircle2 } from "lucide-react";
+import { Phone, CheckCircle2 } from "lucide-react";
 
 export default function CitizenProfilePage() {
   const { currentUser, setCurrentUser } = useStore();
