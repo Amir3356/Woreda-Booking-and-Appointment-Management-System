@@ -7,6 +7,7 @@ import {
   Clock,
   UserCog,
   ShieldAlert,
+  History,
 } from "lucide-react";
 import { useStore } from "@/context";
 
@@ -35,8 +36,18 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
     },
   ];
 
+  const citizenAppointmentsCount = appointments.filter(
+    (a) => a.citizenId === currentUser?.id || a.citizenPhone === currentUser?.phone
+  ).length;
+
   const citizenNav = [
     { href: "/citizen/book", label: "Book Appointment", icon: Calendar },
+    {
+      href: "/citizen/appointments",
+      label: "Appointment History",
+      icon: History,
+      badge: citizenAppointmentsCount > 0 ? citizenAppointmentsCount : null,
+    },
   ];
 
   let items = adminNav;

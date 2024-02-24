@@ -151,12 +151,12 @@ export default function CitizenDashboardPage() {
       {/* Recent Appointments Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 text-sm">Recent Appointments</h3>
+          <h3 className="font-bold text-slate-900 text-sm">Appointment History</h3>
           <Link
             href="/citizen/appointments"
             className="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1"
           >
-            <span>View All</span>
+            <span>View All History</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>

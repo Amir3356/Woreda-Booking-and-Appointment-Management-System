@@ -74,7 +74,7 @@ export default function CitizenAppointmentsPage() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">My Government Appointments</h2>
+          <h2 className="text-xl font-bold text-slate-900">Appointment History</h2>
           <p className="text-xs text-slate-500">
             View, track, reschedule, or print appointment slips for your requests.
           </p>
