@@ -1,17 +1,15 @@
-# VCS / editor
+# Docker build context is this service folder.
+node_modules
+npm-debug.log*
+test
+coverage
 .git
 .gitignore
-.idea
-.vscode
-*.swp
-# Build output & local env
-bin/
-*.exe
-*.test
-*.out
-coverage*
 .env
 .env.*
-# Docker
 Dockerfile
 .dockerignore
+*.md
+.vscode
+.idea
+*.swp

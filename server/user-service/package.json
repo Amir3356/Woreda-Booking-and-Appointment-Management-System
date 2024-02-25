@@ -1,0 +1,23 @@
+{
+  "name": "@woreda/user-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Citizen profiles, staff account provisioning and municipal system settings (REST).",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "bcryptjs": "2.4.3",
+    "express": "5.1.0",
+    "jsonwebtoken": "9.0.2",
+    "kafkajs": "2.2.4",
+    "mongoose": "8.24.5",
+    "pino": "9.6.0"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@woreda/api-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Single entry point behind nginx: JWT check, identity headers, Redis response cache, reverse proxy to the services, WebSocket live notices fed by Kafka.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "express": "5.1.0",
+    "http-proxy-middleware": "3.0.7",
+    "ioredis": "5.4.2",
+    "jsonwebtoken": "9.0.2",
+    "kafkajs": "2.2.4",
+    "pino": "9.6.0",
+    "ws": "8.22.0"
+  }
+}

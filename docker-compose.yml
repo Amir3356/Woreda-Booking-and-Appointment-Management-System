@@ -6,33 +6,38 @@
 name: woreda-booking
 
 x-service-env: &service-env
-  DATABASE_URL: postgres://${POSTGRES_USER:-woreda}:${POSTGRES_PASSWORD:-woreda}@postgres:5432/${POSTGRES_DB:-woreda}?sslmode=disable
+  MONGO_URL: mongodb://mongo:27017/woreda?replicaSet=rs0
+  TZ: Africa/Addis_Ababa # "today" for bookings and the desk queue
   JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
 
 x-service-defaults: &service-defaults
   restart: unless-stopped
   networks: [backend]
   depends_on:
-    postgres:
+    mongo:
       condition: service_healthy
 
 services:
-  postgres:
-    image: postgres:16-alpine
+  # Database: single-node replica set (rs0) so multi-document transactions work.
+  # department-service creates the departments and user-service the administrator and
+  # default settings on startup when they are missing.
+  # Published on localhost only, for mongosh/Compass:
+  #   mongodb://localhost:27017/woreda?directConnection=true
+  mongo:
+    image: mongo:7.0
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-woreda}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-woreda}
-      POSTGRES_DB: ${POSTGRES_DB:-woreda}
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
-      - "5432:5432"
+      - "127.0.0.1:27017:27017"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - mongo-data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      # First run initiates the replica set; healthy once this node is the writable primary.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}).ok }; if (!db.hello().isWritablePrimary) quit(1)"]
       interval: 5s
-      timeout: 5s
-      retries: 10
+      timeout: 10s
+      retries: 30
+      start_period: 10s
     networks: [backend]
 
   redis:
@@ -155,7 +160,7 @@ services:
       PORT: "8081"
       REDIS_URL: redis://redis:6379/0
     depends_on:
-      postgres:
+      mongo:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -169,32 +174,28 @@ services:
 
   department-service:
     <<: *service-defaults
-    build:
-      context: ./server # includes the shared proto module
-      dockerfile: department-service/Dockerfile
+    build: ./server/department-service
     environment:
       <<: *service-env
       PORT: "8083"
       GRPC_PORT: "9083" # internal catalog API (gRPC), not published
       KAFKA_BROKERS: kafka:9092 # publishes catalog changes (woreda.catalog)
     depends_on:
-      postgres:
+      mongo:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
 
   appointment-service:
     <<: *service-defaults
-    build:
-      context: ./server # includes the shared proto module
-      dockerfile: appointment-service/Dockerfile
+    build: ./server/appointment-service
     environment:
       <<: *service-env
       PORT: "8084"
       KAFKA_BROKERS: kafka:9092
       CATALOG_GRPC_ADDR: department-service:9083
     depends_on:
-      postgres:
+      mongo:
         condition: service_healthy
       department-service:
         condition: service_started
@@ -209,13 +210,13 @@ services:
       PORT: "8085"
       KAFKA_BROKERS: kafka:9092
     depends_on:
-      postgres:
+      mongo:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
 
 volumes:
-  postgres-data:
+  mongo-data:
   kafka-data:
 
 networks:
