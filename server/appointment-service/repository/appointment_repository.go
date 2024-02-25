@@ -77,16 +77,10 @@ func reserveSlot(ctx context.Context, tx pgx.Tx, serviceID, date, slot string) e
 	return nil
 }
 
-// Create books an appointment atomically (Database.md §5.2). DepartmentID is derived from the service.
+// Create books an appointment atomically (Database.md §5.2). The caller fills DepartmentID,
+// DepartmentName and ServiceName from the catalog (department-service) beforehand.
 func (r *Repository) Create(ctx context.Context, a *model.Appointment) error {
 	return pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `
-			SELECT s.department_id, d.name, s.name FROM services s JOIN departments d ON d.id = s.department_id
-			WHERE s.id = $1 AND s.is_active AND d.is_active`, a.ServiceID,
-		).Scan(&a.DepartmentID, &a.DepartmentName, &a.ServiceName)
-		if err != nil {
-			return notFound(err)
-		}
 		if err := reserveSlot(ctx, tx, a.ServiceID, a.Date, a.TimeSlot); err != nil {
 			return err
 		}
@@ -181,16 +175,6 @@ func (r *Repository) Cancel(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return err
-}
-
-// SlipDetails returns the department location and the service's required documents.
-func (r *Repository) SlipDetails(ctx context.Context, a *model.Appointment) (string, []string, error) {
-	var room string
-	var docs []string
-	err := r.db.QueryRow(ctx, `
-		SELECT d.building_room, s.required_documents FROM services s JOIN departments d ON d.id = s.department_id
-		WHERE s.id = $1`, a.ServiceID).Scan(&room, &docs)
-	return room, docs, notFound(err)
 }
 
 // Summary aggregates outcomes for appointment dates in [from, to).

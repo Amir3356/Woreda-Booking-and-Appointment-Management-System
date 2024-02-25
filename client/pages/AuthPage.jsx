@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useRouter } from "@/hooks";
 import { useStore } from "@/context";
+import { DEFAULT_PROVISIONED_ACCOUNTS } from "@/context/store";
 import {
   resolveUserSession,
   verifyCredentials,
   isValidEmail,
+  CANONICAL_OFFICER_CREDENTIALS,
 } from "@/services";
 import { EthiopianFlag } from "@/components/ui";
+import { http } from "@/api/httpClient";
 import {
   Building,
   User,
@@ -44,30 +47,179 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
 
   // Handle Sign In
-  const handleSignIn = (e) => {
+  const handleSignIn = async (e) => {
     e.preventDefault();
     setError("");
     setSuccessMsg("");
 
-    const emailClean = signInEmail.trim().toLowerCase();
-    if (!emailClean) {
+    const inputEmail = signInEmail.trim();
+    const passwordClean = signInPassword.trim();
+    if (!inputEmail) {
       setError("Please enter your email address.");
       return;
     }
-    if (!signInPassword) {
+    if (!passwordClean) {
       setError("Please enter your password.");
       return;
     }
 
+    let emailClean = inputEmail.toLowerCase();
+    if (!emailClean.includes("@")) {
+      emailClean = `${emailClean}@woreda.gov.et`;
+    }
+
+    // Administrators sign in against auth-service, so their token is accepted by the API and
+    // they can manage the service catalog. Citizens and officers still use the in-browser
+    // accounts below; their credentials are only checked here and then ignored.
+    setLoading(true);
+    try {
+      const { data } = await http.post("/auth/login", { email: emailClean, password: passwordClean });
+      if (data?.token && data.user?.role === "ADMIN") {
+        setCurrentUser(
+          {
+            ...data.user,
+            departmentName: "Woreda Central Administration",
+            isProvisioned: true,
+          },
+          data.token
+        );
+        router.push("/admin");
+        return;
+      }
+    } catch (err) {
+      if (err?.status === 429) {
+        setLoading(false);
+        setError("Too many sign-in attempts. Please wait a few minutes and try again.");
+        return;
+      }
+      // Not an account in the server database (401) or the server is unreachable:
+      // continue with the in-browser accounts.
+    }
+    setLoading(false);
+
+    // Refresh and assemble all provisioned accounts and users from memory, defaults, and localStorage
+    const provMap = new Map();
+    const usersMap = new Map();
+
+    // 1. Seed canonical officers
+    CANONICAL_OFFICER_CREDENTIALS.forEach((c) => {
+      provMap.set(c.email.toLowerCase(), {
+        fullName: c.fullName,
+        email: c.email,
+        password: c.password,
+        role: "OFFICER",
+        departmentId: c.departmentId,
+        departmentName: c.departmentName,
+        isProvisioned: true,
+        isActive: true,
+      });
+    });
+
+    // 2. Seed defaults
+    DEFAULT_PROVISIONED_ACCOUNTS.forEach((d) => {
+      const k = (d.email || "").trim().toLowerCase();
+      if (k) {
+        provMap.set(k, {
+          ...d,
+          password: d.password || "Password@123",
+          isProvisioned: true,
+          isActive: true,
+        });
+      }
+    });
+
+    // 3. Overlay in-memory Zustand store
+    const storeProv = useStore.getState().provisionedAccounts || [];
+    storeProv.forEach((a) => {
+      const k = (a.email || "").trim().toLowerCase();
+      if (k) {
+        const existing = provMap.get(k) || {};
+        provMap.set(k, {
+          ...existing,
+          ...a,
+          password: (a.password || "").trim() || existing.password || "Password@123",
+          isProvisioned: true,
+          isActive: a.isActive !== false,
+        });
+      }
+    });
+
+    // 4. Overlay browser localStorage ("woreda-booking-storage")
+    let currentDepts = useStore.getState().departments || [];
+    if (typeof window !== "undefined" && window.localStorage) {
+      try {
+        const raw = window.localStorage.getItem("woreda-booking-storage");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const localProv = parsed?.state?.provisionedAccounts || [];
+          const localUsers = parsed?.state?.users || [];
+          const localDepts = parsed?.state?.departments || [];
+
+          localProv.forEach((a) => {
+            const k = (a.email || "").trim().toLowerCase();
+            if (k) {
+              const existing = provMap.get(k) || {};
+              provMap.set(k, {
+                ...existing,
+                ...a,
+                password: (a.password || "").trim() || existing.password || "Password@123",
+                isProvisioned: true,
+                isActive: a.isActive !== false,
+              });
+            }
+          });
+
+          localUsers.forEach((u) => {
+            const k = (u.email || "").trim().toLowerCase();
+            if (k) usersMap.set(k, u);
+          });
+
+          if (localDepts.length > 0) currentDepts = localDepts;
+        }
+
+        // 5. Overlay secondary backup storage ("woreda_provisioned_accounts")
+        const rawBackup = window.localStorage.getItem("woreda_provisioned_accounts");
+        if (rawBackup) {
+          const parsedBackup = JSON.parse(rawBackup);
+          if (Array.isArray(parsedBackup)) {
+            parsedBackup.forEach((a) => {
+              const k = (a.email || "").trim().toLowerCase();
+              if (k) {
+                const existing = provMap.get(k) || {};
+                provMap.set(k, {
+                  ...existing,
+                  ...a,
+                  password: (a.password || "").trim() || existing.password || "Password@123",
+                  isProvisioned: true,
+                  isActive: a.isActive !== false,
+                });
+              }
+            });
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    const storeUsers = useStore.getState().users || [];
+    storeUsers.forEach((u) => {
+      const k = (u.email || "").trim().toLowerCase();
+      if (k && !usersMap.has(k)) usersMap.set(k, u);
+    });
+
+    const currentProvisioned = Array.from(provMap.values());
+    const currentUsers = Array.from(usersMap.values());
+
     // 1. Strict credential check against Admin, provisioned staff, and registered users
-    const isValid = verifyCredentials(signInEmail, signInPassword, users, provisionedAccounts);
+    const isValid = verifyCredentials(emailClean, passwordClean, currentUsers, currentProvisioned);
     if (!isValid) {
       setError("Invalid email or password.");
       return;
     }
 
     // 2. Resolve user session
-    const session = resolveUserSession(signInEmail, users, departments, provisionedAccounts);
+    const session = resolveUserSession(emailClean, currentUsers, currentDepts, currentProvisioned);
     if (!session || !session.user) {
       setError("No registered account found for this email.");
       return;
@@ -81,10 +233,17 @@ export default function AuthPage() {
     setLoading(true);
     setCurrentUser(session.user);
 
+    // Keep store synchronized so the active session immediately has all accounts
+    useStore.setState({
+      provisionedAccounts: currentProvisioned,
+      users: currentUsers,
+      departments: currentDepts,
+    });
+
     setTimeout(() => {
       setLoading(false);
       router.push(session.portalPath);
-    }, 400);
+    }, 300);
   };
 
   // Handle Sign Up (Public self-registration for Citizens ONLY)
@@ -328,9 +487,10 @@ export default function AuthPage() {
                   Phone Number
                 </label>
                 <div className="auth-input-wrapper">
-                  <span className="auth-input-icon flex items-center justify-center">
-                    <EthiopianFlag className="w-5 h-3.5 shadow-xs" />
-                  </span>
+                  <div className="auth-input-icon flex items-center gap-2 pointer-events-none select-none">
+                    <EthiopianFlag className="w-5 h-3.5 shadow-xs shrink-0" />
+                    <span className="w-px h-4 bg-slate-300" />
+                  </div>
                   <input
                     type="tel"
                     required
@@ -338,6 +498,7 @@ export default function AuthPage() {
                     onChange={(e) => setSignUpPhone(e.target.value)}
                     placeholder="+251 9XX XXX XXX"
                     className="auth-input"
+                    style={{ paddingLeft: "3.75rem" }}
                   />
                 </div>
               </div>

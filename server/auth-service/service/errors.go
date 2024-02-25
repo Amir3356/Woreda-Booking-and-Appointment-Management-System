@@ -8,11 +8,12 @@ import (
 
 // Sentinel errors mapped to HTTP status codes by the handler layer.
 var (
-	ErrNotFound       = model.ErrNotFound
-	ErrConflict       = errors.New("conflict")
-	ErrUnauthorized   = errors.New("unauthorized")
-	ErrForbidden      = errors.New("forbidden")
-	ErrNotImplemented = errors.New("not implemented")
+	ErrNotFound        = model.ErrNotFound
+	ErrConflict        = errors.New("conflict")
+	ErrUnauthorized    = errors.New("unauthorized")
+	ErrForbidden       = errors.New("forbidden")
+	ErrNotImplemented  = errors.New("not implemented")
+	ErrTooManyAttempts = errors.New("too many attempts")
 )
 
 // FieldIssue describes one invalid input field.

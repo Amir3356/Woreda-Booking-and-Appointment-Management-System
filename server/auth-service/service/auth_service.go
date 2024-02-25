@@ -4,7 +4,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/woreda/booking/auth-service/model"
 	"github.com/woreda/booking/auth-service/utils"
@@ -18,15 +20,31 @@ type Repository interface {
 	Create(ctx context.Context, u *model.User) error
 }
 
-// AuthService implements registration, login and session lookup.
-type AuthService struct {
-	repo   Repository
-	secret []byte
+// SessionStore holds revoked tokens and failed-login counters (implemented by repository.SessionStore).
+type SessionStore interface {
+	RevokeToken(ctx context.Context, jti string, ttl time.Duration) error
+	LoginFailures(ctx context.Context, email string) (int, error)
+	RecordLoginFailure(ctx context.Context, email string, window time.Duration) error
+	ClearLoginFailures(ctx context.Context, email string) error
 }
 
-// New builds an AuthService.
-func New(repo Repository, jwtSecret string) *AuthService {
-	return &AuthService{repo: repo, secret: []byte(jwtSecret)}
+// Login lockout policy: after MaxLoginFailures wrong passwords for one email, further attempts
+// are refused until LoginLockoutWindow passes without another failure.
+const (
+	MaxLoginFailures   = 5
+	LoginLockoutWindow = 15 * time.Minute
+)
+
+// AuthService implements registration, login and session lookup.
+type AuthService struct {
+	repo     Repository
+	sessions SessionStore // nil when Redis is not configured
+	secret   []byte
+}
+
+// New builds an AuthService. sessions may be nil, which disables revocation and lockout.
+func New(repo Repository, sessions SessionStore, jwtSecret string) *AuthService {
+	return &AuthService{repo: repo, sessions: sessions, secret: []byte(jwtSecret)}
 }
 
 // Register creates a CITIZEN account and returns a session token.
@@ -74,13 +92,34 @@ func (s *AuthService) Register(ctx context.Context, req model.RegisterRequest) (
 }
 
 // Login verifies credentials for any role.
+// Store errors are logged and ignored so a Redis outage never blocks sign-in.
 func (s *AuthService) Login(ctx context.Context, req model.LoginRequest) (*model.AuthResponse, error) {
-	u, err := s.repo.GetByEmail(ctx, strings.TrimSpace(req.Email))
+	email := strings.TrimSpace(req.Email)
+	if s.sessions != nil {
+		n, err := s.sessions.LoginFailures(ctx, email)
+		if err != nil {
+			slog.Warn("login lockout check unavailable", "err", err)
+		} else if n >= MaxLoginFailures {
+			return nil, fmt.Errorf("%w: too many failed sign-in attempts, try again in %d minutes",
+				ErrTooManyAttempts, int(LoginLockoutWindow.Minutes()))
+		}
+	}
+	u, err := s.repo.GetByEmail(ctx, email)
 	if err != nil || !utils.CheckPasswordHash(req.Password, u.PasswordHash) {
+		if s.sessions != nil {
+			if err := s.sessions.RecordLoginFailure(ctx, email, LoginLockoutWindow); err != nil {
+				slog.Warn("record login failure", "err", err)
+			}
+		}
 		return nil, fmt.Errorf("%w: invalid email or password", ErrUnauthorized)
 	}
 	if !u.IsActive {
 		return nil, fmt.Errorf("%w: account is deactivated", ErrUnauthorized)
+	}
+	if s.sessions != nil {
+		if err := s.sessions.ClearLoginFailures(ctx, email); err != nil {
+			slog.Warn("clear login failures", "err", err)
+		}
 	}
 	return s.session(u)
 }
@@ -90,9 +129,14 @@ func (s *AuthService) Me(ctx context.Context, userID string) (*model.User, error
 	return s.repo.GetByID(ctx, userID)
 }
 
-// Logout invalidates the session identified by the token's jti.
-// TODO: persist a jti denylist (checked by middleware) or move to refresh-token rotation.
-func (s *AuthService) Logout(_ context.Context, _ model.Caller) error { return nil }
+// Logout invalidates the session identified by the token's jti. The jti is denylisted in Redis
+// for the token's full lifetime (an upper bound on what remains); the api-gateway rejects it.
+func (s *AuthService) Logout(ctx context.Context, caller model.Caller) error {
+	if s.sessions == nil || caller.TokenID == "" {
+		return nil
+	}
+	return s.sessions.RevokeToken(ctx, caller.TokenID, TokenTTL)
+}
 
 func (s *AuthService) session(u *model.User) (*model.AuthResponse, error) {
 	token, err := issueToken(s.secret, u)

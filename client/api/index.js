@@ -6,4 +6,4 @@ export { serviceApi } from "./serviceApi";
 export { scheduleApi } from "./scheduleApi";
 export { appointmentApi } from "./appointmentApi";
 export { queueApi } from "./queueApi";
-export { staffApi, reportApi, auditApi, settingsApi } from "./adminApi";
+export { staffApi, reportApi, settingsApi } from "./adminApi";

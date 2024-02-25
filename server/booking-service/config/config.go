@@ -8,14 +8,17 @@ type Config struct {
 	Port        string
 	DatabaseURL string
 	JWTSecret   string
+	// KafkaBrokers (comma-separated host:port) enables event streaming; empty = events are dropped.
+	KafkaBrokers string
 }
 
 // Load reads env vars, falling back to local-development defaults.
 func Load() Config {
 	return Config{
-		Port:        getenv("PORT", "8085"),
-		DatabaseURL: getenv("DATABASE_URL", "postgres://woreda:woreda@localhost:5432/woreda?sslmode=disable"),
-		JWTSecret:   getenv("JWT_SECRET", "dev-secret-change-me"),
+		Port:         getenv("PORT", "8085"),
+		DatabaseURL:  getenv("DATABASE_URL", "postgres://woreda:woreda@localhost:5432/woreda?sslmode=disable"),
+		JWTSecret:    getenv("JWT_SECRET", "dev-secret-change-me"),
+		KafkaBrokers: os.Getenv("KAFKA_BROKERS"),
 	}
 }
 

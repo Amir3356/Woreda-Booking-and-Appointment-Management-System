@@ -18,7 +18,6 @@ type GatewayController struct {
 	departmentProxy  *httputil.ReverseProxy
 	appointmentProxy *httputil.ReverseProxy
 	bookingProxy     *httputil.ReverseProxy
-	auditProxy       *httputil.ReverseProxy
 	logger           *slog.Logger
 }
 
@@ -44,10 +43,6 @@ func New(svc config.Services, logger *slog.Logger) (*GatewayController, error) {
 	if err != nil {
 		return nil, err
 	}
-	auditP, err := proxy.New(svc.Audit, logger)
-	if err != nil {
-		return nil, err
-	}
 
 	return &GatewayController{
 		authProxy:        authP,
@@ -55,7 +50,6 @@ func New(svc config.Services, logger *slog.Logger) (*GatewayController, error) {
 		departmentProxy:  deptP,
 		appointmentProxy: aptP,
 		bookingProxy:     bookingP,
-		auditProxy:       auditP,
 		logger:           logger,
 	}, nil
 }
@@ -83,11 +77,6 @@ func (c *GatewayController) ForwardAppointment(w http.ResponseWriter, r *http.Re
 // ForwardBooking receives incoming schedule availability and counter queue requests and coordinates forwarding to booking-service.
 func (c *GatewayController) ForwardBooking(w http.ResponseWriter, r *http.Request) {
 	c.bookingProxy.ServeHTTP(w, r)
-}
-
-// ForwardAudit receives incoming security audit trail requests and coordinates forwarding to audit-service.
-func (c *GatewayController) ForwardAudit(w http.ResponseWriter, r *http.Request) {
-	c.auditProxy.ServeHTTP(w, r)
 }
 
 // HealthCheck serves the gateway liveness and readiness probe.

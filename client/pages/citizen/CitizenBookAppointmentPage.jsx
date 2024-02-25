@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useStore } from "@/context";
+import { subscribe, isLive } from "@/api/realtime";
 import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 import { EthiopianFlag } from "@/components/ui";
 import {
@@ -16,7 +17,24 @@ import {
 } from "lucide-react";
 
 export default function CitizenBookAppointmentPage() {
-  const { currentUser, bookAppointment, departments = [], services = [] } = useStore();
+  const { currentUser, bookAppointment, departments = [], services = [], loadServices } = useStore();
+
+  // Services come from the server catalog managed in Admin > Services Management. The list is
+  // fetched on open and again whenever the server announces a catalog change (WebSocket), so a
+  // service the Admin adds shows up here without refreshing the page.
+  useEffect(() => {
+    const refresh = () =>
+      loadServices().catch(() => {
+        // Server unreachable: keep the last list; the dropdown shows its notice if empty.
+      });
+    refresh();
+    const offChange = subscribe("catalog.changed", refresh);
+    const offReconnect = subscribe("reconnected", refresh); // changes made while disconnected
+    return () => {
+      offChange();
+      offReconnect();
+    };
+  }, [loadServices]);
 
   const [slots, setSlots] = useState(() => {
     if (!services || services.length === 0) return [];
@@ -39,9 +57,8 @@ export default function CitizenBookAppointmentPage() {
 
   useEffect(() => {
     if (services && services.length > 0) {
-      setSlots((prev) => {
-        if (prev.length > 0) return prev;
-        return services.map((srv) => {
+      setSlots(
+        services.map((srv) => {
           const dept = departments.find((d) => d.id === srv.departmentId);
           return {
             id: `slot-${srv.id}`,
@@ -52,11 +69,11 @@ export default function CitizenBookAppointmentPage() {
             department: dept?.name || "Municipal Department",
             serviceId: srv.id,
             service: srv.name,
-            availabilityText: "Available",
-            actionValue: "Available",
+            availabilityText: srv.isActive === false ? "Unavailable" : "Available",
+            actionValue: srv.isActive === false ? "Unavailable" : "Available",
           };
-        });
-      });
+        })
+      );
     } else {
       setSlots([]);
     }
@@ -73,20 +90,26 @@ export default function CitizenBookAppointmentPage() {
   const [citizenNotes, setCitizenNotes] = useState("");
   const [bookingSuccessApt, setBookingSuccessApt] = useState(null);
 
-  // Modal Dropdown Collections
-  const modalDepartments = departments && departments.length > 0 ? departments : [];
+  // Modal service dropdown: every active service from Admin > Services Management.
+  // The department is taken from the chosen service, so citizens don't pick it separately.
+  // The dropdown lists every service in that table; INACTIVE ones are shown but cannot be chosen.
+  const allServices = services || [];
+  const isBookable = (s) => s.isActive !== false;
+  const activeServices = allServices.filter(isBookable);
 
-  const availableServicesForDept =
-    services && services.length > 0
-      ? services.filter((s) => s.departmentId === selectedSlot?.departmentId)
-      : [];
-
-  const safeServices =
-    availableServicesForDept.length > 0
-      ? availableServicesForDept
-      : selectedSlot?.serviceId
-      ? [{ id: selectedSlot.serviceId, name: selectedSlot.service || "General Public Service" }]
-      : [];
+  const serviceSelection = (serviceId, bookable = activeServices) => {
+    const srv = bookable.find((s) => s.id === serviceId);
+    if (!srv) {
+      return { serviceId: "", service: "", departmentId: "", department: "" };
+    }
+    const dept = departments.find((d) => d.id === srv.departmentId);
+    return {
+      serviceId: srv.id,
+      service: srv.name,
+      departmentId: srv.departmentId,
+      department: dept?.name || "Municipal Department",
+    };
+  };
 
   const availableDates = [
     { date: "2026-11-03", dateDisplay: "Nov 3, 2026" },
@@ -108,35 +131,19 @@ export default function CitizenBookAppointmentPage() {
     "15:30 PM",
   ];
 
-  const handleDepartmentChange = (deptId) => {
-    const matchedDept = modalDepartments.find((d) => d.id === deptId);
-    const deptName = matchedDept ? matchedDept.name : "Municipal Department";
-    const servicesForNewDept = (services || []).filter((s) => s.departmentId === deptId);
-    const firstService =
-      servicesForNewDept[0] || {
-        id: `srv-${deptId}`,
-        name: `${deptName} Service`,
-      };
-
-    setSelectedSlot((prev) => ({
-      ...prev,
-      departmentId: deptId,
-      department: deptName,
-      serviceId: firstService.id,
-      service: firstService.name,
-      availabilityText: "Available",
-      actionValue: "Available",
-    }));
-  };
+  // If the chosen service is deactivated or deleted while the form is open, clear the choice
+  // so the citizen picks one that can still be booked.
+  useEffect(() => {
+    if (selectedSlot?.serviceId && !activeServices.some((s) => s.id === selectedSlot.serviceId)) {
+      setSelectedSlot((prev) => (prev ? { ...prev, ...serviceSelection("") } : prev));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [services]);
 
   const handleServiceChange = (serviceId) => {
-    const matchedService = (services || []).find((s) => s.id === serviceId);
-    const serviceName = matchedService ? matchedService.name : "Public Service";
-
     setSelectedSlot((prev) => ({
       ...prev,
-      serviceId,
-      service: serviceName,
+      ...serviceSelection(serviceId),
       availabilityText: "Available",
       actionValue: "Available",
     }));
@@ -176,45 +183,44 @@ export default function CitizenBookAppointmentPage() {
   });
 
   // Calculate summaries
-  const totalCount = slots.length;
   const availableCount = slots.filter((s) => s.actionValue === "Available").length;
   const fullCount = slots.filter((s) => s.actionValue === "Full").length;
   const unavailableCount = slots.filter((s) => s.actionValue === "Unavailable").length;
 
-  const handleOpenBooking = (slot) => {
-    setSelectedSlot(slot);
+  const handleOpenBooking = (slot, bookable = activeServices) => {
+    // A slot whose service was since deactivated opens with no service chosen.
+    setSelectedSlot({ ...slot, ...serviceSelection(slot.serviceId, bookable) });
     setCitizenName(currentUser?.fullName || "Abebe Bikila");
     setCitizenPhone(currentUser?.phone || "+251911223344");
     setCitizenNotes("");
   };
 
-  const handleOpenNewBooking = () => {
-    const firstAvailable = slots.find((s) => s.actionValue === "Available") || slots[0];
-    if (firstAvailable) {
-      handleOpenBooking(firstAvailable);
-    } else if (departments.length > 0) {
-      const firstDept = departments[0];
-      const deptServices = (services || []).filter((s) => s.departmentId === firstDept.id);
-      const firstService =
-        deptServices[0] || services[0] || { id: "srv-gen", name: "General Public Service" };
-      handleOpenBooking({
+  // Always opens the modal; with no active services it shows an empty-state notice instead.
+  // Fetches the catalog again so services the Admin added since this page loaded are included.
+  const handleOpenNewBooking = async () => {
+    try {
+      await loadServices();
+    } catch {
+      // Server unreachable: fall back to the last list fetched.
+    }
+    const bookable = (useStore.getState().services || []).filter(isBookable);
+    handleOpenBooking(
+      {
         id: `slot-${Date.now()}`,
         date: "2026-11-03",
         dateDisplay: "Nov 3, 2026",
         time: "09:00 AM",
-        departmentId: firstDept.id,
-        department: firstDept.name,
-        serviceId: firstService.id,
-        service: firstService.name,
+        serviceId: bookable[0]?.id || "",
         availabilityText: "Available",
         actionValue: "Available",
-      });
-    }
+      },
+      bookable
+    );
   };
 
   const handleConfirmBooking = (e) => {
     e.preventDefault();
-    if (!selectedSlot) return;
+    if (!selectedSlot || !selectedSlot.serviceId) return;
 
     const refNumber = `WRD-${selectedSlot.date.replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -298,20 +304,13 @@ export default function CitizenBookAppointmentPage() {
 
       {/* Summary Cards */}
       <div
-        className="grid grid-cols-2 sm:grid-cols-4 gap-4"
+        className="grid grid-cols-1 sm:grid-cols-3 gap-4"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
           gap: "1rem",
         }}
       >
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            Total Slots
-          </span>
-          <p className="text-2xl font-bold text-slate-900 mt-1">{totalCount}</p>
-        </div>
-
         <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-xs">
           <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -480,9 +479,14 @@ export default function CitizenBookAppointmentPage() {
                   <Calendar className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">Book Municipal Appointment</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-slate-900 text-base">Book Municipal Appointment</h3>
+                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                      {selectedSlot.availabilityText || "Slots Available"}
+                    </span>
+                  </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Select department, service, slot, and confirm your visit details
+                    Select a service and slot, then confirm your visit details
                   </p>
                 </div>
               </div>
@@ -496,40 +500,9 @@ export default function CitizenBookAppointmentPage() {
             </div>
 
             <form onSubmit={handleConfirmBooking} className="mt-6 space-y-6">
-              {/* Section 1: Service & Appointment Slot Selection */}
+              {/* Service & Appointment Slot Selection */}
               <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-5">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-emerald-600" />
-                    <span>1. Service & Appointment Slot</span>
-                  </span>
-                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
-                    {selectedSlot.availabilityText || "Slots Available"}
-                  </span>
-                </div>
-
-                {/* Department Dropdown */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">
-                    Municipal Department *
-                  </label>
-                  <div className="relative">
-                    <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <select
-                      value={selectedSlot.departmentId}
-                      onChange={(e) => handleDepartmentChange(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs"
-                    >
-                      {modalDepartments.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Public Service Dropdown */}
+                {/* Public Service Dropdown (services from Admin > Services Management) */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-2">
                     Public Service *
@@ -539,11 +512,23 @@ export default function CitizenBookAppointmentPage() {
                     <select
                       value={selectedSlot.serviceId}
                       onChange={(e) => handleServiceChange(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs"
+                      onFocus={() => {
+                        // Live updates keep this list current; without a live connection,
+                        // fetch the latest catalog when the citizen opens the dropdown.
+                        if (!isLive()) loadServices().catch(() => {});
+                      }}
+                      required
+                      disabled={allServices.length === 0}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                     >
-                      {safeServices.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
+                      <option value="" disabled>
+                        {allServices.length === 0
+                          ? "No public services available"
+                          : "Select a public service"}
+                      </option>
+                      {allServices.map((s) => (
+                        <option key={s.id} value={s.id} disabled={!isBookable(s)}>
+                          {isBookable(s) ? s.name : `${s.name} (currently unavailable)`}
                         </option>
                       ))}
                     </select>
@@ -630,16 +615,18 @@ export default function CitizenBookAppointmentPage() {
                     Phone Number *
                   </label>
                   <div className="relative flex items-center">
-                    <span className="absolute left-3.5 flex items-center pointer-events-none">
-                      <EthiopianFlag className="w-5 h-3.5 shadow-2xs rounded-xs" />
-                    </span>
+                    <div className="absolute left-3.5 flex items-center gap-2 pointer-events-none select-none">
+                      <EthiopianFlag className="w-5 h-3.5 shadow-2xs rounded-xs shrink-0" />
+                      <span className="w-px h-4 bg-slate-300" />
+                    </div>
                     <input
                       type="tel"
                       required
                       value={citizenPhone}
                       onChange={(e) => setCitizenPhone(e.target.value)}
                       placeholder="+251 9XX XXX XXX"
-                      className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 focus:outline-none bg-white shadow-2xs"
+                      className="w-full pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 focus:outline-none bg-white shadow-2xs"
+                      style={{ paddingLeft: "3.75rem" }}
                     />
                   </div>
                 </div>
@@ -670,7 +657,8 @@ export default function CitizenBookAppointmentPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-2"
+                  disabled={!selectedSlot.serviceId}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
                 >
                   <CheckCircle className="w-4 h-4" />
                   <span>Confirm Booking</span>

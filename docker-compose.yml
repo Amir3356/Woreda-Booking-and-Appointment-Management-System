@@ -35,11 +35,92 @@ services:
       retries: 10
     networks: [backend]
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Cache only (cached API responses, revoked tokens, login-failure counters): no persistence needed.
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "volatile-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+  # Event streaming: appointment lifecycle events (topic woreda.appointments).
+  # Single broker in KRaft mode (no ZooKeeper), internal to the backend network.
+  kafka:
+    image: apache/kafka:3.8.0
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 168 # keep 7 days of events
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    networks: [backend]
+
+  # One-shot: creates the topics, then exits.
+  #   woreda.appointments: appointment lifecycle (3 partitions, keyed by appointment ID)
+  #   woreda.catalog:      department/service changes (1 partition: low volume, global order)
+  kafka-init:
+    image: apache/kafka:3.8.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic woreda.appointments --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic woreda.catalog --partitions 1 --replication-factor 1
+    restart: "no"
+    networks: [backend]
+
+  # Public entry point: rate limits requests (server/nginx/nginx.conf), then proxies to the gateway.
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    # Mount the folder, not the file: editors replace the file on save (new inode), and a
+    # single-file bind mount would keep serving the old copy.
+    volumes:
+      - ./server/nginx:/etc/nginx/woreda:ro
+    command: ["nginx", "-c", "/etc/nginx/woreda/nginx.conf", "-g", "daemon off;"]
+    ports:
+      - "8080:80"
+    depends_on:
+      - api-gateway
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [backend]
+
   api-gateway:
     build: ./server/api-gateway
     restart: unless-stopped
     environment:
       PORT: "8080"
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: kafka:9092
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       AUTH_SERVICE_URL: http://auth-service:8081
@@ -47,16 +128,23 @@ services:
       DEPARTMENT_SERVICE_URL: http://department-service:8083
       APPOINTMENT_SERVICE_URL: http://appointment-service:8084
       BOOKING_SERVICE_URL: http://booking-service:8085
-      AUDIT_SERVICE_URL: http://audit-service:8087
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080" # reached only through nginx
     depends_on:
-      - auth-service
-      - user-service
-      - department-service
-      - appointment-service
-      - booking-service
-      - audit-service
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      auth-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      department-service:
+        condition: service_started
+      appointment-service:
+        condition: service_started
+      booking-service:
+        condition: service_started
     networks: [backend]
 
   auth-service:
@@ -65,6 +153,12 @@ services:
     environment:
       <<: *service-env
       PORT: "8081"
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   user-service:
     <<: *service-defaults
@@ -75,17 +169,37 @@ services:
 
   department-service:
     <<: *service-defaults
-    build: ./server/department-service
+    build:
+      context: ./server # includes the shared proto module
+      dockerfile: department-service/Dockerfile
     environment:
       <<: *service-env
       PORT: "8083"
+      GRPC_PORT: "9083" # internal catalog API (gRPC), not published
+      KAFKA_BROKERS: kafka:9092 # publishes catalog changes (woreda.catalog)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   appointment-service:
     <<: *service-defaults
-    build: ./server/appointment-service
+    build:
+      context: ./server # includes the shared proto module
+      dockerfile: appointment-service/Dockerfile
     environment:
       <<: *service-env
       PORT: "8084"
+      KAFKA_BROKERS: kafka:9092
+      CATALOG_GRPC_ADDR: department-service:9083
+    depends_on:
+      postgres:
+        condition: service_healthy
+      department-service:
+        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
 
   booking-service:
     <<: *service-defaults
@@ -93,16 +207,16 @@ services:
     environment:
       <<: *service-env
       PORT: "8085"
-
-  audit-service:
-    <<: *service-defaults
-    build: ./server/audit-service
-    environment:
-      <<: *service-env
-      PORT: "8087"
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
 volumes:
   postgres-data:
+  kafka-data:
 
 networks:
   backend:

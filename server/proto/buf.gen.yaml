@@ -1,0 +1,10 @@
+# Regenerate with:  cd server/proto && buf generate
+# (needs buf, protoc-gen-go v1.34.2 and protoc-gen-go-grpc v1.5.1 on PATH)
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: gen
+    opt: paths=source_relative
+  - local: protoc-gen-go-grpc
+    out: gen
+    opt: paths=source_relative

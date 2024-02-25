@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useStore } from "@/context";
+import { subscribe } from "@/api/realtime";
 import {
   FileText,
   Plus,
@@ -9,7 +10,25 @@ import {
   Edit2,
   X,
   Trash2,
+  AlertCircle,
 } from "lucide-react";
+
+// Turns an API error into a message an administrator can act on.
+function describeError(err, action) {
+  if (err?.status === 401 || err?.status === 403) {
+    return `Could not ${action}: your administrator session is not connected to the server. Sign out, then sign in again with your administrator account.`;
+  }
+  if (err?.status === 409) {
+    return `Could not ${action}: ${err.message.replace(/^conflict:\s*/i, "")}.`;
+  }
+  if (err?.status === 422 && err.details?.length) {
+    return `Could not ${action}: ${err.details.map((d) => d.issue).join(" ")}`;
+  }
+  if (err instanceof TypeError) {
+    return `Could not ${action}: the server is unreachable. Check that the backend is running.`;
+  }
+  return `Could not ${action}: ${err?.message || "unexpected server error"}.`;
+}
 
 export default function AdminServicesPage() {
   const {
@@ -19,7 +38,30 @@ export default function AdminServicesPage() {
     updateService,
     toggleServiceStatus,
     deleteService,
+    loadServices,
+    servicesLoaded,
   } = useStore();
+  const [errorMsg, setErrorMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // The catalog lives in department-service; fetch it when this page opens and whenever the
+  // server announces a change (e.g. another administrator edited a service).
+  useEffect(() => {
+    const refresh = () => loadServices().catch((err) => setErrorMsg(describeError(err, "load services")));
+    refresh();
+    const offChange = subscribe("catalog.changed", refresh);
+    const offReconnect = subscribe("reconnected", refresh);
+    return () => {
+      offChange();
+      offReconnect();
+    };
+  }, [loadServices]);
+
+  const showSuccess = (msg) => {
+    setErrorMsg("");
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(""), 3500);
+  };
   const [search, setSearch] = useState("");
   const [selectedDeptFilter, setSelectedDeptFilter] = useState("ALL");
   const [modalOpen, setModalOpen] = useState(false);
@@ -55,15 +97,15 @@ export default function AdminServicesPage() {
     setModalOpen(true);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || saving) return;
 
     const targetDeptId = form.departmentId || departments[0]?.id || "dept-general";
     const payload = {
       name: form.name.trim(),
       departmentId: targetDeptId,
-      code: editingService?.code || `SRV-${Date.now().toString().slice(-4)}`,
+      code: editingService?.code || `SRV-${Date.now().toString(36).toUpperCase()}`,
       durationMinutes: editingService?.durationMinutes || 30,
       dailyQuota: editingService?.dailyQuota || 40,
       feeETB: editingService?.feeETB || 0,
@@ -71,30 +113,42 @@ export default function AdminServicesPage() {
       requiredDocuments: editingService?.requiredDocuments || ["Valid Kebele ID"],
     };
 
-    if (editingService) {
-      updateService(editingService.id, payload);
-      setSuccessMsg(`Service "${payload.name}" updated successfully.`);
-    } else {
-      addService(payload);
-      setSuccessMsg(`Service "${payload.name}" created successfully.`);
+    setSaving(true);
+    try {
+      if (editingService) {
+        await updateService(editingService.id, payload);
+        showSuccess(`Service "${payload.name}" updated successfully.`);
+      } else {
+        await addService(payload);
+        showSuccess(`Service "${payload.name}" created successfully.`);
+      }
+      setModalOpen(false);
+      setEditingService(null);
+    } catch (err) {
+      setErrorMsg(describeError(err, editingService ? "update the service" : "create the service"));
+      setModalOpen(false);
+    } finally {
+      setSaving(false);
     }
-    setTimeout(() => setSuccessMsg(""), 3500);
-    setModalOpen(false);
-    setEditingService(null);
   };
 
-  const handleDelete = (service) => {
-    if (window.confirm(`Are you sure you want to delete "${service.name}"?`)) {
-      deleteService(service.id);
-      setSuccessMsg(`Service "${service.name}" deleted.`);
-      setTimeout(() => setSuccessMsg(""), 3500);
+  const handleDelete = async (service) => {
+    if (!window.confirm(`Are you sure you want to delete "${service.name}"?`)) return;
+    try {
+      await deleteService(service.id);
+      showSuccess(`Service "${service.name}" deleted.`);
+    } catch (err) {
+      setErrorMsg(describeError(err, `delete "${service.name}"`));
     }
   };
 
-  const handleToggleStatus = (service) => {
-    toggleServiceStatus(service.id);
-    setSuccessMsg(`Service "${service.name}" is now ${!service.isActive ? "ACTIVE" : "INACTIVE"}.`);
-    setTimeout(() => setSuccessMsg(""), 3000);
+  const handleToggleStatus = async (service) => {
+    try {
+      await toggleServiceStatus(service.id);
+      showSuccess(`Service "${service.name}" is now ${!service.isActive ? "ACTIVE" : "INACTIVE"}.`);
+    } catch (err) {
+      setErrorMsg(describeError(err, `change the status of "${service.name}"`));
+    }
   };
 
   return (
@@ -129,6 +183,16 @@ export default function AdminServicesPage() {
         <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold shadow-xs animate-in fade-in duration-150">
           <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{successMsg}</span>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div role="alert" className="flex items-start gap-2 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold shadow-xs">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-px" />
+          <span className="flex-1">{errorMsg}</span>
+          <button type="button" onClick={() => setErrorMsg("")} className="text-red-500 hover:text-red-700 cursor-pointer" aria-label="Dismiss error">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -187,7 +251,7 @@ export default function AdminServicesPage() {
                       </div>
                       <div>
                         <p className="text-sm font-bold text-slate-700">
-                          No services added yet
+                          {servicesLoaded ? "No services added yet" : "Loading services…"}
                         </p>
                         <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
                           Public services and department counter designations configured by Central Administration will appear here.
@@ -313,9 +377,10 @@ export default function AdminServicesPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-all cursor-pointer"
+                  disabled={saving}
+                  className="px-4 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-all cursor-pointer disabled:opacity-60 disabled:cursor-wait"
                 >
-                  {editingService ? "Save Changes" : "Create Service"}
+                  {saving ? "Saving…" : editingService ? "Save Changes" : "Create Service"}
                 </button>
               </div>
             </form>

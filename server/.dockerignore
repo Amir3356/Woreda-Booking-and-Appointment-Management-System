@@ -1,0 +1,12 @@
+# Used by builds whose context is server/ (department-service, appointment-service).
+**/.git
+**/.idea
+**/.vscode
+**/*.swp
+**/bin/
+**/*.exe
+**/*.test
+**/*.out
+**/coverage*
+**/.env
+**/.env.*

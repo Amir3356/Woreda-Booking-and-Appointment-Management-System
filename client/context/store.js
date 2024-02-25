@@ -13,6 +13,8 @@ import {
   createJwtToken,
   getUserFromJwtCookie,
 } from "@/services";
+import { serviceApi } from "@/api";
+import { http } from "@/api/httpClient";
 
 export const DEFAULT_TIME_SLOTS = [
   "08:30 AM",
@@ -49,6 +51,166 @@ export const DEFAULT_SCHEDULE_CONFIGS = {
   ],
 };
 
+export const DEFAULT_DEPARTMENTS = [
+  {
+    id: "dept-1",
+    name: "Kebele Administration & Vital Events",
+    code: "KBL",
+    description: "Citizen registration, residence identification, birth/marriage certificates, and neighborhood civil records.",
+    buildingRoom: "Building A, Ground Floor, Room 102",
+    contactPhone: "+251 11 551 2341",
+    isActive: true,
+    createdAt: "2026-01-15T08:00:00Z",
+    officerCount: 4,
+    serviceCount: 4,
+  },
+  {
+    id: "dept-2",
+    name: "Land Administration & Urban Development",
+    code: "LND",
+    description: "Landholding rights documentation, residential plot verifications, property transfer oversight, and urban zoning.",
+    buildingRoom: "Building B, 2nd Floor, Room 204",
+    contactPhone: "+251 11 551 8892",
+    isActive: true,
+    createdAt: "2026-01-15T08:00:00Z",
+    officerCount: 3,
+    serviceCount: 3,
+  },
+  {
+    id: "dept-3",
+    name: "Trade, Industry & Enterprise Development",
+    code: "TRD",
+    description: "Business registrations, commercial licenses, micro-enterprise support, and commercial practice verifications.",
+    buildingRoom: "Building A, 1st Floor, Room 115",
+    contactPhone: "+251 11 551 4421",
+    isActive: true,
+    createdAt: "2026-01-16T08:00:00Z",
+    officerCount: 3,
+    serviceCount: 3,
+  },
+  {
+    id: "dept-4",
+    name: "Revenues & Tax Assessment",
+    code: "REV",
+    description: "Local tax assessment, business revenue verification, trade levy collections, and municipal tariff processing.",
+    buildingRoom: "Building B, Ground Floor, Room 108",
+    contactPhone: "+251 11 551 7733",
+    isActive: true,
+    createdAt: "2026-01-16T08:00:00Z",
+    officerCount: 3,
+    serviceCount: 2,
+  },
+  {
+    id: "dept-5",
+    name: "Social Affairs & Labor Welfare",
+    code: "SOC",
+    description: "Social safety net enrollment, vulnerable community support, disability assistance, and pension documentation.",
+    buildingRoom: "Building C, 1st Floor, Room 105",
+    contactPhone: "+251 11 551 6612",
+    isActive: true,
+    createdAt: "2026-01-17T08:00:00Z",
+    officerCount: 2,
+    serviceCount: 3,
+  },
+  {
+    id: "dept-6",
+    name: "Public Health & Environmental Sanitation",
+    code: "HLT",
+    description: "Community health verifications, sanitation inspections, food handler certificates, and hygiene permits.",
+    buildingRoom: "Building C, Ground Floor, Room 101",
+    contactPhone: "+251 11 551 9901",
+    isActive: true,
+    createdAt: "2026-01-17T08:00:00Z",
+    officerCount: 2,
+    serviceCount: 2,
+  },
+  {
+    id: "dept-7",
+    name: "Code Enforcement & Municipal Audit",
+    code: "AUD",
+    description: "Building regulation enforcement, municipal code compliance, public land protection, and community grievance resolution.",
+    buildingRoom: "Building A, 2nd Floor, Room 210",
+    contactPhone: "+251 11 551 3345",
+    isActive: true,
+    createdAt: "2026-01-18T08:00:00Z",
+    officerCount: 2,
+    serviceCount: 2,
+  },
+];
+
+export const DEFAULT_PROVISIONED_ACCOUNTS = [
+  {
+    fullName: "W/ro Tigist Mulugeta",
+    email: "tigist.kbl@woreda.gov.et",
+    password: "Password@123",
+    role: "Department Officer",
+    departmentId: "dept-1",
+    isProvisioned: true,
+    isActive: true,
+    createdAt: "2026-11-01T08:00:00Z",
+  },
+  {
+    fullName: "Ato Yared Assefa",
+    email: "yared.lnd@woreda.gov.et",
+    password: "Password@123",
+    role: "Department Officer",
+    departmentId: "dept-2",
+    isProvisioned: true,
+    isActive: true,
+    createdAt: "2026-11-01T08:00:00Z",
+  },
+  {
+    fullName: "Ato Solomon Haile",
+    email: "solomon.trd@woreda.gov.et",
+    password: "Password@123",
+    role: "Department Officer",
+    departmentId: "dept-3",
+    isProvisioned: true,
+    isActive: true,
+    createdAt: "2026-11-01T08:00:00Z",
+  },
+  {
+    fullName: "W/ro Hana Bekele",
+    email: "hana.tax@woreda.gov.et",
+    password: "Password@123",
+    role: "Department Officer",
+    departmentId: "dept-4",
+    isProvisioned: true,
+    isActive: true,
+    createdAt: "2026-11-01T08:00:00Z",
+  },
+  {
+    fullName: "Ato Mesfin Girma",
+    email: "mesfin.soc@woreda.gov.et",
+    password: "Password@123",
+    role: "Department Officer",
+    departmentId: "dept-5",
+    isProvisioned: true,
+    isActive: true,
+    createdAt: "2026-11-01T08:00:00Z",
+  },
+  {
+    fullName: "W/ro Selamawit Desta",
+    email: "selam.health@woreda.gov.et",
+    password: "Password@123",
+    role: "Department Officer",
+    departmentId: "dept-6",
+    isProvisioned: true,
+    isActive: true,
+    createdAt: "2026-11-01T08:00:00Z",
+  },
+  {
+    fullName: "Ato Berhanu Kebede",
+    email: "berhanu.audit@woreda.gov.et",
+    password: "Password@123",
+    role: "Department Officer",
+    departmentId: "dept-7",
+    isProvisioned: true,
+    isActive: true,
+    createdAt: "2026-11-01T08:00:00Z",
+  },
+];
+
 export const useStore = create(
   persist(
     (set, get) => ({
@@ -59,6 +221,10 @@ export const useStore = create(
           const token = customToken || user.token || createJwtToken(user);
           setJwtCookie(token);
         } else {
+          // Revokes a token issued by auth-service (real admin login). Browser-made tokens are
+          // rejected by the server with 401, which is ignored. The request reads the cookie
+          // before it is cleared below.
+          http.post("/auth/logout").catch(() => {});
           clearJwtCookie();
         }
         set({ currentUser: user });
@@ -74,7 +240,7 @@ export const useStore = create(
       },
 
       // Departments State
-      departments: [],
+      departments: DEFAULT_DEPARTMENTS,
       addDepartment: (dept) => {
         const newDept = {
           ...dept,
@@ -128,66 +294,34 @@ export const useStore = create(
         });
       },
 
-      // Services State
+      // Services State: the public service catalog lives in department-service (GET/POST/PUT/
+      // PATCH/DELETE /api/v1/services). The store only keeps the last list fetched from it.
+      // Writes need an ADMIN token issued by auth-service; errors are thrown to the caller.
       services: [],
-      addService: (service) => {
-        const newService = {
-          ...service,
-          id: `srv-${Date.now()}`,
-          isActive: true,
-        };
-        set((state) => ({ services: [newService, ...state.services] }));
-        get().addAuditLog({
-          userName: get().currentUser?.fullName || "Admin",
-          userRole: "ADMIN",
-          action: "CREATE_SERVICE",
-          entity: newService.name,
-          details: `Added new public service: ${newService.name}`,
-        });
-        return newService;
+      servicesLoaded: false,
+      loadServices: async () => {
+        const { data } = await serviceApi.list();
+        const services = Array.isArray(data) ? data : [];
+        set({ services, servicesLoaded: true });
+        return services;
       },
-      updateService: (id, updates) => {
-        set((state) => ({
-          services: state.services.map((s) =>
-            s.id === id ? { ...s, ...updates } : s
-          ),
-        }));
-        get().addAuditLog({
-          userName: get().currentUser?.fullName || "Admin",
-          userRole: "ADMIN",
-          action: "UPDATE_SERVICE",
-          entity: updates.name || `Srv-${id}`,
-          details: `Updated service record`,
-        });
+      addService: async (service) => {
+        const { data } = await serviceApi.create(service);
+        await get().loadServices();
+        return data;
       },
-      toggleServiceStatus: (id) => {
-        set((state) => ({
-          services: state.services.map((s) =>
-            s.id === id ? { ...s, isActive: !s.isActive } : s
-          ),
-        }));
+      updateService: async (id, updates) => {
+        const { data } = await serviceApi.update(id, updates);
+        await get().loadServices();
+        return data;
       },
-      deleteService: (id) => {
-        set((state) => ({
-          services: state.services.filter((s) => s.id !== id),
-        }));
-        get().addAuditLog({
-          userName: get().currentUser?.fullName || "Admin",
-          userRole: "ADMIN",
-          action: "DELETE_SERVICE",
-          entity: `Srv-${id}`,
-          details: `Deleted service record`,
-        });
+      toggleServiceStatus: async (id) => {
+        await serviceApi.toggleStatus(id);
+        await get().loadServices();
       },
-      clearAllServices: () => {
-        set({ services: [] });
-        get().addAuditLog({
-          userName: get().currentUser?.fullName || "Admin",
-          userRole: "ADMIN",
-          action: "CLEAR_SERVICES",
-          entity: "Services Catalog",
-          details: "Purged all services from catalog",
-        });
+      deleteService: async (id) => {
+        await serviceApi.remove(id);
+        await get().loadServices();
       },
 
       // Users Management
@@ -211,34 +345,54 @@ export const useStore = create(
       },
 
       // Provisioned Accounts Management (Admin Account Provisioning)
-      provisionedAccounts: [],
+      provisionedAccounts: DEFAULT_PROVISIONED_ACCOUNTS,
       addProvisionedAccount: (acc) => {
-        const cleanEmail = acc.email.trim().toLowerCase();
+        const cleanEmail = (acc.email || "").trim().toLowerCase();
         const role = acc.role === "Central Administrator" ? "ADMIN" : "OFFICER";
+        const cleanPassword = (acc.password || "").trim() || "Password@123";
         const newAccount = {
-          fullName: acc.fullName.trim(),
-          email: acc.email.trim(),
-          password: acc.password,
+          fullName: (acc.fullName || "").trim(),
+          email: (acc.email || "").trim(),
+          password: cleanPassword,
           role: acc.role || "Department Officer",
           departmentId: acc.departmentId || "dept-1",
+          isProvisioned: true,
+          isActive: true,
+          createdAt: new Date().toISOString(),
         };
 
+        if (typeof window !== "undefined" && window.localStorage) {
+          try {
+            const rawBackup = window.localStorage.getItem("woreda_provisioned_accounts");
+            const list = rawBackup ? JSON.parse(rawBackup) : [];
+            const filtered = list.filter((a) => (a.email || "").trim().toLowerCase() !== cleanEmail);
+            window.localStorage.setItem("woreda_provisioned_accounts", JSON.stringify([newAccount, ...filtered]));
+          } catch (e) {
+            // ignore
+          }
+        }
+
         set((state) => {
-          const filteredAccs = state.provisionedAccounts.filter(
-            (a) => a.email.toLowerCase() !== cleanEmail
+          const currentList = state.provisionedAccounts || [];
+          const filteredAccs = currentList.filter(
+            (a) => (a.email || "").trim().toLowerCase() !== cleanEmail
           );
           const updatedAccounts = [newAccount, ...filteredAccs];
 
+          const currentDepts = state.departments || [];
           const matchedDept =
-            state.departments.find((d) => d.id === newAccount.departmentId) || state.departments[0];
-          const userIndex = state.users.findIndex((u) => u.email.toLowerCase() === cleanEmail);
-          let updatedUsers = [...state.users];
+            currentDepts.find((d) => d.id === newAccount.departmentId) || currentDepts[0];
+          const userIndex = (state.users || []).findIndex(
+            (u) => (u.email || "").trim().toLowerCase() === cleanEmail
+          );
+          let updatedUsers = [...(state.users || [])];
 
           if (userIndex >= 0) {
             updatedUsers[userIndex] = {
               ...updatedUsers[userIndex],
               fullName: newAccount.fullName,
-              password: newAccount.password,
+              email: newAccount.email,
+              password: cleanPassword,
               role,
               departmentId: role === "OFFICER" ? (newAccount.departmentId || "dept-1") : null,
               departmentName:
@@ -246,13 +400,14 @@ export const useStore = create(
                   ? (matchedDept?.name || "Kebele Administration & Vital Events")
                   : "Woreda Central Administration",
               isActive: true,
+              isProvisioned: true,
             };
           } else {
             updatedUsers.push({
               id: `usr-prov-${Date.now()}`,
               fullName: newAccount.fullName,
               email: newAccount.email,
-              password: newAccount.password,
+              password: cleanPassword,
               phone: "+251911000000",
               nationalId: `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
               role,
@@ -263,6 +418,7 @@ export const useStore = create(
                   : "Woreda Central Administration",
               address: "Kebele 03, Woreda Center",
               isActive: true,
+              isProvisioned: true,
               createdAt: new Date().toISOString(),
             });
           }
@@ -282,45 +438,70 @@ export const useStore = create(
         });
       },
       updateProvisionedAccount: (originalEmail, updatedAcc) => {
-        const cleanOriginal = originalEmail.trim().toLowerCase();
+        const cleanOriginal = (originalEmail || "").trim().toLowerCase();
         const role = updatedAcc.role === "Central Administrator" ? "ADMIN" : "OFFICER";
+        const cleanPassword = (updatedAcc.password || "").trim() || "Password@123";
+
+        if (typeof window !== "undefined" && window.localStorage) {
+          try {
+            const rawBackup = window.localStorage.getItem("woreda_provisioned_accounts");
+            const list = rawBackup ? JSON.parse(rawBackup) : [];
+            const filtered = list.filter((a) => (a.email || "").trim().toLowerCase() !== cleanOriginal);
+            const savedAcc = {
+              ...updatedAcc,
+              password: cleanPassword,
+              isProvisioned: true,
+            };
+            window.localStorage.setItem("woreda_provisioned_accounts", JSON.stringify([savedAcc, ...filtered]));
+          } catch (e) {
+            // ignore
+          }
+        }
 
         set((state) => {
-          const updatedAccounts = state.provisionedAccounts.map((a) =>
-            a.email.toLowerCase() === cleanOriginal
+          const currentList = state.provisionedAccounts || [];
+          const updatedAccounts = currentList.map((a) =>
+            (a.email || "").trim().toLowerCase() === cleanOriginal
               ? {
                   ...updatedAcc,
-                  fullName: updatedAcc.fullName.trim(),
-                  email: updatedAcc.email.trim(),
+                  fullName: (updatedAcc.fullName || "").trim(),
+                  email: (updatedAcc.email || "").trim(),
+                  password: cleanPassword,
                   departmentId: updatedAcc.departmentId || "dept-1",
+                  isProvisioned: true,
+                  updatedAt: new Date().toISOString(),
                 }
               : a
           );
+          const currentDepts = state.departments || [];
           const matchedDept =
-            state.departments.find((d) => d.id === updatedAcc.departmentId) || state.departments[0];
+            currentDepts.find((d) => d.id === updatedAcc.departmentId) || currentDepts[0];
           
-          const userIdx = state.users.findIndex((u) => u.email.toLowerCase() === cleanOriginal);
-          let updatedUsers = [...state.users];
+          const userIdx = (state.users || []).findIndex(
+            (u) => (u.email || "").trim().toLowerCase() === cleanOriginal
+          );
+          let updatedUsers = [...(state.users || [])];
 
           if (userIdx >= 0) {
             updatedUsers[userIdx] = {
               ...updatedUsers[userIdx],
-              fullName: updatedAcc.fullName.trim(),
-              email: updatedAcc.email.trim(),
-              password: updatedAcc.password,
+              fullName: (updatedAcc.fullName || "").trim(),
+              email: (updatedAcc.email || "").trim(),
+              password: cleanPassword,
               role,
               departmentId: role === "OFFICER" ? (updatedAcc.departmentId || "dept-1") : null,
               departmentName:
                 role === "OFFICER"
                   ? (matchedDept?.name || "Kebele Administration & Vital Events")
                   : "Woreda Central Administration",
+              isProvisioned: true,
             };
           } else {
             updatedUsers.push({
               id: `usr-prov-${Date.now()}`,
-              fullName: updatedAcc.fullName.trim(),
-              email: updatedAcc.email.trim(),
-              password: updatedAcc.password,
+              fullName: (updatedAcc.fullName || "").trim(),
+              email: (updatedAcc.email || "").trim(),
+              password: cleanPassword,
               phone: "+251911000000",
               nationalId: `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
               role,
@@ -331,6 +512,7 @@ export const useStore = create(
                   : "Woreda Central Administration",
               address: "Kebele 03, Woreda Center",
               isActive: true,
+              isProvisioned: true,
               createdAt: new Date().toISOString(),
             });
           }
@@ -350,12 +532,26 @@ export const useStore = create(
         });
       },
       deleteProvisionedAccount: (emailToDelete) => {
-        const cleanEmail = emailToDelete.trim().toLowerCase();
+        const cleanEmail = (emailToDelete || "").trim().toLowerCase();
+
+        if (typeof window !== "undefined" && window.localStorage) {
+          try {
+            const rawBackup = window.localStorage.getItem("woreda_provisioned_accounts");
+            const list = rawBackup ? JSON.parse(rawBackup) : [];
+            const filtered = list.filter((a) => (a.email || "").trim().toLowerCase() !== cleanEmail);
+            window.localStorage.setItem("woreda_provisioned_accounts", JSON.stringify(filtered));
+          } catch (e) {
+            // ignore
+          }
+        }
+
         set((state) => ({
-          provisionedAccounts: state.provisionedAccounts.filter(
-            (a) => a.email.toLowerCase() !== cleanEmail
+          provisionedAccounts: (state.provisionedAccounts || []).filter(
+            (a) => (a.email || "").trim().toLowerCase() !== cleanEmail
           ),
-          users: state.users.filter((u) => u.email.toLowerCase() !== cleanEmail),
+          users: (state.users || []).filter(
+            (u) => (u.email || "").trim().toLowerCase() !== cleanEmail
+          ),
         }));
         get().addAuditLog({
           userName: get().currentUser?.fullName || "Admin",
@@ -643,17 +839,7 @@ export const useStore = create(
         }));
       },
 
-      // Audit Logs
-      auditLogs: [],
-      addAuditLog: (log) => {
-        const newLog = {
-          ...log,
-          id: `log-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          ipAddress: "192.168.1.100",
-        };
-        set((state) => ({ auditLogs: [newLog, ...state.auditLogs] }));
-      },
+      addAuditLog: () => {},
 
       // Dynamic Available Slots Calculation
       getAvailableSlots: (serviceId, date) =>
@@ -672,31 +858,94 @@ export const useStore = create(
         users: state.users,
         provisionedAccounts: state.provisionedAccounts,
         departments: state.departments,
-        services: state.services,
-        servicesPurgedV2: state.servicesPurgedV2 ?? true,
         appointments: state.appointments,
         queue: state.queue,
         notifications: state.notifications,
-        auditLogs: state.auditLogs,
         scheduleConfigs: state.scheduleConfigs,
         schedules: state.schedules,
       }),
       merge: (persistedState, currentState) => {
         const { currentUser: _omitted, ...safePersisted } = persistedState || {};
-        // Strip legacy mock provisioned accounts so Account Provision view starts clean
-        const LEGACY_MOCK_EMAILS = new Set([
-          "tigist.kbl@woreda.gov.et",
-          "yared.lnd@woreda.gov.et",
-          "solomon.trd@woreda.gov.et",
-          "hana.tax@woreda.gov.et",
-          "mesfin.soc@woreda.gov.et",
-          "selam.health@woreda.gov.et",
-          "berhanu.audit@woreda.gov.et",
-          "amirsiraj1995@gmail.com",
-        ]);
-        const cleanedProvisioned = (safePersisted.provisionedAccounts || []).filter(
-          (acc) => !LEGACY_MOCK_EMAILS.has(acc.email?.toLowerCase())
-        );
+        
+        // Ensure departments are populated
+        const currentDepartments =
+          safePersisted.departments && safePersisted.departments.length > 0
+            ? safePersisted.departments
+            : DEFAULT_DEPARTMENTS;
+
+        // Ensure provisioned accounts are populated, merging defaults with any admin edits
+        const persistedProv = safePersisted.provisionedAccounts || [];
+        const provMap = new Map();
+
+        // Seed default municipal officers
+        DEFAULT_PROVISIONED_ACCOUNTS.forEach((a) => {
+          provMap.set((a.email || "").trim().toLowerCase(), { ...a });
+        });
+
+        // Overlay user-created and persisted provisioned accounts with robust password preservation
+        persistedProv.forEach((a) => {
+          const emailKey = (a.email || "").trim().toLowerCase();
+          if (!emailKey) return;
+          const defaultAcc = DEFAULT_PROVISIONED_ACCOUNTS.find(
+            (d) => (d.email || "").trim().toLowerCase() === emailKey
+          );
+          const resolvedPassword =
+            (a.password || "").trim() || defaultAcc?.password || "Password@123";
+
+          provMap.set(emailKey, {
+            ...defaultAcc,
+            ...a,
+            fullName: (a.fullName || defaultAcc?.fullName || "").trim(),
+            email: (a.email || defaultAcc?.email || "").trim(),
+            password: resolvedPassword,
+            role: a.role || defaultAcc?.role || "Department Officer",
+            departmentId: a.departmentId || defaultAcc?.departmentId || "dept-1",
+            isProvisioned: true,
+            isActive: a.isActive !== false,
+          });
+        });
+
+        // Also merge un-purgeable secondary backup storage if available in browser
+        if (typeof window !== "undefined" && window.localStorage) {
+          try {
+            const rawBackup = window.localStorage.getItem("woreda_provisioned_accounts");
+            if (rawBackup) {
+              const parsedBackup = JSON.parse(rawBackup);
+              if (Array.isArray(parsedBackup)) {
+                parsedBackup.forEach((a) => {
+                  const emailKey = (a.email || "").trim().toLowerCase();
+                  if (!emailKey) return;
+                  const defaultAcc = DEFAULT_PROVISIONED_ACCOUNTS.find(
+                    (d) => (d.email || "").trim().toLowerCase() === emailKey
+                  );
+                  const existing = provMap.get(emailKey) || {};
+                  const resolvedPassword =
+                    (a.password || "").trim() ||
+                    existing.password ||
+                    defaultAcc?.password ||
+                    "Password@123";
+
+                  provMap.set(emailKey, {
+                    ...defaultAcc,
+                    ...existing,
+                    ...a,
+                    fullName: (a.fullName || existing.fullName || defaultAcc?.fullName || "").trim(),
+                    email: (a.email || existing.email || defaultAcc?.email || "").trim(),
+                    password: resolvedPassword,
+                    role: a.role || existing.role || defaultAcc?.role || "Department Officer",
+                    departmentId: a.departmentId || existing.departmentId || defaultAcc?.departmentId || "dept-1",
+                    isProvisioned: true,
+                    isActive: a.isActive !== false,
+                  });
+                });
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        const cleanedProvisioned = Array.from(provMap.values());
 
         // Strip legacy mock schedules so Schedule Management starts clean
         const LEGACY_MOCK_SCH_IDS = new Set([
@@ -737,7 +986,7 @@ export const useStore = create(
           (q) => !LEGACY_MOCK_QUEUE_IDS.has(q.id)
         );
 
-        // Strip legacy mock users
+        // Strip legacy mock users, keeping provisioned users intact
         const LEGACY_MOCK_USER_IDS = new Set([
           "usr-officer-1",
           "usr-officer-2",
@@ -747,34 +996,52 @@ export const useStore = create(
           "usr-citizen-3",
         ]);
         const cleanedUsers = (safePersisted.users || []).filter(
-          (u) => !LEGACY_MOCK_USER_IDS.has(u.id)
+          (u) => !LEGACY_MOCK_USER_IDS.has(u.id) || u.isProvisioned
         );
 
-        const currentDepartments = safePersisted.departments || [];
+        // Synchronize provisioned accounts into users so both stores stay aligned
+        const usersByEmail = new Map(
+          cleanedUsers.map((u) => [(u.email || "").trim().toLowerCase(), u])
+        );
+        cleanedProvisioned.forEach((prov) => {
+          const provEmail = (prov.email || "").trim().toLowerCase();
+          if (!provEmail) return;
+          const isOfficer = prov.role === "Department Officer" || prov.role === "OFFICER";
+          const role = isOfficer ? "OFFICER" : "ADMIN";
+          const dept = currentDepartments.find((d) => d.id === prov.departmentId) || currentDepartments[0];
+          const existing = usersByEmail.get(provEmail);
 
-        // Strip legacy mock services and purge mock/real data on upgrade
-        const LEGACY_MOCK_SERVICE_IDS = new Set([
-          "srv-1",
-          "srv-2",
-          "srv-3",
-          "srv-4",
-          "srv-5",
-          "srv-6",
-          "srv-7",
-          "srv-8",
-          "srv-9",
-          "srv-10",
-        ]);
-
-        let currentServices = [];
-        if (safePersisted.servicesPurgedV2) {
-          currentServices = (safePersisted.services || []).filter(
-            (s) => !LEGACY_MOCK_SERVICE_IDS.has(s.id)
-          );
-        } else {
-          // One-time purge of all mock and real services in local storage
-          currentServices = [];
-        }
+          if (existing) {
+            existing.password = prov.password || existing.password || "Password@123";
+            existing.role = role;
+            existing.departmentId = isOfficer ? (prov.departmentId || "dept-1") : null;
+            existing.departmentName = isOfficer
+              ? (dept?.name || existing.departmentName || "Kebele Administration & Vital Events")
+              : "Woreda Central Administration";
+            existing.isActive = prov.isActive !== false;
+            existing.isProvisioned = true;
+          } else {
+            const newUser = {
+              id: `usr-prov-${provEmail.replace(/[^a-z0-9]/g, "")}`,
+              fullName: prov.fullName,
+              email: prov.email,
+              password: prov.password || "Password@123",
+              phone: prov.phone || "+251911000000",
+              nationalId: prov.nationalId || `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
+              role,
+              departmentId: isOfficer ? (prov.departmentId || "dept-1") : null,
+              departmentName: isOfficer
+                ? (dept?.name || "Kebele Administration & Vital Events")
+                : "Woreda Central Administration",
+              address: "Kebele 03, Woreda Center",
+              isActive: prov.isActive !== false,
+              isProvisioned: true,
+              createdAt: prov.createdAt || new Date().toISOString(),
+            };
+            cleanedUsers.push(newUser);
+            usersByEmail.set(provEmail, newUser);
+          }
+        });
 
         // Authenticated user is resolved exclusively from the JWT in browser cookies
         const cookieUser = getUserFromJwtCookie(
@@ -786,8 +1053,7 @@ export const useStore = create(
           ...currentState,
           ...safePersisted,
           departments: currentDepartments,
-          services: currentServices,
-          servicesPurgedV2: true,
+          services: currentState.services, // loaded from the API, never from storage
           users: cleanedUsers,
           appointments: cleanedAppointments,
           queue: cleanedQueue,
@@ -800,3 +1066,14 @@ export const useStore = create(
   )
 );
 
+
+// Keep open tabs in sync: when another tab saves the store (for example an Admin adding a
+// service), reload it here. Without this, a tab opened earlier keeps its old copy in memory
+// and overwrites the newer data the next time it saves.
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key === useStore.persist.getOptions().name) {
+      useStore.persist.rehydrate();
+    }
+  });
+}

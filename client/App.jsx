@@ -22,7 +22,6 @@ import AdminSchedulePage from "@/pages/admin/AdminSchedulePage";
 import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminAccountProvisionPage from "@/pages/admin/AdminAccountProvisionPage";
 import AdminReportsPage from "@/pages/admin/AdminReportsPage";
-import AdminAuditPage from "@/pages/admin/AdminAuditPage";
 import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
 
 // Officer pages
@@ -63,7 +62,6 @@ export default function App() {
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="account-provision" element={<AdminAccountProvisionPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
-        <Route path="audit" element={<AdminAuditPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>
 

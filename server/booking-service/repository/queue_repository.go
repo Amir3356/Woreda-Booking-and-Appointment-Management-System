@@ -100,13 +100,13 @@ func (r *Repository) Board(ctx context.Context, deptID string) (*model.QueueBoar
 func (r *Repository) CallNext(ctx context.Context, deptID, officerID string, counter int) (*model.CallNextResult, error) {
 	res := &model.CallNextResult{CounterNumber: counter}
 	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
-		var id, apptID string
+		var id string
 		err := tx.QueryRow(ctx, `
 			SELECT q.id, q.appointment_id, q.token_number, a.citizen_name
 			FROM queue_tokens q JOIN appointments a ON a.id = q.appointment_id
 			WHERE q.department_id = $1 AND q.queue_date = CURRENT_DATE AND q.status = 'WAITING'
 			ORDER BY q.created_at LIMIT 1 FOR UPDATE OF q SKIP LOCKED`, deptID,
-		).Scan(&id, &apptID, &res.CalledToken, &res.CitizenName)
+		).Scan(&id, &res.AppointmentID, &res.CalledToken, &res.CitizenName)
 		if err != nil {
 			return notFound(err)
 		}
@@ -115,16 +115,16 @@ func (r *Repository) CallNext(ctx context.Context, deptID, officerID string, cou
 			WHERE id = $1`, id, counter, officerID); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `UPDATE appointments SET status = 'IN_PROGRESS' WHERE id = $1`, apptID)
+		_, err = tx.Exec(ctx, `UPDATE appointments SET status = 'IN_PROGRESS' WHERE id = $1`, res.AppointmentID)
 		return err
 	})
 	return res, err
 }
 
 // Finalize sets a token to COMPLETED/NO_SHOW and cascades the status to its appointment.
-func (r *Repository) Finalize(ctx context.Context, id, deptID string, status model.QueueStatus) error {
-	return pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
-		var apptID string
+func (r *Repository) Finalize(ctx context.Context, id, deptID string, status model.QueueStatus) (string, error) {
+	var apptID string
+	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
 			UPDATE queue_tokens SET status = $2::queue_status
 			WHERE id = $1 AND ($3 = '' OR department_id = $3) AND status IN ('WAITING', 'SERVING')
@@ -138,4 +138,5 @@ func (r *Repository) Finalize(ctx context.Context, id, deptID string, status mod
 			WHERE id = $1`, apptID, string(status))
 		return err
 	})
+	return apptID, err
 }

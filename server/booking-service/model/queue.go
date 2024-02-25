@@ -78,6 +78,7 @@ type CallNextRequest struct {
 
 // CallNextResult is the response of POST /queue/call-next.
 type CallNextResult struct {
+	AppointmentID string `json:"appointmentId"`
 	CalledToken   string `json:"calledToken"`
 	CitizenName   string `json:"citizenName"`
 	CounterNumber int    `json:"counterNumber"`

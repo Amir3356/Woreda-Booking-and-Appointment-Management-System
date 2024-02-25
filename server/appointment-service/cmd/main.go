@@ -12,8 +12,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/woreda/booking/appointment-service/catalog"
 	"github.com/woreda/booking/appointment-service/config"
 	"github.com/woreda/booking/appointment-service/controller"
+	"github.com/woreda/booking/appointment-service/events"
 	"github.com/woreda/booking/appointment-service/repository"
 	"github.com/woreda/booking/appointment-service/routes"
 	"github.com/woreda/booking/appointment-service/service"
@@ -42,7 +44,21 @@ func main() {
 
 	// Constructor injection: repository → service → controller → routes.
 	repo := repository.New(pool)
-	svc := service.New(repo, service.LogPublisher{})
+	var publisher service.Publisher = service.LogPublisher{}
+	if cfg.KafkaBrokers != "" {
+		kp := events.NewKafkaPublisher(cfg.KafkaBrokers, "appointment-service", logger)
+		defer kp.Close() // flush queued events on shutdown
+		publisher = kp
+		logger.Info("streaming events to kafka", "brokers", cfg.KafkaBrokers, "topic", events.TopicAppointments)
+	}
+	catalogClient, err := catalog.New(cfg.CatalogGRPCAddr)
+	if err != nil {
+		logger.Error("catalog client", "err", err)
+		os.Exit(1)
+	}
+	defer catalogClient.Close()
+	logger.Info("catalog lookups via gRPC", "addr", cfg.CatalogGRPCAddr)
+	svc := service.New(repo, publisher, catalogClient)
 	ctrl := controller.New(svc)
 	root := routes.Register(http.NewServeMux(), ctrl, cfg.JWTSecret, logger)
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: root, ReadHeaderTimeout: 5 * time.Second}

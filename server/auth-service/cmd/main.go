@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/woreda/booking/auth-service/config"
 	"github.com/woreda/booking/auth-service/controller"
@@ -42,7 +43,23 @@ func main() {
 
 	// Constructor injection: repository → service → controller → routes.
 	repo := repository.New(pool)
-	svc := service.New(repo, cfg.JWTSecret)
+	var sessions service.SessionStore
+	if cfg.RedisURL == "" {
+		logger.Warn("REDIS_URL not set: logout does not revoke tokens and login lockout is off")
+	} else {
+		opts, err := redis.ParseURL(cfg.RedisURL)
+		if err != nil {
+			logger.Error("parse REDIS_URL", "err", err)
+			os.Exit(1)
+		}
+		rdb := redis.NewClient(opts)
+		defer rdb.Close()
+		if err := rdb.Ping(pingCtx).Err(); err != nil {
+			logger.Warn("redis not reachable yet", "err", err)
+		}
+		sessions = repository.NewSessionStore(rdb)
+	}
+	svc := service.New(repo, sessions, cfg.JWTSecret)
 	ctrl := controller.New(svc)
 	root := routes.Register(http.NewServeMux(), ctrl, cfg.JWTSecret, logger)
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: root, ReadHeaderTimeout: 5 * time.Second}

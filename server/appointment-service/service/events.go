@@ -5,15 +5,16 @@ import (
 	"log/slog"
 )
 
-// Publisher emits domain events consumed by downstream handlers (e.g. audit-service).
+// Publisher emits appointment lifecycle events (see the events package for the Kafka implementation).
+// Publishing is fire-and-forget: a broker outage must never fail a citizen's request.
 type Publisher interface {
-	Publish(ctx context.Context, eventType string, payload any)
+	Publish(ctx context.Context, eventType, appointmentID string, data any)
 }
 
-// LogPublisher is a stand-in until a broker (NATS/Kafka/RabbitMQ) is chosen.
+// LogPublisher is used when no broker is configured (KAFKA_BROKERS unset): events are only logged.
 type LogPublisher struct{}
 
 // Publish logs the event instead of sending it.
-func (LogPublisher) Publish(_ context.Context, eventType string, payload any) {
-	slog.Info("event published (log only)", "type", eventType, "payload", payload)
+func (LogPublisher) Publish(_ context.Context, eventType, appointmentID string, _ any) {
+	slog.Info("event (not streamed: KAFKA_BROKERS unset)", "type", eventType, "appointmentId", appointmentID)
 }

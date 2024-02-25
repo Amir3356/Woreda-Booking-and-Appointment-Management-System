@@ -23,8 +23,20 @@ type Repository interface {
 	IssueToken(ctx context.Context, a *model.CheckInAppointment, officerID string) (*model.IssuedToken, error)
 	Board(ctx context.Context, deptID string) (*model.QueueBoard, error)
 	CallNext(ctx context.Context, deptID, officerID string, counter int) (*model.CallNextResult, error)
-	Finalize(ctx context.Context, id, deptID string, status model.QueueStatus) error
+	Finalize(ctx context.Context, id, deptID string, status model.QueueStatus) (appointmentID string, err error)
 }
+
+// Publisher emits appointment lifecycle events (Kafka in production, see the events package).
+// Publishing is fire-and-forget: a broker outage must never fail a desk operation.
+type Publisher interface {
+	Publish(ctx context.Context, eventType, appointmentID string, data any)
+}
+
+// NopPublisher discards events (used when KAFKA_BROKERS is unset).
+type NopPublisher struct{}
+
+// Publish does nothing.
+func (NopPublisher) Publish(context.Context, string, string, any) {}
 
 // Municipal booking grid: 30-minute slots from 08:30 to 16:30, lunch break at 12:30.
 const (
@@ -37,10 +49,13 @@ const (
 var weekdays = []string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
 
 // Service implements schedule and queue use cases.
-type Service struct{ repo Repository }
+type Service struct {
+	repo   Repository
+	events Publisher
+}
 
 // New builds a Service.
-func New(repo Repository) *Service { return &Service{repo: repo} }
+func New(repo Repository, events Publisher) *Service { return &Service{repo: repo, events: events} }
 
 func label(s model.Schedule) model.Schedule {
 	if s.Status == string(model.ScheduleActive) {

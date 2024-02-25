@@ -27,19 +27,24 @@ type Repository interface {
 	Review(ctx context.Context, id, officerID string, u model.StatusUpdate) error
 	Reschedule(ctx context.Context, a *model.Appointment, date, slot string) error
 	Cancel(ctx context.Context, id string) error
-	SlipDetails(ctx context.Context, a *model.Appointment) (string, []string, error)
 	Summary(ctx context.Context, from, to time.Time, deptID string) (*model.Summary, error)
+}
+
+// Catalog answers questions about services and departments (department-service over gRPC).
+type Catalog interface {
+	GetService(ctx context.Context, id string) (*model.CatalogService, error)
 }
 
 // Service implements appointment use cases.
 type Service struct {
-	repo   Repository
-	events Publisher
+	repo    Repository
+	events  Publisher
+	catalog Catalog
 }
 
 // New builds a Service.
-func New(repo Repository, events Publisher) *Service {
-	return &Service{repo: repo, events: events}
+func New(repo Repository, events Publisher, catalog Catalog) *Service {
+	return &Service{repo: repo, events: events, catalog: catalog}
 }
 
 func validDate(s string) bool { _, err := time.Parse(time.DateOnly, s); return err == nil }
@@ -79,16 +84,25 @@ func (s *Service) Book(ctx context.Context, caller model.Caller, req model.BookR
 	if err := v.err(); err != nil {
 		return nil, err
 	}
+	// The service and its department are owned by department-service: ask it, don't read its tables.
+	cs, err := s.catalog.GetService(ctx, req.ServiceID)
+	if err != nil {
+		return nil, err
+	}
+	if !cs.Bookable() {
+		return nil, fmt.Errorf("%w: service %s is not open for booking", ErrNotFound, req.ServiceID)
+	}
 	a := &model.Appointment{
 		CitizenID: caller.UserID, CitizenName: strings.TrimSpace(req.CitizenName), CitizenPhone: req.CitizenPhone,
 		CitizenEmail: optional(req.CitizenEmail), ServiceID: req.ServiceID, Date: req.Date, TimeSlot: req.TimeSlot,
 		Status: model.StatusPending, CitizenNotes: optional(req.CitizenNotes),
+		DepartmentID: cs.DepartmentID, DepartmentName: cs.DepartmentName, ServiceName: cs.Name,
 	}
 	// TODO: honour system_settings.auto_approve_bookings and advance_booking_days.
 	if err := s.repo.Create(ctx, a); err != nil {
 		return nil, err
 	}
-	s.events.Publish(ctx, "appointment.booked", a)
+	s.events.Publish(ctx, "appointment.booked", a.ID, a)
 	return a, nil
 }
 
@@ -169,7 +183,7 @@ func (s *Service) UpdateStatus(ctx context.Context, caller model.Caller, id stri
 	}
 	a, err := s.repo.GetByID(ctx, id)
 	if err == nil {
-		s.events.Publish(ctx, "appointment.status_"+strings.ToLower(string(u.Status)), a)
+		s.events.Publish(ctx, "appointment."+strings.ToLower(string(u.Status)), id, a)
 	}
 	return a, err
 }
@@ -193,8 +207,13 @@ func (s *Service) Reschedule(ctx context.Context, caller model.Caller, id string
 	if err := s.repo.Reschedule(ctx, a, req.NewDate, req.NewTimeSlot); err != nil {
 		return nil, err
 	}
-	s.events.Publish(ctx, "appointment.rescheduled", map[string]string{"id": id, "reason": req.Reason})
-	return s.repo.GetByID(ctx, id)
+	updated, err := s.repo.GetByID(ctx, id)
+	if err == nil {
+		s.events.Publish(ctx, "appointment.rescheduled", id, map[string]any{
+			"previousDate": a.Date, "previousTimeSlot": a.TimeSlot, "reason": req.Reason, "appointment": updated,
+		})
+	}
+	return updated, err
 }
 
 // Cancel cancels an active appointment.
@@ -206,7 +225,7 @@ func (s *Service) Cancel(ctx context.Context, caller model.Caller, id string) er
 	if err := s.repo.Cancel(ctx, id); err != nil {
 		return fmt.Errorf("%w: only pending or approved appointments can be cancelled", ErrConflict)
 	}
-	s.events.Publish(ctx, "appointment.cancelled", map[string]string{"id": id})
+	s.events.Publish(ctx, "appointment.cancelled", id, nil)
 	return nil
 }
 
@@ -216,10 +235,11 @@ func (s *Service) Slip(ctx context.Context, id string) (*model.Slip, error) {
 	if err != nil {
 		return nil, err
 	}
-	room, docs, err := s.repo.SlipDetails(ctx, a)
+	cs, err := s.catalog.GetService(ctx, a.ServiceID)
 	if err != nil {
 		return nil, err
 	}
+	room, docs := cs.BuildingRoom, cs.RequiredDocuments
 	return &model.Slip{
 		Appointment: a, BuildingRoom: room, RequiredDocuments: docs, Barcode: a.ReferenceNumber,
 		Instructions: []string{

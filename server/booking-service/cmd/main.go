@@ -14,6 +14,7 @@ import (
 
 	"github.com/woreda/booking/booking-service/config"
 	"github.com/woreda/booking/booking-service/controller"
+	"github.com/woreda/booking/booking-service/events"
 	"github.com/woreda/booking/booking-service/repository"
 	"github.com/woreda/booking/booking-service/routes"
 	"github.com/woreda/booking/booking-service/service"
@@ -42,7 +43,16 @@ func main() {
 
 	// Constructor injection: repository → service → controller → routes.
 	repo := repository.New(pool)
-	svc := service.New(repo)
+	var publisher service.Publisher = service.NopPublisher{}
+	if cfg.KafkaBrokers != "" {
+		kp := events.NewKafkaPublisher(cfg.KafkaBrokers, "booking-service", logger)
+		defer kp.Close() // flush queued events on shutdown
+		publisher = kp
+		logger.Info("streaming events to kafka", "brokers", cfg.KafkaBrokers, "topic", events.TopicAppointments)
+	} else {
+		logger.Warn("KAFKA_BROKERS not set: queue events are not streamed")
+	}
+	svc := service.New(repo, publisher)
 	ctrl := controller.New(svc)
 	root := routes.Register(http.NewServeMux(), ctrl, cfg.JWTSecret, logger)
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: root, ReadHeaderTimeout: 5 * time.Second}

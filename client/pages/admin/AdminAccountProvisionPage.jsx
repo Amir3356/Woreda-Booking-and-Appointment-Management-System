@@ -24,17 +24,6 @@ const ROLE_BADGE = {
   ADMIN: "bg-purple-100 text-purple-700 border-purple-200",
 };
 
-const LEGACY_MOCK_EMAILS = new Set([
-  "tigist.kbl@woreda.gov.et",
-  "yared.lnd@woreda.gov.et",
-  "solomon.trd@woreda.gov.et",
-  "hana.tax@woreda.gov.et",
-  "mesfin.soc@woreda.gov.et",
-  "selam.health@woreda.gov.et",
-  "berhanu.audit@woreda.gov.et",
-  "amirsiraj1995@gmail.com",
-]);
-
 export default function AccountProvisionPage() {
   const {
     provisionedAccounts,
@@ -44,9 +33,7 @@ export default function AccountProvisionPage() {
     departments,
   } = useStore();
 
-  const accounts = (provisionedAccounts || []).filter(
-    (acc) => !LEGACY_MOCK_EMAILS.has(acc.email?.toLowerCase())
-  );
+  const accounts = provisionedAccounts || [];
 
   // Search filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,13 +46,21 @@ export default function AccountProvisionPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmail, setEditingEmail] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [visiblePasswords, setVisiblePasswords] = useState({});
   const [successMsg, setSuccessMsg] = useState("");
   const [error, setError] = useState("");
+
+  const togglePasswordVisibility = (email) => {
+    setVisiblePasswords((prev) => ({
+      ...prev,
+      [email]: !prev[email],
+    }));
+  };
 
   const emptyForm = {
     fullName: "",
     email: "",
-    password: "",
+    password: "Password@123",
     role: "Department Officer",
     departmentId: departments[0]?.id || "dept-1",
   };
@@ -73,9 +68,10 @@ export default function AccountProvisionPage() {
 
   // Filtered accounts based on search query
   const filteredAccounts = accounts.filter((acc) => {
+    const q = (searchQuery || "").trim().toLowerCase();
     return (
-      acc.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      acc.email.toLowerCase().includes(searchQuery.toLowerCase())
+      (acc.fullName || "").toLowerCase().includes(q) ||
+      (acc.email || "").toLowerCase().includes(q)
     );
   });
 
@@ -115,6 +111,7 @@ export default function AccountProvisionPage() {
   const openEdit = (acc) => {
     setForm({
       ...acc,
+      password: acc.password || "Password@123",
       role: acc.role === "OFFICER" ? "Department Officer" : (acc.role || "Department Officer"),
       departmentId: acc.departmentId || departments[0]?.id || "dept-1",
     });
@@ -133,16 +130,20 @@ export default function AccountProvisionPage() {
     e.preventDefault();
     setError("");
 
-    if (!form.fullName.trim()) return setError("Full name is required.");
-    if (!form.email.trim()) return setError("Email address is required.");
-    if (!form.password || form.password.length < 6)
+    const cleanFullName = form.fullName.trim();
+    const cleanEmail = form.email.trim();
+    const cleanPassword = form.password.trim();
+
+    if (!cleanFullName) return setError("Full name is required.");
+    if (!cleanEmail) return setError("Email address is required.");
+    if (!cleanPassword || cleanPassword.length < 6)
       return setError("Password must be at least 6 characters.");
 
     // Check duplicate email (excluding current edit target)
     const duplicate = accounts.some(
       (a) =>
-        a.email.toLowerCase() === form.email.trim().toLowerCase() &&
-        a.email.toLowerCase() !== editingEmail?.toLowerCase()
+        (a.email || "").trim().toLowerCase() === cleanEmail.toLowerCase() &&
+        (a.email || "").trim().toLowerCase() !== (editingEmail || "").trim().toLowerCase()
     );
     if (duplicate) return setError("An account with this email already exists.");
 
@@ -150,16 +151,18 @@ export default function AccountProvisionPage() {
       // Edit existing
       updateProvisionedAccount(editingEmail, {
         ...form,
-        fullName: form.fullName.trim(),
-        email: form.email.trim(),
+        fullName: cleanFullName,
+        email: cleanEmail,
+        password: cleanPassword,
       });
       setSuccessMsg("Account updated successfully.");
     } else {
       // Add new — push to global store (provisionedAccounts + users synchronized)
       addProvisionedAccount({
         ...form,
-        fullName: form.fullName.trim(),
-        email: form.email.trim(),
+        fullName: cleanFullName,
+        email: cleanEmail,
+        password: cleanPassword,
       });
       setSuccessMsg("Account provisioned successfully.");
     }
@@ -289,8 +292,32 @@ export default function AccountProvisionPage() {
                       {acc.fullName}
                     </td>
                     <td className="px-5 py-3.5 text-slate-600">{acc.email}</td>
-                    <td className="px-5 py-3.5 text-slate-500 tracking-widest font-mono">
-                      {"•".repeat(Math.min(acc.password?.length || 8, 10))}
+                    <td className="px-5 py-3.5 text-slate-600 font-mono">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={
+                            visiblePasswords[acc.email]
+                              ? "font-semibold text-slate-800 tracking-normal text-xs"
+                              : "tracking-widest text-slate-500"
+                          }
+                        >
+                          {visiblePasswords[acc.email]
+                            ? (acc.password || "Password@123")
+                            : "•".repeat(Math.min((acc.password || "Password@123").length, 10))}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => togglePasswordVisibility(acc.email)}
+                          className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors cursor-pointer"
+                          title={visiblePasswords[acc.email] ? "Hide password" : "Show password"}
+                        >
+                          {visiblePasswords[acc.email] ? (
+                            <EyeOff className="w-3.5 h-3.5" />
+                          ) : (
+                            <Eye className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
                     </td>
                     <td className="px-5 py-3.5">
                       <span

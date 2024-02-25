@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/woreda/booking/department-service/config"
 	"github.com/woreda/booking/department-service/controller"
+	"github.com/woreda/booking/department-service/events"
+	"github.com/woreda/booking/department-service/grpcserver"
 	"github.com/woreda/booking/department-service/repository"
 	"github.com/woreda/booking/department-service/routes"
 	"github.com/woreda/booking/department-service/service"
@@ -42,7 +45,16 @@ func main() {
 
 	// Constructor injection: repository → service → controller → routes.
 	repo := repository.New(pool)
-	svc := service.New(repo)
+	var publisher service.Publisher = service.NopPublisher{}
+	if cfg.KafkaBrokers != "" {
+		kp := events.NewKafkaPublisher(cfg.KafkaBrokers, "department-service", logger)
+		defer kp.Close() // flush queued events on shutdown
+		publisher = kp
+		logger.Info("streaming catalog events to kafka", "brokers", cfg.KafkaBrokers, "topic", events.TopicCatalog)
+	} else {
+		logger.Warn("KAFKA_BROKERS not set: catalog changes are not streamed")
+	}
+	svc := service.New(repo, publisher)
 	ctrl := controller.New(svc)
 	root := routes.Register(http.NewServeMux(), ctrl, cfg.JWTSecret, logger)
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: root, ReadHeaderTimeout: 5 * time.Second}
@@ -54,7 +66,23 @@ func main() {
 		}
 	}()
 
+	// Internal gRPC catalog API for other services.
+	grpcSrv := grpcserver.New(repo, logger)
+	lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
+	if err != nil {
+		logger.Error("grpc listen", "err", err)
+		os.Exit(1)
+	}
+	go func() {
+		logger.Info("grpc listening", "addr", lis.Addr().String())
+		if err := grpcSrv.Serve(lis); err != nil {
+			logger.Error("grpc server error", "err", err)
+			stop()
+		}
+	}()
+
 	<-ctx.Done()
+	grpcSrv.GracefulStop()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {

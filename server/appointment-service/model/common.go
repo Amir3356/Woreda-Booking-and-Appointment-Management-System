@@ -9,6 +9,21 @@ import (
 // ErrNotFound is the shared "entity does not exist" sentinel (repository → service → controller).
 var ErrNotFound = errors.New("not found")
 
+// ErrUnavailable means a service this one depends on (e.g. the catalog) could not answer.
+var ErrUnavailable = errors.New("dependency unavailable")
+
+// CatalogService is a service from the catalog (department-service), with its department.
+type CatalogService struct {
+	ID, Name                                   string
+	Active                                     bool
+	RequiredDocuments                          []string
+	DepartmentID, DepartmentName, BuildingRoom string
+	DepartmentActive                           bool
+}
+
+// Bookable reports whether citizens can book this service right now.
+func (c CatalogService) Bookable() bool { return c.Active && c.DepartmentActive }
+
 // Caller is the authenticated user taken from verified JWT claims.
 type Caller struct {
 	UserID, Role, Name, DepartmentID, TokenID string

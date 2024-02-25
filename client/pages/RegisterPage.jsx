@@ -132,16 +132,18 @@ export default function RegisterPage() {
                     Phone Number
                   </label>
                   <div className="relative flex items-center">
-                    <span className="absolute left-3 flex items-center pointer-events-none">
-                      <EthiopianFlag className="w-5 h-3.5 shadow-xs" />
-                    </span>
+                    <div className="absolute left-3 flex items-center gap-2 pointer-events-none select-none">
+                      <EthiopianFlag className="w-5 h-3.5 shadow-xs shrink-0" />
+                      <span className="w-px h-4 bg-slate-300" />
+                    </div>
                     <input
                       type="tel"
                       required
                       value={form.phone}
                       onChange={(e) => setForm({ ...form, phone: e.target.value })}
                       placeholder="+251 9XX XXX XXX"
-                      className="w-full pl-10 pr-3 py-2 border rounded-lg text-xs"
+                      className="w-full pr-3 py-2 border rounded-lg text-xs"
+                      style={{ paddingLeft: "3.75rem" }}
                     />
                   </div>
                 </div>

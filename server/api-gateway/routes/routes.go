@@ -21,10 +21,6 @@ func Register(mux *http.ServeMux, c *controller.GatewayController) {
 	mux.HandleFunc("/api/v1/admin/settings", c.ForwardUser)
 	mux.HandleFunc("/api/v1/admin/settings/", c.ForwardUser)
 
-	// Security audit logs -> audit-service
-	mux.HandleFunc("/api/v1/admin/audit-logs", c.ForwardAudit)
-	mux.HandleFunc("/api/v1/admin/audit-logs/", c.ForwardAudit)
-
 	// Departments and service catalog -> department-service
 	mux.HandleFunc("/api/v1/departments", c.ForwardDepartment)
 	mux.HandleFunc("/api/v1/departments/", c.ForwardDepartment)

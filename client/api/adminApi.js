@@ -1,6 +1,6 @@
 import { http, request } from "./httpClient";
 
-// Modules 9–12: staff provisioning, reports, audit trail, municipal settings
+// Modules 9–11: staff provisioning, reports, municipal settings
 export const staffApi = {
   list: (params) => http.get("/admin/users", params),
   provision: (payload) => http.post("/admin/users/provision", payload),
@@ -12,10 +12,6 @@ export const reportApi = {
   summary: (params) => http.get("/reports/summary", params),
   /** Returns the raw Response so the caller can read it as a CSV blob. */
   exportCsv: (params) => request("GET", "/reports/export-csv", { params, raw: true }),
-};
-
-export const auditApi = {
-  list: (params) => http.get("/admin/audit-logs", params),
 };
 
 export const settingsApi = {

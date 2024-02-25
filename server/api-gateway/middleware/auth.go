@@ -1,12 +1,19 @@
 package middleware
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 )
+
+// RevokedTokenKeyPrefix + jti is set by auth-service on logout (keep the two in sync).
+const RevokedTokenKeyPrefix = "auth:revoked:"
 
 // Identity headers forwarded to downstream services after JWT verification.
 // Services trust these headers, so the gateway always strips client-supplied values.
@@ -40,6 +47,7 @@ var publicRoutes = func() *http.ServeMux {
 		"POST /api/v1/appointments",
 		"GET /api/v1/appointments/track",
 		"GET /api/v1/appointments/{id}/slip",
+		"GET /api/v1/ws", // live notices for open pages (no personal data)
 	} {
 		m.Handle(p, noop)
 	}
@@ -52,7 +60,9 @@ func isPublic(r *http.Request) bool {
 }
 
 // Auth verifies the bearer JWT and forwards identity headers to upstream services.
-func Auth(secret string) Middleware {
+// With rdb set, tokens revoked by logout are rejected. If Redis is unreachable the check is
+// skipped (fail open) so an outage of the cache does not lock every user out.
+func Auth(secret string, rdb *redis.Client, logger *slog.Logger) Middleware {
 	key := []byte(secret)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +71,11 @@ func Auth(secret string) Middleware {
 			}
 			public := isPublic(r)
 			claims, err := parseBearer(r, key)
+			if err == nil && isRevoked(r.Context(), rdb, claims.ID, logger) {
+				claims, err = nil, errors.New("token revoked")
+				// Services re-verify the JWT themselves, so drop it before a public route is proxied.
+				stripCredentials(r)
+			}
 			if err != nil && !public {
 				WriteError(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "Missing or expired bearer token.")
 				return
@@ -93,4 +108,30 @@ func parseBearer(r *http.Request, key []byte) (*Claims, error) {
 		return nil, err
 	}
 	return claims, nil
+}
+
+func isRevoked(ctx context.Context, rdb *redis.Client, jti string, logger *slog.Logger) bool {
+	if rdb == nil || jti == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancel()
+	n, err := rdb.Exists(ctx, RevokedTokenKeyPrefix+jti).Result()
+	if err != nil {
+		logger.Warn("redis revocation check unavailable", "err", err)
+		return false
+	}
+	return n > 0
+}
+
+// stripCredentials removes the bearer token and the woreda_token cookie, keeping other cookies.
+func stripCredentials(r *http.Request) {
+	r.Header.Del("Authorization")
+	cookies := r.Cookies()
+	r.Header.Del("Cookie")
+	for _, c := range cookies {
+		if c.Name != "woreda_token" {
+			r.AddCookie(c)
+		}
+	}
 }

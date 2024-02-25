@@ -2,9 +2,11 @@
 package middleware
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
+	"net"
 	"net/http"
 	"slices"
 	"time"
@@ -48,6 +50,15 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.status = code
 	s.ResponseWriter.WriteHeader(code)
 }
+
+// Hijack lets WebSocket upgrades (GET /api/v1/ws) take over the connection through this wrapper.
+func (s *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	s.status = http.StatusSwitchingProtocols
+	return http.NewResponseController(s.ResponseWriter).Hijack()
+}
+
+// Unwrap exposes the underlying writer to http.ResponseController.
+func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter }
 
 // Logging logs method, path, status and latency for each request.
 func Logging(logger *slog.Logger) Middleware {

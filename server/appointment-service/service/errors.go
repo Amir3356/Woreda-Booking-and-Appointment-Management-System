@@ -14,6 +14,7 @@ var (
 	ErrForbidden      = errors.New("forbidden")
 	ErrNotImplemented = errors.New("not implemented")
 	ErrSlotFull       = model.ErrSlotFull
+	ErrUnavailable    = model.ErrUnavailable
 )
 
 // FieldIssue describes one invalid input field.

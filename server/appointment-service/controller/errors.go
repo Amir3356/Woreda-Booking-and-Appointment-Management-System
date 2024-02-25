@@ -18,6 +18,9 @@ func fail(w http.ResponseWriter, r *http.Request, err error) {
 			details = append(details, FieldError{Field: i.Field, Issue: i.Issue})
 		}
 		Fail(w, r, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "Validation failed for the submitted fields.", details...)
+	case errors.Is(err, service.ErrUnavailable):
+		slog.Warn("dependency unavailable", "path", r.URL.Path, "err", err)
+		Fail(w, r, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "A required service is temporarily unavailable. Please try again shortly.")
 	case errors.Is(err, service.ErrNotFound):
 		Fail(w, r, http.StatusNotFound, "NOT_FOUND", "Requested entity does not exist.")
 	case errors.Is(err, service.ErrSlotFull):

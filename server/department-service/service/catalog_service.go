@@ -24,11 +24,26 @@ type Repository interface {
 	DeleteService(ctx context.Context, id string) error
 }
 
+// Publisher announces catalog changes (Kafka, see the events package). Fire-and-forget:
+// a broker outage never fails an admin's change.
+type Publisher interface {
+	Publish(ctx context.Context, eventType, entityID string, data any)
+}
+
+// NopPublisher discards events (used when KAFKA_BROKERS is unset).
+type NopPublisher struct{}
+
+// Publish does nothing.
+func (NopPublisher) Publish(context.Context, string, string, any) {}
+
 // Service implements department and catalog use cases.
-type Service struct{ repo Repository }
+type Service struct {
+	repo   Repository
+	events Publisher
+}
 
 // New builds a Service.
-func New(repo Repository) *Service { return &Service{repo: repo} }
+func New(repo Repository, events Publisher) *Service { return &Service{repo: repo, events: events} }
 
 // ListDepartments lists departments.
 func (s *Service) ListDepartments(ctx context.Context, isActive *bool) ([]model.Department, error) {
@@ -44,7 +59,11 @@ func (s *Service) CreateDepartment(ctx context.Context, in model.DepartmentInput
 	if err != nil {
 		return nil, err
 	}
-	return s.repo.GetDepartment(ctx, id)
+	d, err := s.repo.GetDepartment(ctx, id)
+	if err == nil {
+		s.events.Publish(ctx, "catalog.department.created", id, d)
+	}
+	return d, err
 }
 
 // UpdateDepartment validates and updates a department.
@@ -55,17 +74,29 @@ func (s *Service) UpdateDepartment(ctx context.Context, id string, in model.Depa
 	if err := s.repo.UpdateDepartment(ctx, id, in); err != nil {
 		return nil, err
 	}
-	return s.repo.GetDepartment(ctx, id)
+	d, err := s.repo.GetDepartment(ctx, id)
+	if err == nil {
+		s.events.Publish(ctx, "catalog.department.updated", id, d)
+	}
+	return d, err
 }
 
 // ToggleDepartment flips a department's active flag.
 func (s *Service) ToggleDepartment(ctx context.Context, id string) (bool, error) {
-	return s.repo.ToggleDepartmentStatus(ctx, id)
+	active, err := s.repo.ToggleDepartmentStatus(ctx, id)
+	if err == nil {
+		s.events.Publish(ctx, "catalog.department.status_changed", id, map[string]bool{"isActive": active})
+	}
+	return active, err
 }
 
 // DeleteDepartment removes a department.
 func (s *Service) DeleteDepartment(ctx context.Context, id string) error {
-	return s.repo.DeleteDepartment(ctx, id)
+	err := s.repo.DeleteDepartment(ctx, id)
+	if err == nil {
+		s.events.Publish(ctx, "catalog.department.deleted", id, nil)
+	}
+	return err
 }
 
 // ListServices lists catalog services.
@@ -82,7 +113,11 @@ func (s *Service) CreateService(ctx context.Context, in model.ServiceInput) (*mo
 	if err != nil {
 		return nil, err
 	}
-	return s.repo.GetService(ctx, id)
+	svc, err := s.repo.GetService(ctx, id)
+	if err == nil {
+		s.events.Publish(ctx, "catalog.service.created", id, svc)
+	}
+	return svc, err
 }
 
 // UpdateService validates and updates a service.
@@ -93,17 +128,29 @@ func (s *Service) UpdateService(ctx context.Context, id string, in model.Service
 	if err := s.repo.UpdateService(ctx, id, in); err != nil {
 		return nil, err
 	}
-	return s.repo.GetService(ctx, id)
+	svc, err := s.repo.GetService(ctx, id)
+	if err == nil {
+		s.events.Publish(ctx, "catalog.service.updated", id, svc)
+	}
+	return svc, err
 }
 
 // ToggleService flips a service's active flag.
 func (s *Service) ToggleService(ctx context.Context, id string) (bool, error) {
-	return s.repo.ToggleServiceStatus(ctx, id)
+	active, err := s.repo.ToggleServiceStatus(ctx, id)
+	if err == nil {
+		s.events.Publish(ctx, "catalog.service.status_changed", id, map[string]bool{"isActive": active})
+	}
+	return active, err
 }
 
 // DeleteService removes a service.
 func (s *Service) DeleteService(ctx context.Context, id string) error {
-	return s.repo.DeleteService(ctx, id)
+	err := s.repo.DeleteService(ctx, id)
+	if err == nil {
+		s.events.Publish(ctx, "catalog.service.deleted", id, nil)
+	}
+	return err
 }
 
 func validateDepartment(in *model.DepartmentInput) error {

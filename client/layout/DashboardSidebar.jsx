@@ -6,7 +6,6 @@ import {
   Calendar,
   Clock,
   UserCog,
-  ShieldAlert,
   History,
 } from "lucide-react";
 import { useStore } from "@/context";
@@ -24,7 +23,6 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
     { href: "/admin/services", label: "Service Management", icon: FileText },
     { href: "/admin/schedule", label: "Schedule Management", icon: Clock },
     { href: "/admin/account-provision", label: "Account Provision", icon: UserCog },
-    { href: "/admin/audit", label: "Audit", icon: ShieldAlert },
   ];
 
   const officerNav = [

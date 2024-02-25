@@ -24,6 +24,8 @@ func fail(w http.ResponseWriter, r *http.Request, err error) {
 		Fail(w, r, http.StatusConflict, "CONFLICT", err.Error())
 	case errors.Is(err, service.ErrUnauthorized):
 		Fail(w, r, http.StatusUnauthorized, "UNAUTHORIZED", err.Error())
+	case errors.Is(err, service.ErrTooManyAttempts):
+		Fail(w, r, http.StatusTooManyRequests, "TOO_MANY_ATTEMPTS", err.Error())
 	case errors.Is(err, service.ErrForbidden):
 		Fail(w, r, http.StatusForbidden, "FORBIDDEN", "Insufficient role permissions.")
 	case errors.Is(err, service.ErrNotImplemented):

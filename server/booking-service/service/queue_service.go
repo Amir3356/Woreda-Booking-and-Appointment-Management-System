@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/woreda/booking/booking-service/model"
 )
@@ -36,6 +37,10 @@ func (s *Service) CheckIn(ctx context.Context, officer model.Caller, req model.C
 	if err != nil {
 		return nil, err
 	}
+	s.events.Publish(ctx, "appointment.checked_in", a.ID, map[string]any{
+		"tokenNumber": tok.TokenNumber, "counterNumber": tok.CounterNumber,
+		"departmentId": a.DepartmentID, "officerId": officer.UserID,
+	})
 	return &model.CheckInResult{
 		TokenNumber: tok.TokenNumber, AppointmentID: a.ID, CitizenName: a.CitizenName, ServiceName: a.ServiceName,
 		CounterNumber: tok.CounterNumber, Status: model.QueueWaiting,
@@ -70,6 +75,9 @@ func (s *Service) CallNext(ctx context.Context, officer model.Caller, req model.
 	if err != nil {
 		return nil, err
 	}
+	s.events.Publish(ctx, "appointment.in_progress", res.AppointmentID, map[string]any{
+		"tokenNumber": res.CalledToken, "counterNumber": res.CounterNumber, "officerId": officer.UserID,
+	})
 	res.ChimeText = fmt.Sprintf("Chime: Token %s please proceed to Counter Desk #%d", res.CalledToken, res.CounterNumber)
 	return res, nil
 }
@@ -81,5 +89,12 @@ func (s *Service) Finalize(ctx context.Context, officer model.Caller, id string,
 		v.add("status", "Status must be COMPLETED or NO_SHOW.")
 		return v
 	}
-	return s.repo.Finalize(ctx, id, officer.DepartmentID, req.Status)
+	apptID, err := s.repo.Finalize(ctx, id, officer.DepartmentID, req.Status)
+	if err != nil {
+		return err
+	}
+	s.events.Publish(ctx, "appointment."+strings.ToLower(string(req.Status)), apptID, map[string]any{
+		"queueTokenId": id, "officerId": officer.UserID,
+	})
+	return nil
 }
