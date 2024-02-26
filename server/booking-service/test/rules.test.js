@@ -1,10 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BadRequestError, ValidationError } from "../lib/index.js";
-import {
-  buildSlots, clock12, decodeCallNext, decodeCheckIn, decodeFinalize, decodeSchedule, minutes, parseClock, parseDate,
-  queueToken, scheduleLabel, slotLabel, validateAvailability, validateSchedule, weekdayOf,
-} from "../rules.js";
+import { BadRequestError, ValidationError } from "../utils/errors.js";
+import { clock12, minutes, parseClock, parseDate, weekdayOf } from "../utils/time.js";
+import { buildSlots, slotLabel } from "../utils/slots.js";
+import { queueToken } from "../utils/queueToken.js";
+import { decodeCallNext, decodeCheckIn, decodeFinalize, decodeSchedule } from "../utils/decode.js";
+import { scheduleLabel, validateSchedule } from "../services/schedule.service.js";
+import { validateAvailability } from "../services/availability.service.js";
 
 const issues = (fn) => {
   try {

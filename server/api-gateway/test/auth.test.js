@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isPublic, readCookie } from "../auth.js";
-import { cleanPath } from "../paths.js";
+import { isPublic, readCookie } from "../middleware/auth.js";
+import { cleanPath } from "../utils/paths.js";
 
 test("public routes match Go's publicRoutes", () => {
   for (const [m, p] of [

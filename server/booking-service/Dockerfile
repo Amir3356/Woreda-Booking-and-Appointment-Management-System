@@ -9,4 +9,4 @@ COPY . .
 USER node
 ENV PORT=8085
 EXPOSE 8085
-CMD ["node", "index.js"]
+CMD ["node", "server.js"]

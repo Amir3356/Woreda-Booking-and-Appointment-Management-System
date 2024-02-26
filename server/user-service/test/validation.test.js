@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  cursorMeta, decodeProfile, decodeSettings, isValidEmail, isValidEthiopianPhone, pageParams, roleLabel,
-  settingsView, validateProfile, validateProvision, validateSettings,
-} from "../validation.js";
-import { ilikeContains } from "../users.js";
+import { cursorMeta, pageParams } from "../utils/pagination.js";
+import { decodeProfile, isValidEthiopianPhone, validateProfile } from "../services/profile.service.js";
+import { isValidEmail, roleLabel, validateProvision } from "../services/staff.service.js";
+import { decodeSettings, settingsView, validateSettings } from "../services/settings.service.js";
+import { ilikeContains } from "../repositories/user.repository.js";
 
 const issues = (fn) => {
   try {

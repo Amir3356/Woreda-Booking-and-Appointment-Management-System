@@ -3,7 +3,9 @@ import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import Redis from "ioredis";
-import { cache, canonicalQuery } from "../cache.js";
+import { cache } from "../middleware/cache.js";
+import { canonicalQuery, createCacheService } from "../services/cache.service.js";
+import { createCacheRepository } from "../repositories/cache.repository.js";
 
 const url = process.env.REDIS_TEST_URL;
 const silent = { info() {}, warn() {}, error() {} };
@@ -26,7 +28,7 @@ before(async () => {
   redis = new Redis(url);
   await redis.flushdb();
   const app = express();
-  app.use(cache(redis, silent));
+  app.use(cache(createCacheService({ cacheRepository: createCacheRepository(redis), logger: silent })));
   app.use((req, res) => {
     if (req.method === "GET") upstreamCalls += 1;
     if (failing) return res.status(500).json({ success: false });

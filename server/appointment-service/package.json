@@ -4,9 +4,9 @@
   "private": true,
   "description": "Appointment booking, tracking, review and reports (REST), catalog lookups over gRPC, lifecycle events (Kafka).",
   "type": "module",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node server.js",
     "test": "node --test"
   },
   "engines": {

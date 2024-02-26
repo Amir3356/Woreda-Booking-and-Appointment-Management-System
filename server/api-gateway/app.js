@@ -1,51 +1,41 @@
-// The gateway: Express app (request id -> log -> CORS -> auth -> cache -> router) plus the
-// HTTP "upgrade" handler for the WebSocket hub, which sits in front of the Express app.
-import http from "node:http";
+// Express application: wires repositories → services → controllers → routes, then the middleware chain
+//   request id → request log → CORS → auth → cache → routes (health / 301 / 404 / proxy)
+// Bodies are never parsed here: they are streamed to the services untouched.
+// Also builds the HTTP "upgrade" handler for the WebSocket hub (attached in server.js).
 import express from "express";
-import { requestLogger } from "./lib/index.js";
-import { corsHeaders, cors, requestId } from "./middleware.js";
-import { auth } from "./auth.js";
-import { cache } from "./cache.js";
-import { router } from "./routes.js";
-import { cleanPath } from "./paths.js";
+import { config } from "./config/index.js";
+import { logger } from "./config/logger.js";
+import { requestId } from "./middleware/requestId.js";
+import { requestLogger } from "./middleware/requestLogger.js";
+import { cors } from "./middleware/cors.js";
+import { auth } from "./middleware/auth.js";
+import { cache } from "./middleware/cache.js";
+import { createCacheRepository } from "./repositories/cache.repository.js";
+import { createTokenRepository } from "./repositories/token.repository.js";
+import { createCacheService } from "./services/cache.service.js";
+import { createTokenService } from "./services/token.service.js";
+import { createRealtimeService } from "./services/realtime.service.js";
+import { createGatewayController, createUpgradeHandler } from "./controllers/gateway.controller.js";
+import { createEventsController } from "./controllers/events.controller.js";
+import { createRoutes } from "./routes/index.js";
 
-export function createGateway({ config, redis, logger }) {
+/** redis may be null (REDIS_URL not set): caching and revocation checks are then off. */
+export function createApp({ redis }) {
+  const realtimeService = createRealtimeService({ allowedOrigins: config.allowedOrigins, logger });
+  const cacheService = createCacheService({ cacheRepository: createCacheRepository(redis), logger });
+  const tokenService = createTokenService({ tokenRepository: createTokenRepository(redis), logger });
+
   const app = express();
   app.disable("x-powered-by");
   app.disable("etag");
-  // Never parse bodies here: they are streamed to the services untouched.
   app.use(requestId);
   app.use(requestLogger(logger));
   app.use(cors(config.allowedOrigins));
-  app.use(auth(config.jwtSecret, redis, logger));
-  app.use(cache(redis, logger));
-  app.use(router(config.services, logger));
-  return app;
-}
+  app.use(auth(config.jwtSecret, tokenService));
+  app.use(cache(cacheService));
+  app.use(createRoutes(createGatewayController({ services: config.services, logger })));
 
-/** Handles WebSocket upgrades: GET /api/v1/ws goes to the hub, anything else to the Express app. */
-export function upgradeHandler({ app, hub, config, logger }) {
-  return (req, socket, head) => {
-    const path = (req.url || "").split("?")[0];
-    if (req.method !== "GET" || cleanPath(path) !== "/api/v1/ws" || path !== "/api/v1/ws") {
-      // Answer as a normal HTTP request (401/404/405/301 or a proxied response), then close.
-      const res = new http.ServerResponse(req);
-      res.shouldKeepAlive = false;
-      res.assignSocket(socket);
-      res.on("finish", () => {
-        res.detachSocket(socket);
-        socket.destroySoon();
-      });
-      return app(req, res);
-    }
-    const start = process.hrtime.bigint();
-    let id = req.headers["x-request-id"];
-    if (!id) {
-      requestId(req, { setHeader() {} }, () => {});
-      id = req.headers["x-request-id"];
-    }
-    const status = hub.handleUpgrade(req, socket, head, { "X-Request-ID": id, ...corsHeaders(config.allowedOrigins, req.headers.origin) });
-    const ms = Number(process.hrtime.bigint() - start) / 1e6;
-    logger.info({ method: req.method, path, status, duration: `${ms.toFixed(2)}ms`, requestId: id }, "request");
-  };
+  const upgradeHandler = createUpgradeHandler({ app, realtimeService, allowedOrigins: config.allowedOrigins, logger });
+  const eventsController = createEventsController({ cacheService, realtimeService, logger });
+  return { app, upgradeHandler, eventsController, realtimeService, cacheEnabled: cacheService.enabled };
 }

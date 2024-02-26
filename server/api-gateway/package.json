@@ -4,9 +4,9 @@
   "private": true,
   "description": "Single entry point behind nginx: JWT check, identity headers, Redis response cache, reverse proxy to the services, WebSocket live notices fed by Kafka.",
   "type": "module",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node server.js",
     "test": "node --test"
   },
   "engines": {

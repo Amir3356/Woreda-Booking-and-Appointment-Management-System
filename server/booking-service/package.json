@@ -4,9 +4,9 @@
   "private": true,
   "description": "Operating schedules, slot availability and the desk queue (check-in, call-next, finalize), with appointment lifecycle events (Kafka).",
   "type": "module",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node server.js",
     "test": "node --test"
   },
   "engines": {

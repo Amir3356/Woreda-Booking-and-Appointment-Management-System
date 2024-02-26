@@ -9,4 +9,4 @@ COPY . .
 USER node
 ENV PORT=8083 GRPC_PORT=9083
 EXPOSE 8083 9083
-CMD ["node", "index.js"]
+CMD ["node", "server.js"]

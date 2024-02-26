@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { once } from "node:events";
 import WebSocket from "ws";
-import { Hub } from "../hub.js";
+import { Hub } from "../services/realtime.service.js";
 
 const silent = { info() {}, warn() {}, error() {} };
 

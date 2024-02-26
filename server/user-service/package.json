@@ -4,9 +4,9 @@
   "private": true,
   "description": "Citizen profiles, staff account provisioning and municipal system settings (REST).",
   "type": "module",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node server.js",
     "test": "node --test"
   },
   "engines": {
@@ -16,7 +16,6 @@
     "bcryptjs": "2.4.3",
     "express": "5.1.0",
     "jsonwebtoken": "9.0.2",
-    "kafkajs": "2.2.4",
     "mongoose": "8.24.5",
     "pino": "9.6.0"
   }
