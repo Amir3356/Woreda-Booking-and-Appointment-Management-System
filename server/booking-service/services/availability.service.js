@@ -1,7 +1,7 @@
 // Per-slot availability of a service on a date (public: the citizen booking page shows it before sign-in).
 import { ValidationError } from "../utils/errors.js";
 import { parseDate } from "../utils/time.js";
-import { buildSlots } from "../utils/slots.js";
+import { applyDailyCapacity, buildSlots, closedReason } from "../utils/slots.js";
 import * as schedules from "../repositories/schedule.repository.js";
 import * as catalog from "../repositories/catalog.repository.js";
 import * as appointments from "../repositories/appointment.repository.js";
@@ -34,8 +34,20 @@ export function createAvailabilityService() {
         activeSchedule(serviceId, date),
         appointments.countBySlot(serviceId, date),
       ]);
-      // TODO (as in Go): also enforce schedules.dailyCapacity / services.dailyQuota and public holidays.
-      return { serviceId, date, maxParallelSlots: max, slots: buildSlots(schedule, day, counts, max) };
+      // Public holidays are not modelled yet.
+      const bookedForDay = Object.values(counts).reduce((sum, n) => sum + n, 0);
+      const reason = closedReason(schedule, day, bookedForDay);
+      return {
+        serviceId,
+        date,
+        maxParallelSlots: max,
+        closedReason: reason,
+        dailyCapacity: schedule?.dailyCapacity ?? 0,
+        bookedForDay,
+        openingTime: schedule?.openingTime ?? null,
+        closingTime: schedule?.closingTime ?? null,
+        slots: applyDailyCapacity(buildSlots(schedule, day, counts, max), reason),
+      };
     },
   };
 }

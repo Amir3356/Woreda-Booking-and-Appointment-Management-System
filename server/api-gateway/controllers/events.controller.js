@@ -1,6 +1,7 @@
 // Kafka message handlers (consumers are set up in config/kafka.js): appointment events clear the
-// cached availability; catalog events clear the cached department/service lists and tell open
-// pages (WebSocket) to re-fetch. ev is the parsed event envelope, or null when malformed.
+// cached availability; catalog events clear the cached department/service lists (schedule events
+// also the cached availability) and tell open pages (WebSocket) to re-fetch. ev is the parsed
+// event envelope, or null when malformed.
 import { GROUP_AVAILABILITY, GROUP_CATALOG } from "../services/cache.service.js";
 
 export function createEventsController({ cacheService, realtimeService, logger }) {
@@ -24,6 +25,7 @@ export function createEventsController({ cacheService, realtimeService, logger }
       if (cacheService.enabled) {
         try {
           await cacheService.invalidateGroup(GROUP_CATALOG);
+          if (String(ev.type).startsWith("catalog.schedule.")) await cacheService.invalidateGroup(GROUP_AVAILABILITY);
         } catch (err) {
           logger.warn({ err: err.message }, "catalog cache not cleared; entries expire on their TTL");
         }

@@ -1,9 +1,10 @@
 // booking-service: operating schedules, slot availability and the desk queue (REST :8085),
-// appointment lifecycle events from the desk (Kafka topic woreda.appointments).
+// appointment lifecycle events from the desk (Kafka topic woreda.appointments) and schedule changes
+// (woreda.catalog).
 import { config } from "./config/index.js";
 import { logger } from "./config/logger.js";
 import { connectDatabase, disconnectDatabase } from "./config/database.js";
-import { createEventPublisher } from "./config/kafka.js";
+import { createCatalogPublisher, createEventPublisher } from "./config/kafka.js";
 import { createApp } from "./app.js";
 
 try {
@@ -14,7 +15,8 @@ try {
 }
 
 const events = createEventPublisher();
-const app = createApp({ events });
+const catalogEvents = createCatalogPublisher();
+const app = createApp({ events, catalogEvents });
 
 const httpServer = app.listen(config.port, () => logger.info({ addr: `:${config.port}` }, "listening"));
 
@@ -24,7 +26,7 @@ async function shutdown(signal) {
   stopping = true;
   logger.info({ signal }, "shutting down");
   httpServer.close();
-  for (const step of [() => events.close(), () => disconnectDatabase()]) {
+  for (const step of [() => events.close(), () => catalogEvents.close(), () => disconnectDatabase()]) {
     try {
       await step();
     } catch (err) {

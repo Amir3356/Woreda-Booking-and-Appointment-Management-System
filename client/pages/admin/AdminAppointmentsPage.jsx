@@ -192,12 +192,7 @@ export default function AdminAppointmentsPage() {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
               <tr>
-                <th className="px-5 py-3.5">
-                  <div>Appointment Number</div>
-                  <span className="text-[9px] font-normal text-slate-400 block normal-case">
-                    (is a Unique appointment reference)
-                  </span>
-                </th>
+                <th className="px-5 py-3.5">Appointment Number</th>
                 <th className="px-5 py-3.5">Citizen Name</th>
                 <th className="px-5 py-3.5">Department</th>
                 <th className="px-5 py-3.5">Service</th>

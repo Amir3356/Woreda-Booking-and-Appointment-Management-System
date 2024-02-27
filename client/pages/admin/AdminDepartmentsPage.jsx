@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useStore } from "@/context";
+import { subscribe } from "@/api/realtime";
+import { describeError } from "@/utils";
 import {
   Building2,
   Plus,
@@ -8,6 +10,7 @@ import {
   Edit2,
   Trash2,
   X,
+  AlertCircle,
 } from "lucide-react";
 
 export default function AdminDepartmentsPage() {
@@ -17,9 +20,35 @@ export default function AdminDepartmentsPage() {
     updateDepartment,
     deleteDepartment,
     toggleDepartmentStatus,
+    loadDepartments,
     services,
     users,
   } = useStore();
+  const [errorMsg, setErrorMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Departments live in department-service: fetch on open and whenever the catalog changes.
+  useEffect(() => {
+    const refresh = () => loadDepartments().catch((err) => setErrorMsg(describeError(err, "load departments")));
+    refresh();
+    const offChange = subscribe("catalog.changed", refresh);
+    const offReconnect = subscribe("reconnected", refresh);
+    return () => {
+      offChange();
+      offReconnect();
+    };
+  }, [loadDepartments]);
+
+  const run = async (action, fn) => {
+    setErrorMsg("");
+    try {
+      await fn();
+      return true;
+    } catch (err) {
+      setErrorMsg(describeError(err, action));
+      return false;
+    }
+  };
 
   const [viewMode] = useState("table");
   const [modalOpen, setModalOpen] = useState(false);
@@ -29,8 +58,8 @@ export default function AdminDepartmentsPage() {
     name: "",
     code: "",
     description: "",
-    buildingRoom: "Building A, Ground Floor",
-    contactPhone: "+251 11 ",
+    buildingRoom: "",
+    contactPhone: "",
   });
 
   const filteredDepts = departments || [];
@@ -41,8 +70,8 @@ export default function AdminDepartmentsPage() {
       name: "",
       code: "",
       description: "",
-      buildingRoom: "Building A, Ground Floor",
-      contactPhone: "+251 11 ",
+      buildingRoom: "",
+      contactPhone: "",
     });
     setModalOpen(true);
   };
@@ -69,9 +98,9 @@ export default function AdminDepartmentsPage() {
     return (clean.slice(0, 3) || "DEP").padEnd(3, "X");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || saving) return;
 
     const payload = {
       ...form,
@@ -79,11 +108,11 @@ export default function AdminDepartmentsPage() {
       code: form.code || editingDept?.code || generateDeptCode(form.name),
     };
 
-    if (editingDept) {
-      updateDepartment(editingDept.id, payload);
-    } else {
-      addDepartment(payload);
-    }
+    setSaving(true);
+    await run(editingDept ? "update the department" : "create the department", () =>
+      editingDept ? updateDepartment(editingDept.id, payload) : addDepartment(payload)
+    );
+    setSaving(false);
     setModalOpen(false);
   };
 
@@ -114,6 +143,16 @@ export default function AdminDepartmentsPage() {
         </button>
       </div>
 
+      {errorMsg && (
+        <div role="alert" className="flex items-start gap-2 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold shadow-xs">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-px" />
+          <span className="flex-1">{errorMsg}</span>
+          <button type="button" onClick={() => setErrorMsg("")} className="text-red-500 hover:text-red-700 cursor-pointer" aria-label="Dismiss error">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Main Content Section */}
       {viewMode === "table" ? (
         /* Department Management Table */
@@ -123,7 +162,6 @@ export default function AdminDepartmentsPage() {
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
                 <tr>
                   <th className="px-5 py-3.5">Department Name</th>
-                  <th className="px-5 py-3.5">Responsibility</th>
                   <th className="px-5 py-3.5">Office</th>
                   <th className="px-5 py-3.5">Contact Phone</th>
                   <th className="px-5 py-3.5">Status</th>
@@ -133,7 +171,7 @@ export default function AdminDepartmentsPage() {
               <tbody className="divide-y divide-slate-100">
                 {filteredDepts.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-16 text-center">
+                    <td colSpan={5} className="px-5 py-16 text-center">
                       <div className="flex flex-col items-center gap-3 text-slate-400">
                         <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
                           <Building2 className="w-6 h-6 text-slate-400" />
@@ -170,13 +208,6 @@ export default function AdminDepartmentsPage() {
                           </div>
                         </td>
 
-                        {/* Responsibility */}
-                        <td className="px-5 py-3.5 text-slate-600 max-w-xs md:max-w-md">
-                          <p className="line-clamp-2 text-xs leading-relaxed">
-                            {dept.description || "No description provided"}
-                          </p>
-                        </td>
-
                         {/* Office */}
                         <td className="px-5 py-3.5 text-slate-600">
                           <div className="flex items-center gap-1.5 text-xs">
@@ -196,7 +227,7 @@ export default function AdminDepartmentsPage() {
                         {/* Status */}
                         <td className="px-5 py-3.5">
                           <button
-                            onClick={() => toggleDepartmentStatus(dept.id)}
+                            onClick={() => run(`change the status of "${dept.name}"`, () => toggleDepartmentStatus(dept.id))}
                             className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
                               dept.isActive
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
@@ -226,7 +257,7 @@ export default function AdminDepartmentsPage() {
                             <button
                               onClick={() => {
                                 if (window.confirm(`Are you sure you want to delete ${dept.name}?`)) {
-                                  deleteDepartment?.(dept.id);
+                                  run(`delete "${dept.name}"`, () => deleteDepartment(dept.id));
                                 }
                               }}
                               className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all cursor-pointer"
@@ -282,7 +313,7 @@ export default function AdminDepartmentsPage() {
                     </span>
                     <div className="flex items-center gap-1.5">
                       <button
-                        onClick={() => toggleDepartmentStatus(dept.id)}
+                        onClick={() => run(`change the status of "${dept.name}"`, () => toggleDepartmentStatus(dept.id))}
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
                           dept.isActive
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
@@ -301,7 +332,7 @@ export default function AdminDepartmentsPage() {
                       <button
                         onClick={() => {
                           if (window.confirm(`Are you sure you want to delete ${dept.name}?`)) {
-                            deleteDepartment?.(dept.id);
+                            run(`delete "${dept.name}"`, () => deleteDepartment(dept.id));
                           }
                         }}
                         className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer"
@@ -312,10 +343,7 @@ export default function AdminDepartmentsPage() {
                     </div>
                   </div>
 
-                  <h3 className="font-bold text-slate-900 text-sm mb-1">{dept.name}</h3>
-                  <p className="text-xs text-slate-600 mb-4 line-clamp-2 leading-relaxed">
-                    {dept.description}
-                  </p>
+                  <h3 className="font-bold text-slate-900 text-sm mb-3">{dept.name}</h3>
 
                   <div className="space-y-1.5 text-xs text-slate-500 border-t border-slate-100 pt-3">
                     <div className="flex items-center gap-2">
@@ -400,19 +428,6 @@ export default function AdminDepartmentsPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Responsibility (Description)
-                </label>
-                <textarea
-                  rows={3}
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="Summary of responsibilities..."
-                  className="w-full px-3 py-2 border rounded-lg text-xs"
-                />
-              </div>
-
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
@@ -423,7 +438,8 @@ export default function AdminDepartmentsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow cursor-pointer"
+                  disabled={saving}
+                  className="px-4 py-2 rounded-lg disabled:opacity-60 bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow cursor-pointer"
                 >
                   {editingDept ? "Update Department" : "Save Department"}
                 </button>

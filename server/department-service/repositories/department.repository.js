@@ -53,6 +53,7 @@ export async function countsFor(ids) {
 
 /** Inserts the departments that are missing; returns how many were created. */
 export async function insertMissing(departments) {
+  if (!departments || departments.length === 0) return 0;
   const now = new Date();
   const res = await Department.collection.bulkWrite(
     departments.map(({ _id, ...fields }) => ({

@@ -1,6 +1,19 @@
 import { useState, useEffect } from "react";
 import { useStore } from "@/context";
 import { subscribe, isLive } from "@/api/realtime";
+import { scheduleApi } from "@/api";
+import {
+  bookableRange,
+  closedMessage,
+  displayDate,
+  displayTime,
+  formatWorkingDays,
+  localIsoDate,
+  nextWorkingDate,
+  scheduleOn,
+  schedulesForService,
+  weekdayOfIso,
+} from "@/utils";
 import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 import { EthiopianFlag } from "@/components/ui";
 import {
@@ -14,19 +27,35 @@ import {
   X,
   User,
   Phone,
+  AlertCircle,
 } from "lucide-react";
 
 export default function CitizenBookAppointmentPage() {
-  const { currentUser, bookAppointment, departments = [], services = [], loadServices } = useStore();
+  // Bumped on every catalog/schedule change so open availability is fetched again.
+  const [availabilityVersion, setAvailabilityVersion] = useState(0);
+
+  const {
+    currentUser,
+    bookAppointment,
+    departments = [],
+    services = [],
+    schedules = [],
+    loadServices,
+    loadBookableSchedules,
+  } = useStore();
 
   // Services come from the server catalog managed in Admin > Services Management. The list is
   // fetched on open and again whenever the server announces a catalog change (WebSocket), so a
   // service the Admin adds shows up here without refreshing the page.
   useEffect(() => {
-    const refresh = () =>
+    const refresh = () => {
       loadServices().catch(() => {
         // Server unreachable: keep the last list; the dropdown shows its notice if empty.
       });
+      // Opening schedules from Admin > Schedule Management (working days, hours, capacity, dates).
+      loadBookableSchedules().catch(() => {});
+      setAvailabilityVersion((v) => v + 1); // re-read slot availability as well
+    };
     refresh();
     const offChange = subscribe("catalog.changed", refresh);
     const offReconnect = subscribe("reconnected", refresh); // changes made while disconnected
@@ -34,50 +63,56 @@ export default function CitizenBookAppointmentPage() {
       offChange();
       offReconnect();
     };
-  }, [loadServices]);
+  }, [loadServices, loadBookableSchedules]);
 
-  const [slots, setSlots] = useState(() => {
-    if (!services || services.length === 0) return [];
-    return services.map((srv) => {
-      const dept = departments.find((d) => d.id === srv.departmentId);
-      return {
-        id: `slot-${srv.id}`,
-        date: "2026-11-03",
-        dateDisplay: "Nov 3, 2026",
-        time: "09:00 AM",
-        departmentId: srv.departmentId,
-        department: dept?.name || "Municipal Department",
-        serviceId: srv.id,
-        service: srv.name,
-        availabilityText: "Available",
-        actionValue: "Available",
-      };
-    });
-  });
+  const [slots, setSlots] = useState([]);
 
+  // Overview table: every active service that has an opening schedule, on its next working day,
+  // with that day's availability from booking-service.
   useEffect(() => {
-    if (services && services.length > 0) {
-      setSlots(
-        services.map((srv) => {
-          const dept = departments.find((d) => d.id === srv.departmentId);
-          return {
-            id: `slot-${srv.id}`,
-            date: "2026-11-03",
-            dateDisplay: "Nov 3, 2026",
-            time: "09:00 AM",
-            departmentId: srv.departmentId,
-            department: dept?.name || "Municipal Department",
-            serviceId: srv.id,
-            service: srv.name,
-            availabilityText: srv.isActive === false ? "Unavailable" : "Available",
-            actionValue: srv.isActive === false ? "Unavailable" : "Available",
-          };
-        })
-      );
-    } else {
-      setSlots([]);
-    }
-  }, [services, departments]);
+    let cancelled = false;
+    const rows = (services || [])
+      .filter((srv) => srv.isActive !== false)
+      .map((srv) => {
+        const date = nextWorkingDate(srv, schedules);
+        const sch = date ? scheduleOn(srv, schedules, date) : null;
+        if (!date || !sch) return null;
+        const dept = departments.find((d) => d.id === srv.departmentId);
+        return {
+          id: `slot-${srv.id}-${date}`,
+          date,
+          dateDisplay: displayDate(date),
+          time: `${displayTime(sch.openingTime)} – ${displayTime(sch.closingTime)}`,
+          workingDays: formatWorkingDays(sch.workingDays),
+          departmentId: srv.departmentId,
+          department: dept?.name || sch.department || "Municipal Department",
+          serviceId: srv.id,
+          service: srv.name,
+          availabilityText: "Checking…",
+          actionValue: "Unavailable",
+        };
+      })
+      .filter(Boolean);
+    setSlots(rows);
+    Promise.all(
+      rows.map((row) =>
+        scheduleApi
+          .availability({ serviceId: row.serviceId, date: row.date })
+          .then(({ data }) => {
+            const open = (data?.slots || []).filter((sl) => sl.status === "Available").length;
+            const full = !data?.closedReason && open === 0 ? "Full" : null;
+            const actionValue = open > 0 ? "Available" : full || (data?.closedReason === "DAILY_CAPACITY_REACHED" ? "Full" : "Unavailable");
+            return { ...row, actionValue, availabilityText: open > 0 ? `${open} slots open` : actionValue };
+          })
+          .catch(() => ({ ...row, availabilityText: "Unavailable" }))
+      )
+    ).then((checked) => {
+      if (!cancelled) setSlots(checked);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [schedules, services, departments, availabilityVersion]);
 
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("ALL");
@@ -85,8 +120,8 @@ export default function CitizenBookAppointmentPage() {
 
   // Booking Modal State
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [citizenName, setCitizenName] = useState(currentUser?.fullName || "Abebe Bikila");
-  const [citizenPhone, setCitizenPhone] = useState(currentUser?.phone || "+251911223344");
+  const [citizenName, setCitizenName] = useState(currentUser?.fullName || "");
+  const [citizenPhone, setCitizenPhone] = useState(currentUser?.phone || "");
   const [citizenNotes, setCitizenNotes] = useState("");
   const [bookingSuccessApt, setBookingSuccessApt] = useState(null);
 
@@ -111,25 +146,61 @@ export default function CitizenBookAppointmentPage() {
     };
   };
 
-  const availableDates = [
-    { date: "2026-11-03", dateDisplay: "Nov 3, 2026" },
-    { date: "2026-11-04", dateDisplay: "Nov 4, 2026" },
-    { date: "2026-11-05", dateDisplay: "Nov 5, 2026" },
-    { date: "2026-11-06", dateDisplay: "Nov 6, 2026" },
-    { date: "2026-11-09", dateDisplay: "Nov 9, 2026" },
-  ];
+  const todayIso = localIsoDate();
+  const selectedService = allServices.find((s) => s.id === selectedSlot?.serviceId) || null;
+  const serviceSchedules = schedulesForService(selectedService, schedules);
+  const dateRange = bookableRange(selectedService, schedules, todayIso);
+  const scheduleForDate =
+    selectedService && selectedSlot?.date ? scheduleOn(selectedService, schedules, selectedSlot.date) : null;
 
-  const availableTimeSlots = [
-    "08:30 AM",
-    "09:00 AM",
-    "10:00 AM",
-    "10:30 AM",
-    "11:00 AM",
-    "11:30 AM",
-    "14:00 PM",
-    "14:30 PM",
-    "15:30 PM",
-  ];
+  // Slots of the chosen service on the chosen date, from booking-service (schedule hours, working
+  // days, daily capacity and existing bookings).
+  const [availability, setAvailability] = useState({ loading: false, data: null, error: "" });
+  useEffect(() => {
+    const serviceId = selectedSlot?.serviceId;
+    const date = selectedSlot?.date;
+    if (!serviceId || !date) {
+      setAvailability({ loading: false, data: null, error: "" });
+      return;
+    }
+    let cancelled = false;
+    setAvailability((prev) => ({ ...prev, loading: true, error: "" }));
+    scheduleApi
+      .availability({ serviceId, date })
+      .then(({ data }) => {
+        if (cancelled) return;
+        setAvailability({ loading: false, data, error: "" });
+        // Keep the chosen time if it is still free, otherwise take the first free slot.
+        const free = (data?.slots || []).filter((sl) => sl.status === "Available");
+        setSelectedSlot((prev) =>
+          prev && !free.some((sl) => sl.timeSlot === prev.time)
+            ? { ...prev, time: free[0]?.timeSlot || "" }
+            : prev
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAvailability({ loading: false, data: null, error: "Could not check available times. Check your connection and try again." });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSlot?.serviceId, selectedSlot?.date, availabilityVersion]);
+
+  // Times offered in the dropdown: the schedule's opening hours (lunch break and closed hours left out).
+  const timeOptions = (availability.data?.slots || []).filter((sl) => sl.status !== "Unavailable");
+  const chosenSlot = timeOptions.find((sl) => sl.timeSlot === selectedSlot?.time);
+  const canConfirm = Boolean(selectedSlot?.serviceId && selectedSlot?.date && chosenSlot?.status === "Available");
+  const dateNotice = !selectedService
+    ? ""
+    : serviceSchedules.length === 0 || !dateRange
+      ? "This service has no published opening schedule yet, so it cannot be booked. Please check again later."
+      : availability.data?.closedReason
+        ? closedMessage(availability.data.closedReason, { date: selectedSlot?.date, schedule: scheduleForDate })
+        : !availability.loading && availability.data && timeOptions.length > 0 && !timeOptions.some((sl) => sl.status === "Available")
+          ? "Every time on that day is fully booked. Choose another date."
+          : "";
 
   // If the chosen service is deactivated or deleted while the form is open, clear the choice
   // so the citizen picks one that can still be booked.
@@ -141,30 +212,44 @@ export default function CitizenBookAppointmentPage() {
   }, [services]);
 
   const handleServiceChange = (serviceId) => {
-    setSelectedSlot((prev) => ({
-      ...prev,
-      ...serviceSelection(serviceId),
-      availabilityText: "Available",
-      actionValue: "Available",
-    }));
+    const srv = activeServices.find((s) => s.id === serviceId);
+    setSelectedSlot((prev) => {
+      // Keep the date if the new service is open then; otherwise move to its next working day.
+      const sch = prev?.date && srv ? scheduleOn(srv, schedules, prev.date) : null;
+      const keep = Boolean(sch && prev.date >= todayIso && (sch.workingDays || []).includes(weekdayOfIso(prev.date)));
+      const date = keep ? prev.date : nextWorkingDate(srv, schedules) || "";
+      return {
+        ...prev,
+        ...serviceSelection(serviceId),
+        date,
+        dateDisplay: date ? displayDate(date) : "",
+        time: "",
+        availabilityText: "Available",
+        actionValue: "Available",
+      };
+    });
   };
 
   const handleDateChange = (dateVal) => {
-    const matchedDate = availableDates.find((d) => d.date === dateVal) || {
+    if (!dateVal) {
+      setSelectedSlot((prev) => ({ ...prev, date: "", dateDisplay: "" }));
+      return;
+    }
+    const parts = dateVal.split("-").map(Number);
+    const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+    const dateDisplay = isNaN(dateObj.getTime())
+      ? dateVal
+      : dateObj.toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+    setSelectedSlot((prev) => ({
+      ...prev,
       date: dateVal,
-      dateDisplay: dateVal,
-    };
-    setSelectedSlot((prev) => ({
-      ...prev,
-      date: matchedDate.date,
-      dateDisplay: matchedDate.dateDisplay,
-    }));
-  };
-
-  const handleTimeChange = (timeVal) => {
-    setSelectedSlot((prev) => ({
-      ...prev,
-      time: timeVal,
+      dateDisplay,
+      time: "",
     }));
   };
 
@@ -189,9 +274,9 @@ export default function CitizenBookAppointmentPage() {
 
   const handleOpenBooking = (slot, bookable = activeServices) => {
     // A slot whose service was since deactivated opens with no service chosen.
-    setSelectedSlot({ ...slot, ...serviceSelection(slot.serviceId, bookable) });
-    setCitizenName(currentUser?.fullName || "Abebe Bikila");
-    setCitizenPhone(currentUser?.phone || "+251911223344");
+    setSelectedSlot({ ...slot, time: "", ...serviceSelection(slot.serviceId, bookable) });
+    setCitizenName(currentUser?.fullName || "");
+    setCitizenPhone(currentUser?.phone || "");
     setCitizenNotes("");
   };
 
@@ -203,14 +288,19 @@ export default function CitizenBookAppointmentPage() {
     } catch {
       // Server unreachable: fall back to the last list fetched.
     }
+    const latestSchedules = await loadBookableSchedules().catch(() => useStore.getState().schedules || []);
     const bookable = (useStore.getState().services || []).filter(isBookable);
+    // Start with the first service that has an opening schedule, on its next working day.
+    const first =
+      bookable.find((s) => nextWorkingDate(s, latestSchedules)) || bookable[0] || null;
+    const date = first ? nextWorkingDate(first, latestSchedules) || "" : "";
     handleOpenBooking(
       {
         id: `slot-${Date.now()}`,
-        date: "2026-11-03",
-        dateDisplay: "Nov 3, 2026",
-        time: "09:00 AM",
-        serviceId: bookable[0]?.id || "",
+        date,
+        dateDisplay: date ? displayDate(date) : "",
+        time: "",
+        serviceId: first?.id || "",
         availabilityText: "Available",
         actionValue: "Available",
       },
@@ -220,7 +310,7 @@ export default function CitizenBookAppointmentPage() {
 
   const handleConfirmBooking = (e) => {
     e.preventDefault();
-    if (!selectedSlot || !selectedSlot.serviceId) return;
+    if (!selectedSlot || !canConfirm) return;
 
     const refNumber = `WRD-${selectedSlot.date.replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -229,8 +319,8 @@ export default function CitizenBookAppointmentPage() {
       referenceNumber: refNumber,
       citizenId: currentUser?.id || "usr-citizen-temp",
       citizenName: citizenName || currentUser?.fullName || "Citizen Applicant",
-      citizenPhone: citizenPhone || "+251911223344",
-      citizenEmail: currentUser?.email || "citizen@woreda.gov.et",
+      citizenPhone: citizenPhone || currentUser?.phone || "",
+      citizenEmail: currentUser?.email || "",
       departmentId: selectedSlot.departmentId,
       departmentName: selectedSlot.department,
       serviceId: selectedSlot.serviceId,
@@ -239,7 +329,7 @@ export default function CitizenBookAppointmentPage() {
       timeSlot: selectedSlot.time,
       status: "PENDING",
       tokenNumber: null,
-      citizenNotes: citizenNotes || "Standard desk visit request.",
+      citizenNotes: citizenNotes || "",
       officerNotes: null,
       createdAt: new Date().toISOString(),
     };
@@ -257,14 +347,6 @@ export default function CitizenBookAppointmentPage() {
       citizenNotes: newApt.citizenNotes,
     });
 
-    // Mark slot as booked or reduce count in local view
-    setSlots((prev) =>
-      prev.map((s) =>
-        s.id === selectedSlot.id
-          ? { ...s, actionValue: "Full" }
-          : s
-      )
-    );
 
     setSelectedSlot(null);
     setBookingSuccessApt(newApt);
@@ -399,8 +481,18 @@ export default function CitizenBookAppointmentPage() {
             <tbody className="divide-y divide-slate-100">
               {filteredSlots.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center text-slate-400">
-                    No booking slots found matching this filter.
+                  <td colSpan={4} className="px-5 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3 text-slate-400">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                        <Calendar className="w-6 h-6 text-slate-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-700">No appointment slots available yet</p>
+                        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                          Services appear here once the Woreda administration publishes their opening schedule.
+                        </p>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -426,6 +518,9 @@ export default function CitizenBookAppointmentPage() {
                           <Clock className="w-3 h-3 text-blue-600 inline" />
                           {slot.time}
                         </div>
+                        {slot.workingDays && (
+                          <div className="text-[10px] text-slate-500 mt-0.5">Open {slot.workingDays}</div>
+                        )}
                       </td>
 
                       {/* Column 2: Department */}
@@ -444,6 +539,9 @@ export default function CitizenBookAppointmentPage() {
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                             Available
+                            {slot.availabilityText?.endsWith("slots open") && (
+                              <span className="font-normal text-emerald-600">· {slot.availabilityText}</span>
+                            )}
                           </span>
                         )}
                         {isFull && (
@@ -535,47 +633,70 @@ export default function CitizenBookAppointmentPage() {
                   </div>
                 </div>
 
-                {/* Date & Time Slot Grid with Ample Gaps */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-2">
-                      Appointment Date *
-                    </label>
+                {/* Appointment Date&Time Selection */}
+                <div className="pt-1">
+                  <label className="block text-xs font-bold text-slate-700 mb-2">
+                    Appointment Date&Time *
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Date Selection: only dates inside the service's schedule */}
                     <div className="relative">
                       <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <select
-                        value={selectedSlot.date}
+                      <input
+                        type="date"
+                        required
+                        min={dateRange?.min || todayIso}
+                        max={dateRange?.max || undefined}
+                        disabled={!selectedService || !dateRange}
+                        value={selectedSlot.date || ""}
                         onChange={(e) => handleDateChange(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs"
+                        aria-label="Appointment date"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                      />
+                    </div>
+
+                    {/* Time Selection: the schedule's slots on that date */}
+                    <div className="relative">
+                      <Clock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <select
+                        required
+                        value={chosenSlot ? selectedSlot.time : ""}
+                        onChange={(e) => setSelectedSlot((prev) => ({ ...prev, time: e.target.value }))}
+                        disabled={availability.loading || timeOptions.length === 0 || Boolean(availability.data?.closedReason && availability.data.closedReason !== "DAILY_CAPACITY_REACHED")}
+                        aria-label="Appointment time"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                       >
-                        {availableDates.map((d) => (
-                          <option key={d.date} value={d.date}>
-                            {d.dateDisplay}
+                        <option value="" disabled>
+                          {availability.loading
+                            ? "Checking available times…"
+                            : timeOptions.length === 0
+                              ? "No times available"
+                              : "Select a time"}
+                        </option>
+                        {timeOptions.map((sl) => (
+                          <option key={sl.timeSlot} value={sl.timeSlot} disabled={sl.status !== "Available"}>
+                            {displayTime(sl.timeSlot)}
+                            {sl.status === "Full" ? " (full)" : ""}
                           </option>
                         ))}
                       </select>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-2">
-                      Available Time Slot *
-                    </label>
-                    <div className="relative">
-                      <Clock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <select
-                        value={selectedSlot.time}
-                        onChange={(e) => handleTimeChange(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs"
-                      >
-                        {availableTimeSlots.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                  {/* What the Admin's schedule allows for this service */}
+                  {scheduleForDate && (
+                    <p className="text-[11px] text-slate-500 mt-2">
+                      Open {formatWorkingDays(scheduleForDate.workingDays)}, {displayTime(scheduleForDate.openingTime)} –{" "}
+                      {displayTime(scheduleForDate.closingTime)}
+                      {dateRange?.max ? ` · bookable until ${displayDate(dateRange.max)}` : ""}
+                    </p>
+                  )}
+                  {(dateNotice || availability.error) && (
+                    <p role="alert" className="flex items-start gap-1.5 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                      <span>{availability.error || dateNotice}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -631,16 +752,16 @@ export default function CitizenBookAppointmentPage() {
                   </div>
                 </div>
 
-                {/* Purpose / Notes */}
+                {/* Message (Optional) */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-2">
-                    Purpose / Notes for Desk Officer (Optional)
+                    Message (Optional)
                   </label>
                   <textarea
                     rows={3}
                     value={citizenNotes}
                     onChange={(e) => setCitizenNotes(e.target.value)}
-                    placeholder="Briefly state your purpose, reason for visit, or documents prepared for this visit..."
+                    placeholder="Write your message or any notes regarding your visit..."
                     className="w-full p-3 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 focus:outline-none bg-white shadow-2xs"
                   />
                 </div>
@@ -657,7 +778,7 @@ export default function CitizenBookAppointmentPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!selectedSlot.serviceId}
+                  disabled={!canConfirm}
                   className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
                 >
                   <CheckCircle className="w-4 h-4" />

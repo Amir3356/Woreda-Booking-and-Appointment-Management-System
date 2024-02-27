@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BadRequestError, ValidationError } from "../utils/errors.js";
 import { clock12, minutes, parseClock, parseDate, weekdayOf } from "../utils/time.js";
-import { buildSlots, slotLabel } from "../utils/slots.js";
+import { applyDailyCapacity, buildSlots, closedReason, slotLabel } from "../utils/slots.js";
 import { queueToken } from "../utils/queueToken.js";
 import { decodeCallNext, decodeCheckIn, decodeFinalize, decodeSchedule } from "../utils/decode.js";
 import { scheduleLabel, validateSchedule } from "../services/schedule.service.js";
@@ -107,6 +107,8 @@ test("schedule validation: Go messages in Go order", () => {
     { field: "closingTime", issue: "Opening/closing must be HH:MM and closing must be after opening." },
     { field: "dailyCapacity", issue: "Daily capacity must be positive." },
     { field: "effectiveStartDate", issue: "Start date must be YYYY-MM-DD." },
+  ]); // an empty end date now means "no end date" (Go rejected it as preceding the start)
+  assert.deepEqual(issues(() => validateSchedule({ ...validInput, effectiveEndDate: "2026-10-01" })), [
     { field: "effectiveEndDate", issue: "End date cannot precede start date." },
   ]);
   assert.deepEqual(issues(() => validateSchedule({ ...validInput, effectiveEndDate: "2026-12-99" })), [
@@ -140,4 +142,32 @@ test("decode mirrors Go's typed JSON decoding", () => {
   assert.throws(() => decodeCallNext({ counterNumber: 1.5 }), /cannot unmarshal number 1.5 into Go struct field CallNextRequest.counterNumber of type int/);
   assert.throws(() => decodeFinalize({ status: 1 }), /FinalizeRequest.status of type model.QueueStatus/);
   assert.throws(() => decodeSchedule({ workingDays: "Mon" }), /ScheduleInput.workingDays of type \[\]string/);
+});
+
+test("daily capacity: once the day is full every open slot is Full; closed reasons", () => {
+  const sched = { ...weekSchedule, dailyCapacity: 4 };
+  const day = parseDate("2026-11-03"); // Tue
+  assert.equal(closedReason(null, day, 0), "NO_SCHEDULE");
+  assert.equal(closedReason(sched, parseDate("2026-11-07"), 0), "NOT_WORKING_DAY");
+  assert.equal(closedReason(sched, day, 3), null);
+  assert.equal(closedReason(sched, day, 4), "DAILY_CAPACITY_REACHED");
+  const counts = { "09:00 AM": 3, "10:00 AM": 1 };
+  const slots = applyDailyCapacity(buildSlots(sched, day, counts, 3), closedReason(sched, day, 4));
+  assert.ok(slots.every((s) => s.status !== "Available" && s.remainingCapacity === 0));
+  assert.equal(slots.find((s) => s.timeSlot === "12:30 PM").status, "Unavailable");
+  const open = applyDailyCapacity(buildSlots(sched, day, counts, 3), null);
+  assert.equal(open.find((s) => s.timeSlot === "08:30 AM").status, "Available");
+});
+
+test("schedule validation: empty end date and service mean none; status label accepted", () => {
+  const base = { departmentId: "dept-1", serviceId: "", workingDays: ["Mon"], openingTime: "08:30", closingTime: "12:00",
+    dailyCapacity: 10, effectiveStartDate: "2026-11-01", effectiveEndDate: "", status: "Inactive" };
+  const f = validateSchedule(base);
+  assert.equal(f.effectiveEndDate, null);
+  assert.equal(f.serviceId, null);
+  assert.equal(f.status, "INACTIVE");
+  assert.equal(validateSchedule({ ...base, status: "" }).status, undefined);
+  assert.deepEqual(issues(() => validateSchedule({ ...base, status: "Paused" })), [
+    { field: "status", issue: "Status must be Active or Inactive." },
+  ]);
 });

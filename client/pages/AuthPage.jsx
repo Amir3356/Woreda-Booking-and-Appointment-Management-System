@@ -74,16 +74,40 @@ export default function AuthPage() {
     setLoading(true);
     try {
       const { data } = await http.post("/auth/login", { email: emailClean, password: passwordClean });
-      if (data?.token && data.user?.role === "ADMIN") {
-        setCurrentUser(
-          {
-            ...data.user,
-            departmentName: "Woreda Central Administration",
-            isProvisioned: true,
-          },
-          data.token
-        );
-        router.push("/admin");
+      if (data?.token && data?.user) {
+        const u = data.user;
+        const isOfficer = u.role === "OFFICER" || u.role === "Department Officer";
+        const isAdmin = u.role === "ADMIN" || u.role === "Central Administrator";
+        const role = isOfficer ? "OFFICER" : isAdmin ? "ADMIN" : "CITIZEN";
+        const portalPath = isOfficer ? "/officer" : isAdmin ? "/admin" : "/citizen";
+
+        const currentDepts = useStore.getState().departments || [];
+        const matchedDept = currentDepts.find((d) => d.id === u.departmentId);
+        const departmentName = isOfficer
+          ? (u.departmentName || matchedDept?.name || "Kebele Office")
+          : isAdmin
+          ? "Woreda Central Administration"
+          : null;
+
+        const authenticatedUser = {
+          ...u,
+          role,
+          departmentName,
+          isProvisioned: true,
+        };
+
+        setCurrentUser(authenticatedUser, data.token);
+
+        // Keep local store synchronized with authenticated account
+        useStore.getState().addProvisionedAccount({
+          fullName: u.fullName,
+          email: u.email,
+          password: passwordClean,
+          role: departmentName || "Department Officer",
+          departmentId: u.departmentId,
+        });
+
+        router.push(portalPath);
         return;
       }
     } catch (err) {

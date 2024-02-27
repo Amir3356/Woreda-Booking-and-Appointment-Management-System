@@ -41,6 +41,38 @@ export async function findById(id) {
 
 export const create = (doc) => Schedule.create(doc);
 
+/** Replaces the editable fields; false when the schedule does not exist. */
+export async function update(id, fields) {
+  const res = await Schedule.updateOne({ _id: id }, { $set: fields });
+  return res.matchedCount > 0;
+}
+
+/** Flips ACTIVE <-> INACTIVE; returns the new status, or null when the schedule does not exist. */
+export async function toggleStatus(id) {
+  const doc = await Schedule.findOneAndUpdate(
+    { _id: id },
+    [{ $set: { status: { $cond: [{ $eq: ["$status", "ACTIVE"] }, "INACTIVE", "ACTIVE"] } } }],
+    { new: true, projection: { status: 1 } },
+  );
+  return doc ? doc.status : null;
+}
+
+/** false when the schedule does not exist. */
+export async function remove(id) {
+  const res = await Schedule.deleteOne({ _id: id });
+  return res.deletedCount > 0;
+}
+
+/** ACTIVE schedules whose effective period has not ended before date (the citizen booking page). */
+export async function findBookable(date) {
+  const rows = await Schedule.aggregate([
+    { $match: { status: "ACTIVE", $or: [{ effectiveEndDate: null }, { effectiveEndDate: { $gte: date } }] } },
+    ...joinNames,
+    { $sort: { "dept.name": 1, effectiveStartDate: 1 } },
+  ]).collation({ locale: "en" });
+  return rows.map(toSchedule);
+}
+
 /**
  * The ACTIVE schedule effective on date for the service itself or, when service (the catalog
  * document, or null) is given, department-wide (serviceId null) for the service's department.

@@ -13,7 +13,7 @@ import {
   createJwtToken,
   getUserFromJwtCookie,
 } from "@/services";
-import { serviceApi } from "@/api";
+import { serviceApi, departmentApi, scheduleApi } from "@/api";
 import { http } from "@/api/httpClient";
 
 export const DEFAULT_TIME_SLOTS = [
@@ -51,165 +51,9 @@ export const DEFAULT_SCHEDULE_CONFIGS = {
   ],
 };
 
-export const DEFAULT_DEPARTMENTS = [
-  {
-    id: "dept-1",
-    name: "Kebele Administration & Vital Events",
-    code: "KBL",
-    description: "Citizen registration, residence identification, birth/marriage certificates, and neighborhood civil records.",
-    buildingRoom: "Building A, Ground Floor, Room 102",
-    contactPhone: "+251 11 551 2341",
-    isActive: true,
-    createdAt: "2026-01-15T08:00:00Z",
-    officerCount: 4,
-    serviceCount: 4,
-  },
-  {
-    id: "dept-2",
-    name: "Land Administration & Urban Development",
-    code: "LND",
-    description: "Landholding rights documentation, residential plot verifications, property transfer oversight, and urban zoning.",
-    buildingRoom: "Building B, 2nd Floor, Room 204",
-    contactPhone: "+251 11 551 8892",
-    isActive: true,
-    createdAt: "2026-01-15T08:00:00Z",
-    officerCount: 3,
-    serviceCount: 3,
-  },
-  {
-    id: "dept-3",
-    name: "Trade, Industry & Enterprise Development",
-    code: "TRD",
-    description: "Business registrations, commercial licenses, micro-enterprise support, and commercial practice verifications.",
-    buildingRoom: "Building A, 1st Floor, Room 115",
-    contactPhone: "+251 11 551 4421",
-    isActive: true,
-    createdAt: "2026-01-16T08:00:00Z",
-    officerCount: 3,
-    serviceCount: 3,
-  },
-  {
-    id: "dept-4",
-    name: "Revenues & Tax Assessment",
-    code: "REV",
-    description: "Local tax assessment, business revenue verification, trade levy collections, and municipal tariff processing.",
-    buildingRoom: "Building B, Ground Floor, Room 108",
-    contactPhone: "+251 11 551 7733",
-    isActive: true,
-    createdAt: "2026-01-16T08:00:00Z",
-    officerCount: 3,
-    serviceCount: 2,
-  },
-  {
-    id: "dept-5",
-    name: "Social Affairs & Labor Welfare",
-    code: "SOC",
-    description: "Social safety net enrollment, vulnerable community support, disability assistance, and pension documentation.",
-    buildingRoom: "Building C, 1st Floor, Room 105",
-    contactPhone: "+251 11 551 6612",
-    isActive: true,
-    createdAt: "2026-01-17T08:00:00Z",
-    officerCount: 2,
-    serviceCount: 3,
-  },
-  {
-    id: "dept-6",
-    name: "Public Health & Environmental Sanitation",
-    code: "HLT",
-    description: "Community health verifications, sanitation inspections, food handler certificates, and hygiene permits.",
-    buildingRoom: "Building C, Ground Floor, Room 101",
-    contactPhone: "+251 11 551 9901",
-    isActive: true,
-    createdAt: "2026-01-17T08:00:00Z",
-    officerCount: 2,
-    serviceCount: 2,
-  },
-  {
-    id: "dept-7",
-    name: "Code Enforcement & Municipal Audit",
-    code: "AUD",
-    description: "Building regulation enforcement, municipal code compliance, public land protection, and community grievance resolution.",
-    buildingRoom: "Building A, 2nd Floor, Room 210",
-    contactPhone: "+251 11 551 3345",
-    isActive: true,
-    createdAt: "2026-01-18T08:00:00Z",
-    officerCount: 2,
-    serviceCount: 2,
-  },
-];
+export const DEFAULT_DEPARTMENTS = [];
 
-export const DEFAULT_PROVISIONED_ACCOUNTS = [
-  {
-    fullName: "W/ro Tigist Mulugeta",
-    email: "tigist.kbl@woreda.gov.et",
-    password: "Password@123",
-    role: "Department Officer",
-    departmentId: "dept-1",
-    isProvisioned: true,
-    isActive: true,
-    createdAt: "2026-11-01T08:00:00Z",
-  },
-  {
-    fullName: "Ato Yared Assefa",
-    email: "yared.lnd@woreda.gov.et",
-    password: "Password@123",
-    role: "Department Officer",
-    departmentId: "dept-2",
-    isProvisioned: true,
-    isActive: true,
-    createdAt: "2026-11-01T08:00:00Z",
-  },
-  {
-    fullName: "Ato Solomon Haile",
-    email: "solomon.trd@woreda.gov.et",
-    password: "Password@123",
-    role: "Department Officer",
-    departmentId: "dept-3",
-    isProvisioned: true,
-    isActive: true,
-    createdAt: "2026-11-01T08:00:00Z",
-  },
-  {
-    fullName: "W/ro Hana Bekele",
-    email: "hana.tax@woreda.gov.et",
-    password: "Password@123",
-    role: "Department Officer",
-    departmentId: "dept-4",
-    isProvisioned: true,
-    isActive: true,
-    createdAt: "2026-11-01T08:00:00Z",
-  },
-  {
-    fullName: "Ato Mesfin Girma",
-    email: "mesfin.soc@woreda.gov.et",
-    password: "Password@123",
-    role: "Department Officer",
-    departmentId: "dept-5",
-    isProvisioned: true,
-    isActive: true,
-    createdAt: "2026-11-01T08:00:00Z",
-  },
-  {
-    fullName: "W/ro Selamawit Desta",
-    email: "selam.health@woreda.gov.et",
-    password: "Password@123",
-    role: "Department Officer",
-    departmentId: "dept-6",
-    isProvisioned: true,
-    isActive: true,
-    createdAt: "2026-11-01T08:00:00Z",
-  },
-  {
-    fullName: "Ato Berhanu Kebede",
-    email: "berhanu.audit@woreda.gov.et",
-    password: "Password@123",
-    role: "Department Officer",
-    departmentId: "dept-7",
-    isProvisioned: true,
-    isActive: true,
-    createdAt: "2026-11-01T08:00:00Z",
-  },
-];
+export const DEFAULT_PROVISIONED_ACCOUNTS = [];
 
 export const useStore = create(
   persist(
@@ -239,33 +83,30 @@ export const useStore = create(
         });
       },
 
-      // Departments State
+      // Departments State: departments live in department-service (/api/v1/departments).
+      // DEFAULT_DEPARTMENTS (same ids as the server seed) is shown until the first fetch returns.
       departments: DEFAULT_DEPARTMENTS,
-      addDepartment: (dept) => {
-        const newDept = {
-          ...dept,
-          id: `dept-${Date.now()}`,
-          createdAt: new Date().toISOString(),
-          isActive: true,
-          officerCount: 0,
-          serviceCount: 0,
-        };
-        set((state) => ({ departments: [newDept, ...state.departments] }));
+      loadDepartments: async () => {
+        const { data } = await departmentApi.list();
+        const departments = Array.isArray(data) ? data : [];
+        set({ departments });
+        return departments;
+      },
+      addDepartment: async (dept) => {
+        const { data } = await departmentApi.create(dept);
+        await get().loadDepartments();
         get().addAuditLog({
           userName: get().currentUser?.fullName || "Admin",
           userRole: "ADMIN",
           action: "CREATE_DEPARTMENT",
-          entity: newDept.name,
-          details: `Created new department: ${newDept.name} (${newDept.code})`,
+          entity: data?.name || dept.name,
+          details: `Created new department: ${data?.name || dept.name} (${data?.code || dept.code})`,
         });
-        return newDept;
+        return data;
       },
-      updateDepartment: (id, updates) => {
-        set((state) => ({
-          departments: state.departments.map((d) =>
-            d.id === id ? { ...d, ...updates } : d
-          ),
-        }));
+      updateDepartment: async (id, updates) => {
+        const { data } = await departmentApi.update(id, updates);
+        await get().loadDepartments();
         get().addAuditLog({
           userName: get().currentUser?.fullName || "Admin",
           userRole: "ADMIN",
@@ -273,18 +114,15 @@ export const useStore = create(
           entity: `Dept-${id}`,
           details: `Updated department configurations`,
         });
+        return data;
       },
-      toggleDepartmentStatus: (id) => {
-        set((state) => ({
-          departments: state.departments.map((d) =>
-            d.id === id ? { ...d, isActive: !d.isActive } : d
-          ),
-        }));
+      toggleDepartmentStatus: async (id) => {
+        await departmentApi.toggleStatus(id);
+        await get().loadDepartments();
       },
-      deleteDepartment: (id) => {
-        set((state) => ({
-          departments: state.departments.filter((d) => d.id !== id),
-        }));
+      deleteDepartment: async (id) => {
+        await departmentApi.remove(id);
+        await get().loadDepartments();
         get().addAuditLog({
           userName: get().currentUser?.fullName || "Admin",
           userRole: "ADMIN",
@@ -354,8 +192,9 @@ export const useStore = create(
           fullName: (acc.fullName || "").trim(),
           email: (acc.email || "").trim(),
           password: cleanPassword,
+          passwordHash: acc.passwordHash || null,
           role: acc.role || "Department Officer",
-          departmentId: acc.departmentId || "dept-1",
+          departmentId: acc.departmentId || null,
           isProvisioned: true,
           isActive: true,
           createdAt: new Date().toISOString(),
@@ -381,7 +220,7 @@ export const useStore = create(
 
           const currentDepts = state.departments || [];
           const matchedDept =
-            currentDepts.find((d) => d.id === newAccount.departmentId) || currentDepts[0];
+            currentDepts.find((d) => d.id === newAccount.departmentId || d.name === newAccount.role) || currentDepts[0];
           const userIndex = (state.users || []).findIndex(
             (u) => (u.email || "").trim().toLowerCase() === cleanEmail
           );
@@ -394,10 +233,10 @@ export const useStore = create(
               email: newAccount.email,
               password: cleanPassword,
               role,
-              departmentId: role === "OFFICER" ? (newAccount.departmentId || "dept-1") : null,
+              departmentId: role === "OFFICER" ? (newAccount.departmentId || matchedDept?.id || null) : null,
               departmentName:
                 role === "OFFICER"
-                  ? (matchedDept?.name || "Kebele Administration & Vital Events")
+                  ? (matchedDept?.name || newAccount.role || "Unassigned Department")
                   : "Woreda Central Administration",
               isActive: true,
               isProvisioned: true,
@@ -411,10 +250,10 @@ export const useStore = create(
               phone: "+251911000000",
               nationalId: `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
               role,
-              departmentId: role === "OFFICER" ? (newAccount.departmentId || "dept-1") : null,
+              departmentId: role === "OFFICER" ? (newAccount.departmentId || matchedDept?.id || null) : null,
               departmentName:
                 role === "OFFICER"
-                  ? (matchedDept?.name || "Kebele Administration & Vital Events")
+                  ? (matchedDept?.name || newAccount.role || "Unassigned Department")
                   : "Woreda Central Administration",
               address: "Kebele 03, Woreda Center",
               isActive: true,
@@ -467,7 +306,8 @@ export const useStore = create(
                   fullName: (updatedAcc.fullName || "").trim(),
                   email: (updatedAcc.email || "").trim(),
                   password: cleanPassword,
-                  departmentId: updatedAcc.departmentId || "dept-1",
+                  passwordHash: updatedAcc.passwordHash || null,
+                  departmentId: updatedAcc.departmentId || null,
                   isProvisioned: true,
                   updatedAt: new Date().toISOString(),
                 }
@@ -475,7 +315,7 @@ export const useStore = create(
           );
           const currentDepts = state.departments || [];
           const matchedDept =
-            currentDepts.find((d) => d.id === updatedAcc.departmentId) || currentDepts[0];
+            currentDepts.find((d) => d.id === updatedAcc.departmentId || d.name === updatedAcc.role) || currentDepts[0];
           
           const userIdx = (state.users || []).findIndex(
             (u) => (u.email || "").trim().toLowerCase() === cleanOriginal
@@ -489,10 +329,10 @@ export const useStore = create(
               email: (updatedAcc.email || "").trim(),
               password: cleanPassword,
               role,
-              departmentId: role === "OFFICER" ? (updatedAcc.departmentId || "dept-1") : null,
+              departmentId: role === "OFFICER" ? (updatedAcc.departmentId || matchedDept?.id || null) : null,
               departmentName:
                 role === "OFFICER"
-                  ? (matchedDept?.name || "Kebele Administration & Vital Events")
+                  ? (matchedDept?.name || updatedAcc.role || "Unassigned Department")
                   : "Woreda Central Administration",
               isProvisioned: true,
             };
@@ -505,10 +345,10 @@ export const useStore = create(
               phone: "+251911000000",
               nationalId: `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
               role,
-              departmentId: role === "OFFICER" ? (updatedAcc.departmentId || "dept-1") : null,
+              departmentId: role === "OFFICER" ? (updatedAcc.departmentId || matchedDept?.id || null) : null,
               departmentName:
                 role === "OFFICER"
-                  ? (matchedDept?.name || "Kebele Administration & Vital Events")
+                  ? (matchedDept?.name || updatedAcc.role || "Unassigned Department")
                   : "Woreda Central Administration",
               address: "Kebele 03, Woreda Center",
               isActive: true,
@@ -577,57 +417,40 @@ export const useStore = create(
         });
       },
 
-      // Municipal Service Schedules
+      // Municipal Service Schedules: they live in booking-service (/api/v1/schedules). Admin >
+      // Schedule Management reads all of them; the citizen booking page reads the bookable ones
+      // (ACTIVE, not yet ended) from the public /schedules/active.
       schedules: [],
-      addSchedule: (sch) => {
-        set((state) => ({ schedules: [sch, ...(state.schedules || [])] }));
-        get().addAuditLog({
-          userName: get().currentUser?.fullName || "Admin",
-          userRole: "ADMIN",
-          action: "CREATE_SCHEDULE",
-          entity: sch.id,
-          details: `Created schedule for ${sch.service} (${sch.department})`,
-        });
+      loadSchedules: async () => {
+        const { data } = await scheduleApi.list();
+        const schedules = Array.isArray(data) ? data : [];
+        set({ schedules });
+        return schedules;
       },
-      updateSchedule: (id, updates) => {
-        set((state) => ({
-          schedules: (state.schedules || []).map((s) => (s.id === id ? { ...s, ...updates } : s)),
-        }));
-        get().addAuditLog({
-          userName: get().currentUser?.fullName || "Admin",
-          userRole: "ADMIN",
-          action: "UPDATE_SCHEDULE",
-          entity: id,
-          details: `Updated schedule ${id}`,
-        });
+      loadBookableSchedules: async () => {
+        const { data } = await scheduleApi.active();
+        const schedules = Array.isArray(data) ? data : [];
+        set({ schedules });
+        return schedules;
       },
-      deleteSchedule: (id) => {
-        set((state) => ({
-          schedules: (state.schedules || []).filter((s) => s.id !== id),
-        }));
-        get().addAuditLog({
-          userName: get().currentUser?.fullName || "Admin",
-          userRole: "ADMIN",
-          action: "DELETE_SCHEDULE",
-          entity: id,
-          details: `Deleted schedule ${id}`,
-        });
+      addSchedule: async (sch) => {
+        const { data } = await scheduleApi.create(sch);
+        await get().loadSchedules();
+        return data;
       },
-      toggleScheduleStatus: (id) => {
-        const sch = (get().schedules || []).find((s) => s.id === id);
-        const newStatus = sch?.status === "Active" ? "Inactive" : "Active";
-        set((state) => ({
-          schedules: (state.schedules || []).map((s) =>
-            s.id === id ? { ...s, status: newStatus } : s
-          ),
-        }));
-        get().addAuditLog({
-          userName: get().currentUser?.fullName || "Admin",
-          userRole: "ADMIN",
-          action: "UPDATE_SCHEDULE_STATUS",
-          entity: id,
-          details: `Changed status of schedule ${id} to ${newStatus}`,
-        });
+      updateSchedule: async (id, updates) => {
+        const { data } = await scheduleApi.update(id, updates);
+        await get().loadSchedules();
+        return data;
+      },
+      deleteSchedule: async (id) => {
+        await scheduleApi.remove(id);
+        await get().loadSchedules();
+      },
+      toggleScheduleStatus: async (id) => {
+        const { data } = await scheduleApi.toggleStatus(id);
+        await get().loadSchedules();
+        return data;
       },
 
       // Appointments State
@@ -857,27 +680,35 @@ export const useStore = create(
         // DO NOT persist currentUser to localStorage! Authentication is strictly JWT in browser cookie.
         users: state.users,
         provisionedAccounts: state.provisionedAccounts,
-        departments: state.departments,
         appointments: state.appointments,
         queue: state.queue,
         notifications: state.notifications,
         scheduleConfigs: state.scheduleConfigs,
-        schedules: state.schedules,
       }),
       merge: (persistedState, currentState) => {
         const { currentUser: _omitted, ...safePersisted } = persistedState || {};
         
-        // Ensure departments are populated
-        const currentDepartments =
-          safePersisted.departments && safePersisted.departments.length > 0
-            ? safePersisted.departments
-            : DEFAULT_DEPARTMENTS;
+        // Departments come from the API; an old browser copy (which may hold departments the
+        // server never had) is ignored.
+        delete safePersisted.departments;
+        const currentDepartments = currentState.departments || DEFAULT_DEPARTMENTS;
+
+        // Strip legacy pre-seeded mock officer accounts so Account Provision starts clean
+        const LEGACY_MOCK_OFFICER_EMAILS = new Set([
+          "tigist.kbl@woreda.gov.et",
+          "yared.lnd@woreda.gov.et",
+          "solomon.trd@woreda.gov.et",
+          "hana.tax@woreda.gov.et",
+          "mesfin.soc@woreda.gov.et",
+          "selam.health@woreda.gov.et",
+          "berhanu.audit@woreda.gov.et",
+        ]);
 
         // Ensure provisioned accounts are populated, merging defaults with any admin edits
         const persistedProv = safePersisted.provisionedAccounts || [];
         const provMap = new Map();
 
-        // Seed default municipal officers
+        // Seed default municipal accounts (if any)
         DEFAULT_PROVISIONED_ACCOUNTS.forEach((a) => {
           provMap.set((a.email || "").trim().toLowerCase(), { ...a });
         });
@@ -886,6 +717,10 @@ export const useStore = create(
         persistedProv.forEach((a) => {
           const emailKey = (a.email || "").trim().toLowerCase();
           if (!emailKey) return;
+          // Filter out legacy pre-seeded mock officer accounts
+          if (LEGACY_MOCK_OFFICER_EMAILS.has(emailKey) && (!a.createdAt || a.createdAt === "2026-11-01T08:00:00Z")) {
+            return;
+          }
           const defaultAcc = DEFAULT_PROVISIONED_ACCOUNTS.find(
             (d) => (d.email || "").trim().toLowerCase() === emailKey
           );
@@ -899,7 +734,7 @@ export const useStore = create(
             email: (a.email || defaultAcc?.email || "").trim(),
             password: resolvedPassword,
             role: a.role || defaultAcc?.role || "Department Officer",
-            departmentId: a.departmentId || defaultAcc?.departmentId || "dept-1",
+            departmentId: a.departmentId || defaultAcc?.departmentId || null,
             isProvisioned: true,
             isActive: a.isActive !== false,
           });
@@ -912,7 +747,14 @@ export const useStore = create(
             if (rawBackup) {
               const parsedBackup = JSON.parse(rawBackup);
               if (Array.isArray(parsedBackup)) {
-                parsedBackup.forEach((a) => {
+                // Purge legacy mock accounts from backup storage
+                const sanitizedBackup = parsedBackup.filter((a) => {
+                  const emailKey = (a.email || "").trim().toLowerCase();
+                  return !(LEGACY_MOCK_OFFICER_EMAILS.has(emailKey) && (!a.createdAt || a.createdAt === "2026-11-01T08:00:00Z"));
+                });
+                window.localStorage.setItem("woreda_provisioned_accounts", JSON.stringify(sanitizedBackup));
+
+                sanitizedBackup.forEach((a) => {
                   const emailKey = (a.email || "").trim().toLowerCase();
                   if (!emailKey) return;
                   const defaultAcc = DEFAULT_PROVISIONED_ACCOUNTS.find(
@@ -933,7 +775,7 @@ export const useStore = create(
                     email: (a.email || existing.email || defaultAcc?.email || "").trim(),
                     password: resolvedPassword,
                     role: a.role || existing.role || defaultAcc?.role || "Department Officer",
-                    departmentId: a.departmentId || existing.departmentId || defaultAcc?.departmentId || "dept-1",
+                    departmentId: a.departmentId || existing.departmentId || defaultAcc?.departmentId || null,
                     isProvisioned: true,
                     isActive: a.isActive !== false,
                   });
@@ -946,23 +788,6 @@ export const useStore = create(
         }
 
         const cleanedProvisioned = Array.from(provMap.values());
-
-        // Strip legacy mock schedules so Schedule Management starts clean
-        const LEGACY_MOCK_SCH_IDS = new Set([
-          "SCH-001",
-          "SCH-002",
-          "SCH-003",
-          "SCH-004",
-          "SCH-005",
-          "SCH-006",
-          "SCH-007",
-          "SCH-008",
-          "SCH-009",
-          "SCH-010",
-        ]);
-        const cleanedSchedules = (safePersisted.schedules || []).filter(
-          (s) => !LEGACY_MOCK_SCH_IDS.has(s.id)
-        );
 
         // Strip legacy mock appointments
         const LEGACY_MOCK_APT_IDS = new Set([
@@ -996,7 +821,9 @@ export const useStore = create(
           "usr-citizen-3",
         ]);
         const cleanedUsers = (safePersisted.users || []).filter(
-          (u) => !LEGACY_MOCK_USER_IDS.has(u.id) || u.isProvisioned
+          (u) =>
+            (!LEGACY_MOCK_USER_IDS.has(u.id) || u.isProvisioned) &&
+            !LEGACY_MOCK_OFFICER_EMAILS.has((u.email || "").trim().toLowerCase())
         );
 
         // Synchronize provisioned accounts into users so both stores stay aligned
@@ -1006,17 +833,17 @@ export const useStore = create(
         cleanedProvisioned.forEach((prov) => {
           const provEmail = (prov.email || "").trim().toLowerCase();
           if (!provEmail) return;
-          const isOfficer = prov.role === "Department Officer" || prov.role === "OFFICER";
+          const isOfficer = prov.role !== "Central Administrator" && prov.role !== "ADMIN";
           const role = isOfficer ? "OFFICER" : "ADMIN";
-          const dept = currentDepartments.find((d) => d.id === prov.departmentId) || currentDepartments[0];
+          const dept = currentDepartments.find((d) => d.id === prov.departmentId || d.name === prov.role) || currentDepartments[0];
           const existing = usersByEmail.get(provEmail);
 
           if (existing) {
             existing.password = prov.password || existing.password || "Password@123";
             existing.role = role;
-            existing.departmentId = isOfficer ? (prov.departmentId || "dept-1") : null;
+            existing.departmentId = isOfficer ? (prov.departmentId || null) : null;
             existing.departmentName = isOfficer
-              ? (dept?.name || existing.departmentName || "Kebele Administration & Vital Events")
+              ? (dept?.name || existing.departmentName || "Unassigned Department")
               : "Woreda Central Administration";
             existing.isActive = prov.isActive !== false;
             existing.isProvisioned = true;
@@ -1029,9 +856,9 @@ export const useStore = create(
               phone: prov.phone || "+251911000000",
               nationalId: prov.nationalId || `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
               role,
-              departmentId: isOfficer ? (prov.departmentId || "dept-1") : null,
+              departmentId: isOfficer ? (prov.departmentId || null) : null,
               departmentName: isOfficer
-                ? (dept?.name || "Kebele Administration & Vital Events")
+                ? (dept?.name || "Unassigned Department")
                 : "Woreda Central Administration",
               address: "Kebele 03, Woreda Center",
               isActive: prov.isActive !== false,
@@ -1058,7 +885,7 @@ export const useStore = create(
           appointments: cleanedAppointments,
           queue: cleanedQueue,
           provisionedAccounts: cleanedProvisioned,
-          schedules: cleanedSchedules,
+          schedules: currentState.schedules, // loaded from the API, never from storage
           currentUser: cookieUser,
         };
       },

@@ -6,7 +6,6 @@ import {
   Calendar,
   Clock,
   UserCog,
-  History,
 } from "lucide-react";
 import { useStore } from "@/context";
 
@@ -34,18 +33,8 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
     },
   ];
 
-  const citizenAppointmentsCount = appointments.filter(
-    (a) => a.citizenId === currentUser?.id || a.citizenPhone === currentUser?.phone
-  ).length;
-
   const citizenNav = [
     { href: "/citizen/book", label: "Book Appointment", icon: Calendar },
-    {
-      href: "/citizen/appointments",
-      label: "Appointment History",
-      icon: History,
-      badge: citizenAppointmentsCount > 0 ? citizenAppointmentsCount : null,
-    },
   ];
 
   let items = adminNav;
@@ -81,21 +70,32 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
       }}
     >
       {/* Brand & Portal Header */}
-      <div className="p-4 border-b border-white/10">
-        <Link href={brandHref} className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-900 flex items-center justify-center font-bold text-sm shadow">
+      <div className="p-4 border-b border-white/10 overflow-hidden">
+        <Link href={brandHref} className="flex items-start gap-2.5 group w-full min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-900 flex items-center justify-center font-bold text-sm shadow shrink-0 mt-0.5">
             W
           </div>
-          <div>
-            <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
-              WoredaCare
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5 flex-wrap">
+              <span>WoredaCare</span>
               {role !== "ADMIN" && !isAdmin && (
-                <span className={`text-[9px] uppercase px-1.5 py-0.2 rounded font-semibold ${badgeColor}`}>
+                <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-semibold ${badgeColor} shrink-0`}>
                   {role}
                 </span>
               )}
             </h2>
-            <p className="text-[10px] text-slate-400 truncate max-w-[150px]">{subtitle}</p>
+            <p
+              className="text-[11px] text-slate-300 font-medium leading-snug mt-1 break-words"
+              title={subtitle}
+              style={{
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
+                lineHeight: "1.35",
+                color: "#94a3b8",
+              }}
+            >
+              {subtitle}
+            </p>
           </div>
         </Link>
       </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useStore } from "@/context";
 import { subscribe } from "@/api/realtime";
+import { describeError } from "@/utils";
 import {
   FileText,
   Plus,
@@ -13,23 +14,6 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-// Turns an API error into a message an administrator can act on.
-function describeError(err, action) {
-  if (err?.status === 401 || err?.status === 403) {
-    return `Could not ${action}: your administrator session is not connected to the server. Sign out, then sign in again with your administrator account.`;
-  }
-  if (err?.status === 409) {
-    return `Could not ${action}: ${err.message.replace(/^conflict:\s*/i, "")}.`;
-  }
-  if (err?.status === 422 && err.details?.length) {
-    return `Could not ${action}: ${err.details.map((d) => d.issue).join(" ")}`;
-  }
-  if (err instanceof TypeError) {
-    return `Could not ${action}: the server is unreachable. Check that the backend is running.`;
-  }
-  return `Could not ${action}: ${err?.message || "unexpected server error"}.`;
-}
-
 export default function AdminServicesPage() {
   const {
     services,
@@ -39,6 +23,7 @@ export default function AdminServicesPage() {
     toggleServiceStatus,
     deleteService,
     loadServices,
+    loadDepartments,
     servicesLoaded,
   } = useStore();
   const [errorMsg, setErrorMsg] = useState("");
@@ -47,7 +32,10 @@ export default function AdminServicesPage() {
   // The catalog lives in department-service; fetch it when this page opens and whenever the
   // server announces a change (e.g. another administrator edited a service).
   useEffect(() => {
-    const refresh = () => loadServices().catch((err) => setErrorMsg(describeError(err, "load services")));
+    const refresh = () => {
+      loadServices().catch((err) => setErrorMsg(describeError(err, "load services")));
+      loadDepartments().catch((err) => setErrorMsg(describeError(err, "load departments")));
+    };
     refresh();
     const offChange = subscribe("catalog.changed", refresh);
     const offReconnect = subscribe("reconnected", refresh);
@@ -55,7 +43,7 @@ export default function AdminServicesPage() {
       offChange();
       offReconnect();
     };
-  }, [loadServices]);
+  }, [loadServices, loadDepartments]);
 
   const showSuccess = (msg) => {
     setErrorMsg("");
@@ -70,7 +58,7 @@ export default function AdminServicesPage() {
 
   const [form, setForm] = useState({
     name: "",
-    departmentId: departments[0]?.id || "dept-general",
+    departmentId: departments[0]?.id || "",
   });
 
   const filteredServices = (services || []).filter((s) => {
@@ -83,7 +71,7 @@ export default function AdminServicesPage() {
     setEditingService(null);
     setForm({
       name: "",
-      departmentId: departments[0]?.id || "dept-general",
+      departmentId: departments[0]?.id || "",
     });
     setModalOpen(true);
   };
@@ -92,7 +80,7 @@ export default function AdminServicesPage() {
     setEditingService(srv);
     setForm({
       name: srv.name,
-      departmentId: srv.departmentId || departments[0]?.id || "dept-general",
+      departmentId: srv.departmentId || departments[0]?.id || "",
     });
     setModalOpen(true);
   };
@@ -101,7 +89,11 @@ export default function AdminServicesPage() {
     e.preventDefault();
     if (!form.name.trim() || saving) return;
 
-    const targetDeptId = form.departmentId || departments[0]?.id || "dept-general";
+    const targetDeptId = form.departmentId || departments[0]?.id || "";
+    if (!departments.some((d) => d.id === targetDeptId)) {
+      setErrorMsg("Could not save the service: choose an existing department.");
+      return;
+    }
     const payload = {
       name: form.name.trim(),
       departmentId: targetDeptId,
@@ -222,9 +214,6 @@ export default function AdminServicesPage() {
                 {d.name}
               </option>
             ))}
-            {departments.length === 0 && (
-              <option value="dept-general">General Municipal Desk</option>
-            )}
           </select>
         </div>
       </div>
@@ -269,7 +258,7 @@ export default function AdminServicesPage() {
                         {service.name}
                       </td>
                       <td className="px-5 py-3.5 text-slate-600 font-medium">
-                        {dept?.name || (service.departmentId === "dept-general" ? "General Municipal Desk" : "General Administration")}
+                        {dept?.name || "Unknown department"}
                       </td>
                       <td className="px-5 py-3.5">
                         <button
@@ -354,11 +343,9 @@ export default function AdminServicesPage() {
                       {d.name}
                     </option>
                   ))}
-                  {(!departments.some((d) => d.id === form.departmentId) || departments.length === 0) && (
-                    <option value={form.departmentId || "dept-general"}>
-                      {form.departmentId === "dept-general" || !form.departmentId
-                        ? "General Municipal Service Desk"
-                        : "General Administration"}
+                  {!departments.some((d) => d.id === form.departmentId) && (
+                    <option value={form.departmentId} disabled>
+                      {form.departmentId ? "Department no longer exists: choose another" : "Choose a department"}
                     </option>
                   )}
                 </select>

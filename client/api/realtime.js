@@ -89,7 +89,11 @@ export function subscribe(type, handler) {
       reconnectTimer = null;
       const ws = socket;
       socket = null; // detach first, so its close handler does not reconnect
-      ws?.close();
+      // Closing a socket that is still connecting makes the browser log "closed before the
+      // connection is established" (React StrictMode mounts, unmounts and remounts every page
+      // in development). Let it finish connecting, then close it quietly.
+      if (ws?.readyState === 0) ws.onopen = () => ws.close(); // WebSocket.CONNECTING
+      else ws?.close();
       everConnected = false;
       attempts = 0;
     }

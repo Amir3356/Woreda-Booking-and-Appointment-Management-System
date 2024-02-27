@@ -48,6 +48,7 @@ export const decodeSchedule = (input) =>
   decode(input, "ScheduleInput", {
     departmentId: "string", serviceId: "*string", workingDays: "[]string", openingTime: "string",
     closingTime: "string", dailyCapacity: "int", effectiveStartDate: "string", effectiveEndDate: "*string",
+    status: "string",
   });
 export const decodeCheckIn = (input) =>
   decode(input, "CheckInRequest", { appointmentId: "string", verifiedDocuments: "[]string", notes: "string" });

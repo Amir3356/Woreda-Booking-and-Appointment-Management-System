@@ -167,10 +167,10 @@ export default function OfficerAppointmentsPage() {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
               <tr>
-                <th className="px-5 py-3.5">Citizen Name</th>
-                <th className="px-5 py-3.5">Requested Service</th>
+                <th className="px-5 py-3.5">Citizen Details</th>
+                <th className="px-5 py-3.5">Service Requested</th>
                 <th className="px-5 py-3.5">Scheduled Date & Time</th>
-                <th className="px-5 py-3.5">Booked On</th>
+                <th className="px-5 py-3.5">Booked Date</th>
                 <th className="px-5 py-3.5">Status</th>
               </tr>
             </thead>

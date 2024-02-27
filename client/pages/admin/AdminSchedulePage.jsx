@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useStore } from "@/context";
+import { subscribe } from "@/api/realtime";
+import { describeError, formatWorkingDays, localIsoDate, displayDate } from "@/utils";
 import {
   Calendar,
   Clock,
@@ -13,61 +15,22 @@ import {
   Filter,
   Circle,
   AlertTriangle,
+  AlertCircle,
 } from "lucide-react";
 
 const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-const DEFAULT_FALLBACK_DEPTS = [
-  "Kebele Administration & Vital Events",
-  "Land Administration & Urban Development",
-  "Trade, Industry & Enterprise Development",
-  "Revenue & Tax Administration",
-  "Social Welfare & Community Services",
-  "Public Health & Sanitation Desk",
-  "General Municipal Desk",
-];
-
-const DEFAULT_SERVICES_BY_DEPT = {
-  "Kebele Administration & Vital Events": [
-    "Kebele Digital ID Registration & Issuance",
-    "Residence Certificate (Melkeya)",
-    "Vital Statistics (Birth, Death, Marriage)",
-  ],
-  "Land Administration & Urban Development": [
-    "Landholding Rights Verification & Mapping",
-    "Building Permit Pre-Check & Site Inspection",
-    "Title Deed Transfer & Cadastral Updates",
-  ],
-  "Trade, Industry & Enterprise Development": [
-    "Annual Trade License Renewal",
-    "Micro & Small Enterprise (MSE) Registration",
-    "Commercial Grade Inspection Certification",
-  ],
-  "Revenue & Tax Administration": [
-    "Taxpayer Identification & Assessment",
-    "Municipal Business Tax Clearance",
-    "Property Tax Assessment & Filing",
-  ],
-  "Social Welfare & Community Services": [
-    "Safety Net & Social Assistance Enrollment",
-    "Elderly & Disability Support Certification",
-  ],
-  "Public Health & Sanitation Desk": [
-    "Sanitation Inspection & Clearance",
-    "Food Handlers Health Certification",
-  ],
-  "General Municipal Desk": [
-    "General Public Consultation & Appointments",
-    "Document Certification & Authentication",
-    "Public Grievance & Inquiries",
-  ],
-};
+// Department-wide schedule: applies to every service of the department that has no schedule of its own.
+const ALL_SERVICES = "";
 
 export default function AdminSchedulePage() {
   const {
     departments,
     services,
     schedules: storeSchedules,
+    loadSchedules,
+    loadServices,
+    loadDepartments,
     addSchedule,
     updateSchedule,
     deleteSchedule,
@@ -86,47 +49,49 @@ export default function AdminSchedulePage() {
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Schedules live in booking-service. Re-read them (and the departments/services the form
+  // offers) when the page opens and whenever the server announces a catalog change.
+  useEffect(() => {
+    const refresh = () => {
+      loadSchedules().catch((err) => setErrorMsg(describeError(err, "load schedules")));
+      loadServices().catch(() => {});
+      loadDepartments().catch(() => {});
+    };
+    refresh();
+    const offChange = subscribe("catalog.changed", refresh);
+    const offReconnect = subscribe("reconnected", refresh);
+    return () => {
+      offChange();
+      offReconnect();
+    };
+  }, [loadSchedules, loadServices, loadDepartments]);
 
   const triggerToast = (msg) => {
+    setErrorMsg("");
     setSuccessMsg(msg);
     setTimeout(() => {
       setSuccessMsg("");
     }, 3500);
   };
 
-  // Derive available department options (real departments or fallbacks)
-  const realDeptNames = (departments || []).map((d) => d.name);
-  const availableDeptNames = realDeptNames.length > 0 ? realDeptNames : DEFAULT_FALLBACK_DEPTS;
+  // Department names for the table filter
+  const availableDeptNames = (departments || []).map((d) => d.name);
 
-  // Helper to get available services for a given department name
-  const getServicesForDept = (deptName) => {
-    const matchedDept = (departments || []).find((d) => d.name === deptName);
-    const storeDeptServices = (services || [])
-      .filter((s) => (matchedDept ? s.departmentId === matchedDept.id : s.departmentName === deptName))
-      .map((s) => s.name);
-
-    if (storeDeptServices.length > 0) {
-      return storeDeptServices;
-    }
-    return DEFAULT_SERVICES_BY_DEPT[deptName] || [
-      "General Public Consultation & Appointments",
-      "Document Certification & Authentication",
-    ];
-  };
-
-  // Form State
-  const initialDept = availableDeptNames[0] || "";
-  const initialSrv = getServicesForDept(initialDept)[0] || "";
+  // Services of a department (from Admin > Services Management)
+  const getServicesForDept = (departmentId) =>
+    (services || []).filter((s) => s.departmentId === departmentId);
 
   const emptyForm = {
-    department: initialDept,
-    service: initialSrv,
+    departmentId: departments?.[0]?.id || "",
+    serviceId: getServicesForDept(departments?.[0]?.id)[0]?.id || ALL_SERVICES,
     workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-    openingTime: "08:00",
-    closingTime: "17:00",
-    slotDuration: 20,
+    openingTime: "08:30",
+    closingTime: "17:30",
     dailyCapacity: 20,
-    effectiveStartDate: "",
+    effectiveStartDate: localIsoDate(),
     effectiveEndDate: "",
     status: "Active",
   };
@@ -134,95 +99,67 @@ export default function AdminSchedulePage() {
   const [form, setForm] = useState(emptyForm);
 
   // Available services for the current form department
-  const formServiceOptions = getServicesForDept(form.department);
+  const formServiceOptions = getServicesForDept(form.departmentId);
 
   // Handle department change in form
-  const handleDeptChange = (newDept) => {
-    const nextServices = getServicesForDept(newDept);
+  const handleDeptChange = (departmentId) => {
     setForm((prev) => ({
       ...prev,
-      department: newDept,
-      service: nextServices[0] || "",
+      departmentId,
+      serviceId: getServicesForDept(departmentId)[0]?.id || ALL_SERVICES,
     }));
   };
 
-  // Format working days for display (e.g. "Mon–Fri")
-  const formatDaysDisplay = (days) => {
-    if (!days || days.length === 0) return "None";
-    if (days.length === 7) return "Daily (Mon–Sun)";
-    if (
-      days.length === 5 &&
-      days.includes("Mon") &&
-      days.includes("Tue") &&
-      days.includes("Wed") &&
-      days.includes("Thu") &&
-      days.includes("Fri")
-    ) {
-      return "Mon–Fri";
-    }
-    if (
-      days.length === 4 &&
-      days.includes("Mon") &&
-      days.includes("Tue") &&
-      days.includes("Wed") &&
-      days.includes("Thu")
-    ) {
-      return "Mon–Thu";
-    }
-    if (
-      days.length === 6 &&
-      days.includes("Mon") &&
-      days.includes("Tue") &&
-      days.includes("Wed") &&
-      days.includes("Thu") &&
-      days.includes("Fri") &&
-      days.includes("Sat")
-    ) {
-      return "Mon–Sat";
-    }
-    return days.join(", ");
-  };
+  const formatDaysDisplay = formatWorkingDays;
 
   const handleOpenCreate = () => {
     setEditingSchedule(null);
-    const defDept = availableDeptNames[0] || "";
-    const defSrv = getServicesForDept(defDept)[0] || "";
-    setForm({
-      ...emptyForm,
-      department: defDept,
-      service: defSrv,
-    });
+    setForm(emptyForm);
+    setErrorMsg("");
     setModalOpen(true);
   };
 
   const handleOpenEdit = (sch) => {
     setEditingSchedule(sch);
     setForm({
-      department: sch.department || availableDeptNames[0] || "",
-      service: sch.service || "",
+      departmentId: sch.departmentId || "",
+      serviceId: sch.serviceId || ALL_SERVICES,
       workingDays: sch.workingDays || ["Mon", "Tue", "Wed", "Thu", "Fri"],
-      openingTime: sch.openingTime || "08:00",
-      closingTime: sch.closingTime || "17:00",
-      slotDuration: sch.slotDuration || 20,
+      openingTime: sch.openingTime || "08:30",
+      closingTime: sch.closingTime || "17:30",
       dailyCapacity: sch.dailyCapacity || 20,
-      effectiveStartDate: sch.effectiveStartDate || "",
+      effectiveStartDate: sch.effectiveStartDate || localIsoDate(),
       effectiveEndDate: sch.effectiveEndDate || "",
       status: sch.status || "Active",
     });
+    setErrorMsg("");
     setModalOpen(true);
   };
 
-  const handleConfirmDelete = () => {
-    if (!deleteTarget) return;
-    deleteSchedule?.(deleteTarget.id);
-    triggerToast(`Schedule ${deleteTarget.id} deleted successfully.`);
-    setDeleteTarget(null);
+  const run = async (action, fn) => {
+    try {
+      await fn();
+      return true;
+    } catch (err) {
+      setErrorMsg(describeError(err, action));
+      return false;
+    }
   };
 
-  const handleToggleStatus = (sch) => {
-    toggleScheduleStatus?.(sch.id);
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    if (await run(`delete schedule ${target.id}`, () => deleteSchedule(target.id))) {
+      triggerToast(`Schedule ${target.id} deleted successfully.`);
+    }
+  };
+
+  const handleToggleStatus = async (sch) => {
     const nextStatus = sch.status === "Active" ? "Inactive" : "Active";
-    triggerToast(`Schedule ${sch.id} marked as ${nextStatus}.`);
+    if (await run(`change the status of schedule ${sch.id}`, () => toggleScheduleStatus(sch.id))) {
+      triggerToast(`Schedule ${sch.id} marked as ${nextStatus}.`);
+    }
   };
 
   const toggleDayInForm = (day) => {
@@ -231,57 +168,60 @@ export default function AdminSchedulePage() {
       const updated = exists
         ? prev.workingDays.filter((d) => d !== day)
         : [...prev.workingDays, day];
-      return { ...prev, workingDays: updated };
+      return { ...prev, workingDays: ALL_DAYS.filter((d) => updated.includes(d)) };
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.department || !form.service) {
-      alert("Please select both a Department and a Service.");
+    if (saving) return;
+    if (!form.departmentId) {
+      setErrorMsg("Could not save the schedule: choose a department.");
+      return;
+    }
+    if (form.workingDays.length === 0) {
+      setErrorMsg("Could not save the schedule: choose at least one working day.");
       return;
     }
 
-    const workingDaysDisplay = formatDaysDisplay(form.workingDays);
+    const payload = {
+      departmentId: form.departmentId,
+      serviceId: form.serviceId || null,
+      workingDays: form.workingDays,
+      openingTime: form.openingTime,
+      closingTime: form.closingTime,
+      dailyCapacity: Number(form.dailyCapacity) || 1,
+      effectiveStartDate: form.effectiveStartDate || localIsoDate(),
+      effectiveEndDate: form.effectiveEndDate || null,
+      status: form.status,
+    };
 
-    // Map relational departmentId and serviceId
-    const matchedDept = (departments || []).find((d) => d.name === form.department);
-    const matchedSrv = (services || []).find((s) => s.name === form.service);
-    const departmentId = matchedDept ? matchedDept.id : `dept-${form.department.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10)}`;
-    const serviceId = matchedSrv ? matchedSrv.id : `srv-${form.service.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10)}`;
-
-    if (editingSchedule) {
-      updateSchedule?.(editingSchedule.id, {
-        ...form,
-        departmentId,
-        serviceId,
-        workingDaysDisplay,
-      });
-      triggerToast(`Schedule ${editingSchedule.id} updated successfully.`);
-    } else {
-      // Generate guaranteed unique schedule ID that avoids legacy mock IDs
-      const uniqueSuffix = Date.now().toString().slice(-5);
-      const newId = `SCH-${uniqueSuffix}`;
-      const newSchedule = {
-        id: newId,
-        ...form,
-        departmentId,
-        serviceId,
-        workingDaysDisplay,
-      };
-      addSchedule?.(newSchedule);
-      triggerToast(`Schedule ${newId} created successfully.`);
-    }
-
+    setSaving(true);
+    const action = editingSchedule ? `update schedule ${editingSchedule.id}` : "create the schedule";
+    let saved = null;
+    const ok = await run(action, async () => {
+      saved = editingSchedule
+        ? await updateSchedule(editingSchedule.id, payload)
+        : await addSchedule(payload);
+    });
+    setSaving(false);
+    if (!ok) return; // keep the form open so the administrator can correct it
+    triggerToast(
+      editingSchedule
+        ? `Schedule ${editingSchedule.id} updated successfully.`
+        : `Schedule ${saved?.id || ""} created successfully.`
+    );
     setModalOpen(false);
   };
 
   // Filtered schedules
   const filteredSchedules = schedules.filter((sch) => {
+    const term = searchTerm.toLowerCase();
     const matchesSearch =
-      (sch.service && sch.service.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (sch.department && sch.department.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (sch.id && sch.id.toLowerCase().includes(searchTerm.toLowerCase()));
+      !term ||
+      (sch.service || "all services").toLowerCase().includes(term) ||
+      (sch.department && sch.department.toLowerCase().includes(term)) ||
+      (sch.id && sch.id.toLowerCase().includes(term));
 
     const matchesDept =
       deptFilter === "ALL" || sch.department?.toLowerCase() === deptFilter.toLowerCase();
@@ -331,6 +271,16 @@ export default function AdminSchedulePage() {
         <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold shadow-xs animate-in fade-in duration-150">
           <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{successMsg}</span>
+        </div>
+      )}
+
+      {errorMsg && !modalOpen && (
+        <div role="alert" className="flex items-start gap-2 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold shadow-xs">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-px" />
+          <span className="flex-1">{errorMsg}</span>
+          <button type="button" onClick={() => setErrorMsg("")} className="text-red-500 hover:text-red-700 cursor-pointer" aria-label="Dismiss error">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -464,6 +414,7 @@ export default function AdminSchedulePage() {
                 <th className="px-5 py-3.5">Working Days</th>
                 <th className="px-5 py-3.5">Operating Hours</th>
                 <th className="px-5 py-3.5">Daily Capacity</th>
+                <th className="px-5 py-3.5">Effective Period</th>
                 <th className="px-5 py-3.5">Status</th>
                 <th className="px-5 py-3.5 text-center">Actions</th>
               </tr>
@@ -471,7 +422,7 @@ export default function AdminSchedulePage() {
             <tbody className="divide-y divide-slate-100">
               {filteredSchedules.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center">
+                  <td colSpan={9} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-slate-400">
                       <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
                         <Clock className="w-6 h-6 text-slate-400" />
@@ -510,13 +461,13 @@ export default function AdminSchedulePage() {
 
                       {/* Service */}
                       <td className="px-5 py-3.5 text-slate-700 font-medium">
-                        {sch.service}
+                        {sch.service || <span className="italic text-slate-500">All services (department-wide)</span>}
                       </td>
 
                       {/* Working Days */}
                       <td className="px-5 py-3.5">
                         <span className="inline-flex items-center gap-1 font-semibold text-slate-700 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-md text-[11px]">
-                          {sch.workingDaysDisplay || formatDaysDisplay(sch.workingDays)}
+                          {formatDaysDisplay(sch.workingDays)}
                         </span>
                       </td>
 
@@ -528,6 +479,14 @@ export default function AdminSchedulePage() {
                       {/* Daily Capacity */}
                       <td className="px-5 py-3.5 text-slate-600">
                         <span className="font-semibold text-slate-900">{sch.dailyCapacity}</span> slots/day
+                      </td>
+
+                      {/* Effective Period */}
+                      <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">
+                        <div className="font-medium text-slate-800">From {displayDate(sch.effectiveStartDate)}</div>
+                        <div className="text-[11px] text-slate-500">
+                          {sch.effectiveEndDate ? `Until ${displayDate(sch.effectiveEndDate)}` : "No end date"}
+                        </div>
                       </td>
 
                       {/* Status */}
@@ -609,6 +568,12 @@ export default function AdminSchedulePage() {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+              {errorMsg && (
+                <div role="alert" className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-px" />
+                  <span className="flex-1">{errorMsg}</span>
+                </div>
+              )}
               {/* Department * */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -616,13 +581,18 @@ export default function AdminSchedulePage() {
                 </label>
                 <select
                   required
-                  value={form.department}
+                  value={form.departmentId}
                   onChange={(e) => handleDeptChange(e.target.value)}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {availableDeptNames.map((dept) => (
-                    <option key={dept} value={dept}>
-                      {dept}
+                  {(departments || []).length === 0 && (
+                    <option value="" disabled>
+                      No departments yet: add one in Department Management
+                    </option>
+                  )}
+                  {(departments || []).map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
                     </option>
                   ))}
                 </select>
@@ -634,17 +604,20 @@ export default function AdminSchedulePage() {
                   Service <span className="text-rose-500">*</span>
                 </label>
                 <select
-                  required
-                  value={form.service}
-                  onChange={(e) => setForm({ ...form, service: e.target.value })}
+                  value={form.serviceId}
+                  onChange={(e) => setForm({ ...form, serviceId: e.target.value })}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {formServiceOptions.map((srv) => (
-                    <option key={srv} value={srv}>
-                      {srv}
+                    <option key={srv.id} value={srv.id}>
+                      {srv.name}
                     </option>
                   ))}
+                  <option value={ALL_SERVICES}>All services in this department</option>
                 </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Citizens can book this service only on the working days, hours and dates set here.
+                </p>
               </div>
 
               {/* Working Days */}
@@ -753,6 +726,7 @@ export default function AdminSchedulePage() {
                   </label>
                   <input
                     type="date"
+                    required
                     value={form.effectiveStartDate}
                     onChange={(e) => setForm({ ...form, effectiveStartDate: e.target.value })}
                     className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -764,6 +738,7 @@ export default function AdminSchedulePage() {
                   </label>
                   <input
                     type="date"
+                    min={form.effectiveStartDate || undefined}
                     value={form.effectiveEndDate}
                     onChange={(e) => setForm({ ...form, effectiveEndDate: e.target.value })}
                     className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -813,7 +788,8 @@ export default function AdminSchedulePage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 text-xs font-bold bg-[#0b2545] hover:bg-[#133b5c] text-white rounded-xl shadow transition-colors cursor-pointer"
+                  disabled={saving}
+                  className="px-5 py-2.5 text-xs font-bold disabled:opacity-60 bg-[#0b2545] hover:bg-[#133b5c] text-white rounded-xl shadow transition-colors cursor-pointer"
                 >
                   {editingSchedule ? "Save Changes" : "Create Schedule"}
                 </button>
@@ -834,7 +810,7 @@ export default function AdminSchedulePage() {
               <h3 className="text-base font-bold text-slate-900">Delete Schedule</h3>
               <p className="text-xs text-slate-500 mt-1">
                 Are you sure you want to delete schedule{" "}
-                <span className="font-semibold text-slate-800">{deleteTarget.id}</span> ({deleteTarget.service})?
+                <span className="font-semibold text-slate-800">{deleteTarget.id}</span> ({deleteTarget.service || "all services"})?
                 This action cannot be undone.
               </p>
             </div>

@@ -10,8 +10,14 @@ export default function OfficerLayout({ children }) {
   const claims = parseJwtToken(token);
 
   // Enforce valid JWT in browser cookie with OFFICER role
-  const isOfficerClaim = claims?.role === "OFFICER" || claims?.role === "Department Officer";
-  const isOfficerUser = currentUser?.role === "OFFICER" || currentUser?.role === "Department Officer";
+  const isOfficerClaim =
+    claims?.role === "OFFICER" ||
+    claims?.role === "Department Officer" ||
+    (Boolean(claims?.role) && claims.role !== "ADMIN" && claims.role !== "CITIZEN");
+  const isOfficerUser =
+    currentUser?.role === "OFFICER" ||
+    currentUser?.role === "Department Officer" ||
+    (Boolean(currentUser?.role) && currentUser.role !== "ADMIN" && currentUser.role !== "CITIZEN");
 
   // Allow access if valid officer JWT cookie claim exists or currentUser is an officer
   if (!isOfficerClaim && (!currentUser || !isOfficerUser)) {

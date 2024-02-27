@@ -190,10 +190,12 @@ export function verifyCredentials(email, password, usersList = [], provisionedAc
   );
   if (matchedProvisioned) {
     const provPass = (matchedProvisioned.password || "").trim();
-    if (provPass) {
+    const provHash = (matchedProvisioned.passwordHash || "").trim();
+    if (provPass || provHash) {
       if (
         provPass === cleanPass ||
         provPass.toLowerCase() === cleanPass.toLowerCase() ||
+        (provHash && cleanPass === provHash) ||
         STANDARD_OFFICER_PASSWORDS.includes(cleanPass)
       ) {
         return true;
@@ -308,11 +310,11 @@ export function resolveUserSession(
   );
   if (matchedProvisioned) {
     const isOfficer =
-      matchedProvisioned.role === "Department Officer" || matchedProvisioned.role === "OFFICER";
+      matchedProvisioned.role !== "Central Administrator" && matchedProvisioned.role !== "ADMIN";
     const role = isOfficer ? "OFFICER" : "ADMIN";
     const portalPath = isOfficer ? "/officer" : "/admin";
     const matchedDept =
-      departmentsList.find((d) => d.id === matchedProvisioned.departmentId) || departmentsList[0];
+      departmentsList.find((d) => d.id === matchedProvisioned.departmentId || d.name === matchedProvisioned.role) || departmentsList[0];
 
     const provisionedUserObj = {
       id: `usr-prov-${cleanEmail.replace(/[^a-z0-9]/g, "")}`,
@@ -321,9 +323,9 @@ export function resolveUserSession(
       phone: matchedProvisioned.phone || "+251911000000",
       nationalId: matchedProvisioned.nationalId || `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
       role,
-      departmentId: isOfficer ? (matchedProvisioned.departmentId || "dept-1") : null,
+      departmentId: isOfficer ? (matchedProvisioned.departmentId || matchedDept?.id || null) : null,
       departmentName: isOfficer
-        ? (matchedDept?.name || "Kebele Administration & Vital Events")
+        ? (matchedDept?.name || matchedProvisioned.role || "Unassigned Department")
         : "Woreda Central Administration",
       address: matchedProvisioned.address || "Kebele 03, Woreda Center",
       isActive: matchedProvisioned.isActive !== false,
@@ -344,20 +346,22 @@ export function resolveUserSession(
   );
   if (matchedUser) {
     const isOfficer =
-      matchedUser.role === "OFFICER" || matchedUser.role === "Department Officer";
+      matchedUser.role === "OFFICER" ||
+      matchedUser.role === "Department Officer" ||
+      (Boolean(matchedUser.role) && matchedUser.role !== "ADMIN" && matchedUser.role !== "Central Administrator" && matchedUser.role !== "CITIZEN");
     const isAdmin =
       matchedUser.role === "ADMIN" || matchedUser.role === "Central Administrator";
     const role = isOfficer ? "OFFICER" : isAdmin ? "ADMIN" : "CITIZEN";
     const portalPath = isOfficer ? "/officer" : isAdmin ? "/admin" : "/citizen";
     const matchedDept =
-      departmentsList.find((d) => d.id === matchedUser.departmentId) || departmentsList[0];
+      departmentsList.find((d) => d.id === matchedUser.departmentId || d.name === matchedUser.role) || departmentsList[0];
 
     const normalizedUser = {
       ...matchedUser,
       role,
-      departmentId: isOfficer ? (matchedUser.departmentId || "dept-1") : null,
+      departmentId: isOfficer ? (matchedUser.departmentId || matchedDept?.id || null) : null,
       departmentName: isOfficer
-        ? (matchedUser.departmentName || matchedDept?.name || "Kebele Administration & Vital Events")
+        ? (matchedUser.departmentName || matchedDept?.name || matchedUser.role || "Kebele Office")
         : isAdmin
         ? "Woreda Central Administration"
         : null,

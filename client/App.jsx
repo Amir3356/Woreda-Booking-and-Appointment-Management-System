@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+import { useStore } from "@/context";
 
 // Layouts
 import { AdminLayout, OfficerLayout, CitizenLayout } from "@/layout";
@@ -39,6 +41,13 @@ import CitizenProfilePage from "@/pages/citizen/CitizenProfilePage";
 import CitizenNotificationsPage from "@/pages/citizen/CitizenNotificationsPage";
 
 export default function App() {
+  // Departments come from the server; until the fetch returns the seeded defaults are shown,
+  // so a failed fetch (server down) only keeps those defaults.
+  const loadDepartments = useStore((state) => state.loadDepartments);
+  useEffect(() => {
+    loadDepartments().catch(() => {});
+  }, [loadDepartments]);
+
   return (
     <Routes>
       {/* Public Pages */}

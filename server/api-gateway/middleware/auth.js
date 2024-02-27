@@ -14,6 +14,7 @@ const PUBLIC_ROUTES = [
   ["POST", "/api/v1/auth/login"],
   ["GET", "/api/v1/departments"],
   ["GET", "/api/v1/services"],
+  ["GET", "/api/v1/schedules/active"], // bookable schedules for the citizen booking form
   ["GET", "/api/v1/schedules/availability"],
   ["POST", "/api/v1/appointments"],
   ["GET", "/api/v1/appointments/track"],

@@ -13,8 +13,8 @@ import { createScheduleController } from "./controllers/schedule.controller.js";
 import { createQueueController } from "./controllers/queue.controller.js";
 import { createRoutes } from "./routes/index.js";
 
-export function createApp({ events }) {
-  const scheduleService = createScheduleService();
+export function createApp({ events, catalogEvents }) {
+  const scheduleService = createScheduleService({ events: catalogEvents });
   const availabilityService = createAvailabilityService();
   const queueService = createQueueService({ events });
 

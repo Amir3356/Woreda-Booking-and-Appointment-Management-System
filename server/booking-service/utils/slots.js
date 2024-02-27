@@ -13,6 +13,23 @@ export function slotLabel(m) {
 }
 
 /**
+ * Why nothing can be booked on the day, or null when the day is open:
+ * NO_SCHEDULE (no active schedule covers the date), NOT_WORKING_DAY, DAILY_CAPACITY_REACHED.
+ */
+export function closedReason(schedule, day, bookedForDay) {
+  if (!schedule) return "NO_SCHEDULE";
+  if (!(schedule.workingDays ?? []).includes(weekdayOf(day))) return "NOT_WORKING_DAY";
+  if (schedule.dailyCapacity > 0 && bookedForDay >= schedule.dailyCapacity) return "DAILY_CAPACITY_REACHED";
+  return null;
+}
+
+/** Once the day's bookings reach the schedule's daily capacity, every open slot is Full. */
+export function applyDailyCapacity(slots, reason) {
+  if (reason !== "DAILY_CAPACITY_REACHED") return slots;
+  return slots.map((s) => (s.status === "Available" ? { ...s, status: "Full", remainingCapacity: 0 } : s));
+}
+
+/**
  * Per-slot availability. schedule: the schedule in force (or null), day: parsed date,
  * counts: {"09:00 AM": n}, max: system_settings.maxParallelSlots.
  */
