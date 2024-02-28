@@ -6,6 +6,10 @@
 // (booking-service /schedules/availability decides the actual slots).
 
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_NAMES = {
+  Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday",
+  Fri: "Friday", Sat: "Saturday", Sun: "Sunday",
+};
 
 /** Today as "YYYY-MM-DD" in the browser's time zone. */
 export function localIsoDate(date = new Date()) {
@@ -114,7 +118,7 @@ export function closedMessage(reason, { date, schedule } = {}) {
     case "NO_SCHEDULE":
       return "This service has no opening schedule on that date. Choose another date.";
     case "NOT_WORKING_DAY":
-      return `This service is closed on ${date ? weekdayOfIso(date) : "that day"}s${
+      return `This service is closed on ${date ? DAY_NAMES[weekdayOfIso(date)] + "s" : "that day"}${
         schedule ? `. Open ${formatWorkingDays(schedule.workingDays)}` : ""
       }. Choose another date.`;
     case "DAILY_CAPACITY_REACHED":

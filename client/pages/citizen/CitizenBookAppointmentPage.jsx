@@ -100,9 +100,11 @@ export default function CitizenBookAppointmentPage() {
           .availability({ serviceId: row.serviceId, date: row.date })
           .then(({ data }) => {
             const open = (data?.slots || []).filter((sl) => sl.status === "Available").length;
+            // Appointments still possible that day: free times, limited by the daily capacity.
+            const left = data?.dailyCapacity ? Math.min(open, data.dailyCapacity - data.bookedForDay) : open;
             const full = !data?.closedReason && open === 0 ? "Full" : null;
-            const actionValue = open > 0 ? "Available" : full || (data?.closedReason === "DAILY_CAPACITY_REACHED" ? "Full" : "Unavailable");
-            return { ...row, actionValue, availabilityText: open > 0 ? `${open} slots open` : actionValue };
+            const actionValue = left > 0 ? "Available" : full || (data?.closedReason === "DAILY_CAPACITY_REACHED" ? "Full" : "Unavailable");
+            return { ...row, actionValue, availabilityText: left > 0 ? `${left} left` : actionValue };
           })
           .catch(() => ({ ...row, availabilityText: "Unavailable" }))
       )
@@ -539,7 +541,7 @@ export default function CitizenBookAppointmentPage() {
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                             Available
-                            {slot.availabilityText?.endsWith("slots open") && (
+                            {slot.availabilityText?.endsWith(" left") && (
                               <span className="font-normal text-emerald-600">· {slot.availabilityText}</span>
                             )}
                           </span>
