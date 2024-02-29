@@ -7,6 +7,8 @@ import { config } from "./config/index.js";
 import { logger } from "./config/logger.js";
 import { requestId } from "./middleware/requestId.js";
 import { requestLogger } from "./middleware/requestLogger.js";
+import { httpMetrics } from "./middleware/metrics.js";
+import { gauge } from "./config/metrics.js";
 import { cors } from "./middleware/cors.js";
 import { auth } from "./middleware/auth.js";
 import { cache } from "./middleware/cache.js";
@@ -22,6 +24,10 @@ import { createRoutes } from "./routes/index.js";
 /** redis may be null (REDIS_URL not set): caching and revocation checks are then off. */
 export function createApp({ redis }) {
   const realtimeService = createRealtimeService({ allowedOrigins: config.allowedOrigins, logger });
+  // Open pages connected for live updates, read when Prometheus scrapes.
+  gauge("woreda_websocket_clients", "Pages connected to the live-update WebSocket.", [], function collect() {
+    this.set(realtimeService.count());
+  });
   const cacheService = createCacheService({ cacheRepository: createCacheRepository(redis), logger });
   const tokenService = createTokenService({ tokenRepository: createTokenRepository(redis), logger });
 
@@ -30,6 +36,7 @@ export function createApp({ redis }) {
   app.disable("etag");
   app.use(requestId);
   app.use(requestLogger(logger));
+  app.use(httpMetrics());
   app.use(cors(config.allowedOrigins));
   app.use(auth(config.jwtSecret, tokenService));
   app.use(cache(cacheService));

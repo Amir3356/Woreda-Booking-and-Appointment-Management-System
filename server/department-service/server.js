@@ -2,6 +2,7 @@
 // catalog API for other services (gRPC :9083), catalog change events (Kafka topic woreda.catalog).
 import { config } from "./config/index.js";
 import { logger } from "./config/logger.js";
+import { startMetricsServer } from "./config/metrics.js";
 import { connectDatabase, disconnectDatabase } from "./config/database.js";
 import { createEventPublisher } from "./config/kafka.js";
 import { startGrpcServer } from "./config/grpc.js";
@@ -28,6 +29,7 @@ try {
 }
 
 const httpServer = app.listen(config.port, () => logger.info({ addr: `:${config.port}` }, "listening"));
+const metricsServer = startMetricsServer(); // internal /metrics for Prometheus
 
 let stopping = false;
 async function shutdown(signal) {
@@ -35,6 +37,7 @@ async function shutdown(signal) {
   stopping = true;
   logger.info({ signal }, "shutting down");
   httpServer.close();
+  metricsServer.close();
   await new Promise((resolve) => grpcServer.tryShutdown(() => resolve()));
   await events.close();
   await disconnectDatabase();

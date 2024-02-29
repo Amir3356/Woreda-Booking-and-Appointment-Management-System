@@ -5,6 +5,7 @@ import { config } from "./config/index.js";
 import { logger } from "./config/logger.js";
 import { authenticate } from "./middleware/auth.js";
 import { requestLogger } from "./middleware/requestLogger.js";
+import { httpMetrics } from "./middleware/metrics.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { createScheduleService } from "./services/schedule.service.js";
 import { createAvailabilityService } from "./services/availability.service.js";
@@ -23,6 +24,7 @@ export function createApp({ events, catalogEvents }) {
   app.set("query parser", "simple");
   app.use(express.json({ limit: "1mb" }));
   app.use(requestLogger(logger));
+  app.use(httpMetrics());
   app.use(authenticate(config.jwtSecret));
   app.use(createRoutes({
     scheduleController: createScheduleController({ scheduleService, availabilityService }),

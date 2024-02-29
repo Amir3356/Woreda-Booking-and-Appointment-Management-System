@@ -5,6 +5,13 @@ export function today(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
+/** The current time of day in minutes since midnight, in the service's time zone. */
+export function nowMinutes(date = new Date()) {
+  const [h, m] = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })
+    .format(date).split(":").map(Number);
+  return (h % 24) * 60 + m;
+}
+
 /** Strict YYYY-MM-DD with a real calendar day (Go time.Parse(time.DateOnly)). */
 export function validDate(s) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);

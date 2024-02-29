@@ -1,7 +1,7 @@
 // Per-slot availability of a service on a date (public: the citizen booking page shows it before sign-in).
 import { ValidationError } from "../utils/errors.js";
-import { parseDate } from "../utils/time.js";
-import { applyDailyCapacity, buildSlots, closedReason } from "../utils/slots.js";
+import { clockTime, parseDate, today } from "../utils/time.js";
+import { applyDailyCapacity, buildSlots, closedReason, markPast, perTimeCapacity } from "../utils/slots.js";
 import * as schedules from "../repositories/schedule.repository.js";
 import * as catalog from "../repositories/catalog.repository.js";
 import * as appointments from "../repositories/appointment.repository.js";
@@ -29,14 +29,23 @@ export function createAvailabilityService() {
   return {
     async availability(serviceId, date) {
       const day = validateAvailability(serviceId, date);
-      const [max, schedule, counts] = await Promise.all([
+      const [parallel, schedule, counts] = await Promise.all([
         catalog.maxParallelSlots(),
         activeSchedule(serviceId, date),
         appointments.countBySlot(serviceId, date),
       ]);
+      const max = perTimeCapacity(schedule, parallel);
       // Public holidays are not modelled yet.
       const bookedForDay = Object.values(counts).reduce((sum, n) => sum + n, 0);
-      const reason = closedReason(schedule, day, bookedForDay);
+      let slots = buildSlots(schedule, day, counts, max);
+      let reason = closedReason(schedule, day, bookedForDay);
+      if (date === today()) {
+        // Times that have already started today cannot be booked; when none is left the day is over.
+        const [h, m] = clockTime().split(":").map(Number);
+        const hadOpen = slots.some((s) => s.status !== "Unavailable");
+        slots = markPast(slots, h * 60 + m);
+        if (!reason && hadOpen && slots.every((s) => s.status === "Unavailable")) reason = "DAY_OVER";
+      }
       return {
         serviceId,
         date,
@@ -46,7 +55,7 @@ export function createAvailabilityService() {
         bookedForDay,
         openingTime: schedule?.openingTime ?? null,
         closingTime: schedule?.closingTime ?? null,
-        slots: applyDailyCapacity(buildSlots(schedule, day, counts, max), reason),
+        slots: applyDailyCapacity(slots, reason),
       };
     },
   };

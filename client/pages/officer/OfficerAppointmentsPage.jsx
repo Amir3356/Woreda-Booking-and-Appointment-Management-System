@@ -1,38 +1,47 @@
 import { useState } from "react";
 import { useStore } from "@/context";
 import StatusBadge from "@/components/ui/StatusBadge";
-import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 import { formatDate } from "@/utils";
-import {
-  Calendar,
-  Search,
-  Filter,
-  AlertCircle,
-} from "lucide-react";
+import { AlertCircle, Check, X } from "lucide-react";
 
 export default function OfficerAppointmentsPage() {
   const {
     currentUser,
     appointments,
-    services,
+    updateAppointmentStatus,
+    appointmentError,
+    clearAppointmentError,
   } = useStore();
 
-  const [timeFilter, setTimeFilter] = useState("ALL");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [search, setSearch] = useState("");
-  const [selectedSlipApt, setSelectedSlipApt] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  // Action column: a department officer decides PENDING bookings of their own department.
+  const handleApprove = async (e, apt) => {
+    e.stopPropagation();
+    setBusyId(apt.id);
+    await updateAppointmentStatus(apt.id, "APPROVED");
+    setBusyId(null);
+  };
+  const handleReject = async (e, apt) => {
+    e.stopPropagation();
+    const reason = window.prompt(
+      `Reason for rejecting ${apt.citizenName}'s booking (${apt.referenceNumber}):`,
+      "Quota or invalid paperwork"
+    );
+    if (reason === null) return; // cancelled
+    setBusyId(apt.id);
+    await updateAppointmentStatus(apt.id, "REJECTED", "", reason.trim() || "Quota or invalid paperwork");
+    setBusyId(null);
+  };
 
   const effectiveAppointments = appointments || [];
 
-  // Scoped to officer's assigned department (or all if unassigned)
-  const deptAppointments = effectiveAppointments.filter((a) => {
-    if (!currentUser?.departmentId) return true;
-    return (
-      a.departmentId === currentUser.departmentId ||
-      (currentUser.departmentName &&
-        a.departmentName?.toLowerCase() === currentUser.departmentName?.toLowerCase())
-    );
-  });
+  // Only the department the Admin assigned to this officer in Account Provision. The server
+  // already returns only that department's appointments; this keeps the page strict as well, and
+  // an officer without a department sees none.
+  const deptAppointments = effectiveAppointments.filter(
+    (a) => Boolean(currentUser?.departmentId) && a.departmentId === currentUser.departmentId
+  );
 
   const formatRequestDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -45,42 +54,7 @@ export default function OfficerAppointmentsPage() {
     });
   };
 
-  const getTodayStr = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
-  const todayStr = getTodayStr();
-
-  const filtered = deptAppointments.filter((a) => {
-    const matchesSearch =
-      a.referenceNumber.toLowerCase().includes(search.toLowerCase()) ||
-      a.citizenName.toLowerCase().includes(search.toLowerCase()) ||
-      a.citizenPhone.includes(search) ||
-      (a.serviceName && a.serviceName.toLowerCase().includes(search.toLowerCase()));
-
-    const matchesStatus =
-      statusFilter === "ALL"
-        ? true
-        : statusFilter === "REJECTED"
-        ? a.status === "REJECTED" || a.status === "REJECT"
-        : a.status === statusFilter;
-
-    const aptDate = (a.date || "").split("T")[0];
-    let matchesTime = true;
-    if (timeFilter === "TODAY") {
-      matchesTime = aptDate === todayStr;
-    } else if (timeFilter === "UPCOMING") {
-      matchesTime = aptDate > todayStr;
-    } else if (timeFilter === "ALL") {
-      matchesTime = true;
-    }
-
-    return matchesSearch && matchesStatus && matchesTime;
-  });
+  const filtered = deptAppointments;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -113,75 +87,48 @@ export default function OfficerAppointmentsPage() {
         </span>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
-        <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search citizen, phone, reference..."
-            className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Timeframe Dropdown */}
+      {appointmentError && (
+        <div role="alert" className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold shadow-xs">
           <div className="flex items-center gap-2">
-            <Calendar className="w-3.5 h-3.5 text-blue-600" />
-            <select
-              value={timeFilter}
-              onChange={(e) => setTimeFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
-            >
-              <option value="ALL">All Dates</option>
-              <option value="TODAY">Today's Visits</option>
-              <option value="UPCOMING">Upcoming Visits</option>
-            </select>
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{appointmentError.message}</span>
           </div>
-
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="PENDING">Pending Approval</option>
-              <option value="APPROVED">Approved</option>
-              <option value="CHECKED_IN">Checked In</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="REJECTED">Rejected</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
-          </div>
+          <button
+            type="button"
+            onClick={clearAppointmentError}
+            className="text-red-700 hover:text-red-900 cursor-pointer p-0.5"
+            aria-label="Dismiss error"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
-      </div>
+      )}
 
       {/* Appointments Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
+            {/* Column headers are always shown, also when there are no appointments yet, and stay
+                at the top while the list scrolls. */}
+            <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
               <tr>
-                <th className="px-5 py-3.5">Citizen Details</th>
-                <th className="px-5 py-3.5">Service Requested</th>
-                <th className="px-5 py-3.5">Scheduled Date & Time</th>
-                <th className="px-5 py-3.5">Booked Date</th>
-                <th className="px-5 py-3.5">Status</th>
+                <th className="px-5 py-3.5 whitespace-nowrap">Citizen Details</th>
+                <th className="px-5 py-3.5 whitespace-nowrap">Service Requested</th>
+                <th className="px-5 py-3.5 whitespace-nowrap">Message</th>
+                <th className="px-5 py-3.5 whitespace-nowrap">Scheduled Date &amp; Time</th>
+                <th className="px-5 py-3.5 whitespace-nowrap">Booked Date</th>
+                <th className="px-5 py-3.5 whitespace-nowrap">Status</th>
+                <th className="px-5 py-3.5 whitespace-nowrap text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
                     <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <p className="font-semibold text-slate-700">No appointments found</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      No citizen appointments match your selected filter criteria.
+                      No citizen appointments booked for your department yet.
                     </p>
                   </td>
                 </tr>
@@ -189,9 +136,7 @@ export default function OfficerAppointmentsPage() {
                 filtered.map((apt) => (
                   <tr
                     key={apt.id}
-                    className="hover:bg-slate-50/80 transition-colors cursor-pointer"
-                    onClick={() => setSelectedSlipApt(apt)}
-                    title="Click to preview official appointment confirmation slip"
+                    className="hover:bg-slate-50/80 transition-colors"
                   >
                     {/* Citizen Details */}
                     <td className="px-5 py-3.5 font-medium text-slate-900">
@@ -210,10 +155,19 @@ export default function OfficerAppointmentsPage() {
                     {/* Service */}
                     <td className="px-5 py-3.5 text-slate-700 font-medium">
                       <div>{apt.serviceName}</div>
-                      {apt.citizenNotes && (
-                        <span className="text-[10px] text-slate-400 truncate block max-w-xs" title={apt.citizenNotes}>
-                          "{apt.citizenNotes}"
-                        </span>
+                    </td>
+
+                    {/* Message the citizen wrote when booking */}
+                    <td className="px-5 py-3.5 text-slate-700 align-top">
+                      {apt.citizenNotes ? (
+                        <p
+                          className="max-w-[220px] whitespace-pre-line break-words line-clamp-3 text-[11px] leading-snug"
+                          title={apt.citizenNotes}
+                        >
+                          {apt.citizenNotes}
+                        </p>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">—</span>
                       )}
                     </td>
 
@@ -240,6 +194,38 @@ export default function OfficerAppointmentsPage() {
                         </span>
                       )}
                     </td>
+
+                    {/* Action: approve / reject */}
+                    <td className="px-5 py-3.5 text-center">
+                      {apt.status === "PENDING" ? (
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => handleApprove(e, apt)}
+                            disabled={busyId === apt.id}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                            title="Approve this booking"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleReject(e, apt)}
+                            disabled={busyId === apt.id}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                            title="Reject this booking"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400" title="Only pending bookings can be approved or rejected">
+                          —
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
@@ -247,24 +233,6 @@ export default function OfficerAppointmentsPage() {
           </table>
         </div>
       </div>
-
-      {/* Slip Modal View */}
-      {selectedSlipApt && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="relative max-w-2xl w-full">
-            <button
-              onClick={() => setSelectedSlipApt(null)}
-              className="absolute -top-10 right-0 text-white font-bold text-xs bg-slate-800 px-3 py-1.5 rounded-lg no-print cursor-pointer"
-            >
-              ✕ Close
-            </button>
-            <AppointmentSlip
-              appointment={selectedSlipApt}
-              service={services.find((s) => s.id === selectedSlipApt.serviceId)}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

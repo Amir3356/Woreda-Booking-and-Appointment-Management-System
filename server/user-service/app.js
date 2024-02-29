@@ -5,6 +5,7 @@ import { config } from "./config/index.js";
 import { logger } from "./config/logger.js";
 import { authenticate } from "./middleware/auth.js";
 import { requestLogger } from "./middleware/requestLogger.js";
+import { httpMetrics } from "./middleware/metrics.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { createProfileService } from "./services/profile.service.js";
 import { createStaffService } from "./services/staff.service.js";
@@ -20,6 +21,7 @@ export function createApp() {
   app.set("query parser", "simple");
   app.use(express.json({ limit: "1mb" }));
   app.use(requestLogger(logger));
+  app.use(httpMetrics());
   app.use(authenticate(config.jwtSecret));
   app.use(createRoutes({
     profileController: createProfileController(createProfileService()),

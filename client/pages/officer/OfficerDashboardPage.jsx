@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useStore } from "@/context";
 import StatusBadge from "@/components/ui/StatusBadge";
 import {
@@ -6,35 +5,27 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  Megaphone,
   ArrowRight,
-  FileCheck2,
   Check,
   X,
 } from "lucide-react";
 import Link from "@/components/ui/Link";
+import { displayDate, displayTime } from "@/utils";
 
 export default function OfficerDashboardPage() {
   const {
     currentUser,
     appointments,
     queue,
-    callNextCitizen,
-    updateQueueStatus,
     updateAppointmentStatus,
   } = useStore();
 
   const officerDeptId = currentUser?.departmentId;
 
-  // Filter scoped to officer's assigned department (or all if unassigned)
-  const deptAppointments = appointments.filter((a) => {
-    if (!officerDeptId) return true;
-    return (
-      a.departmentId === officerDeptId ||
-      (currentUser?.departmentName &&
-        a.departmentName?.toLowerCase() === currentUser.departmentName?.toLowerCase())
-    );
-  });
+  // Only the department the Admin assigned in Account Provision (none when unassigned).
+  const deptAppointments = appointments.filter(
+    (a) => Boolean(officerDeptId) && a.departmentId === officerDeptId
+  );
   const deptQueue = queue.filter((q) => {
     if (!officerDeptId) return true;
     return q.departmentId === officerDeptId;
@@ -45,45 +36,8 @@ export default function OfficerDashboardPage() {
   const completedToday = deptAppointments.filter((a) => a.status === "COMPLETED").length;
   const noShowToday = deptAppointments.filter((a) => a.status === "NO_SHOW").length;
 
-  const [callAlert, setCallAlert] = useState("");
-  const [internalNote, setInternalNote] = useState("");
-
-  const handleCallNext = () => {
-    const called = callNextCitizen(officerDeptId, currentUser?.counterNumber || 1);
-    if (called) {
-      setCallAlert(`Now calling Token ${called.tokenNumber} (${called.citizenName}) to Counter #1`);
-      setTimeout(() => setCallAlert(""), 4000);
-    } else {
-      setCallAlert("No citizens currently waiting in the lobby queue.");
-      setTimeout(() => setCallAlert(""), 3000);
-    }
-  };
-
-  const handleCompleteCurrent = () => {
-    if (!servingCitizen) return;
-    updateQueueStatus(servingCitizen.id, "COMPLETED");
-  };
-
-  const handleNoShowCurrent = () => {
-    if (!servingCitizen) return;
-    updateQueueStatus(servingCitizen.id, "NO_SHOW");
-  };
-
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Top Banner Alert when calling */}
-      {callAlert && (
-        <div className="p-4 rounded-2xl bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-between shadow-md animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center gap-2">
-            <Megaphone className="w-5 h-5" />
-            <span className="text-sm">{callAlert}</span>
-          </div>
-          <button onClick={() => setCallAlert("")} className="text-slate-900 font-bold text-xs">
-            ✕
-          </button>
-        </div>
-      )}
-
       {/* Desk Status Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
@@ -123,97 +77,6 @@ export default function OfficerDashboardPage() {
         </div>
       </div>
 
-      {/* Currently Serving & Calling Control Station */}
-      <div className="bg-white rounded-2xl border-2 border-emerald-600/40 p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
-            <h3 className="font-bold text-slate-900 text-base">
-              Service Counter Desk #1 (Live Desk)
-            </h3>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleCallNext}
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow-md transition-all active:scale-95"
-            >
-              <Megaphone className="w-4 h-4 text-amber-300" />
-              <span>Call Next Citizen</span>
-            </button>
-
-            <Link
-              href="/officer/verify"
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 shadow-xs"
-            >
-              <FileCheck2 className="w-4 h-4 text-blue-600" />
-              <span>Check-in Arrival</span>
-            </Link>
-          </div>
-        </div>
-
-        {servingCitizen ? (
-          <div className="py-6 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl bg-emerald-50/60 border border-emerald-200">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-emerald-800">Queue Token</span>
-                <p className="text-3xl font-mono font-black text-emerald-900">{servingCitizen.tokenNumber}</p>
-              </div>
-
-              <div>
-                <span className="text-[10px] uppercase font-bold text-emerald-800">Citizen Name</span>
-                <p className="text-base font-bold text-slate-900">{servingCitizen.citizenName}</p>
-                <p className="text-xs text-slate-600">{servingCitizen.serviceName}</p>
-              </div>
-
-              <div>
-                <span className="text-[10px] uppercase font-bold text-emerald-800">Called At</span>
-                <p className="text-sm font-semibold text-slate-800">{servingCitizen.calledTime || "Just now"}</p>
-                <span className="text-[10px] text-emerald-700 font-bold">STATUS: IN PROGRESS</span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <input
-                  type="text"
-                  placeholder="Internal note for citizen record..."
-                  value={internalNote}
-                  onChange={(e) => setInternalNote(e.target.value)}
-                  className="px-3 py-2 border rounded-xl text-xs w-full sm:w-72"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleNoShowCurrent}
-                  className="px-4 py-2 rounded-xl bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center gap-1.5"
-                >
-                  <XCircle className="w-4 h-4" />
-                  <span>Mark No-Show</span>
-                </button>
-
-                <button
-                  onClick={handleCompleteCurrent}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Service Completed</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="py-10 text-center text-slate-400">
-            <Clock className="w-10 h-10 mx-auto mb-2 opacity-50" />
-            <p className="text-xs font-medium">Counter is currently free.</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Click "Call Next Citizen" to bring the next waiting person to your desk.
-            </p>
-          </div>
-        )}
-      </div>
-
       {/* Today's Department Appointments Schedule */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
@@ -234,10 +97,10 @@ export default function OfficerDashboardPage() {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold text-[10px]">
               <tr>
-                <th className="px-5 py-3">Reference #</th>
+                <th className="px-5 py-3">Appointment Date&amp;Time</th>
                 <th className="px-5 py-3">Citizen Name</th>
                 <th className="px-5 py-3">Service</th>
-                <th className="px-5 py-3">Slot</th>
+                <th className="px-5 py-3">Message</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3 text-right">Desk Action</th>
               </tr>
@@ -252,20 +115,35 @@ export default function OfficerDashboardPage() {
               ) : (
                 deptAppointments.map((apt) => (
                   <tr key={apt.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-5 py-3.5 font-mono font-bold text-slate-900">
-                      <div>{apt.referenceNumber}</div>
+                    {/* The date and time the citizen chose when booking */}
+                    <td className="px-5 py-3.5">
+                      <div className="font-bold text-slate-900">{displayDate(apt.date)}</div>
+                      <span className="text-[11px] text-blue-700 font-semibold">{displayTime(apt.timeSlot)}</span>
+                    </td>
+                    <td className="px-5 py-3.5 font-medium text-slate-900">
+                      <div>{apt.citizenName}</div>
+                      <span className="text-[10px] text-slate-400 font-normal">{apt.citizenPhone}</span>
                       {apt.tokenNumber && (
                         <span className="text-[10px] text-emerald-700 font-bold block">
                           Token: {apt.tokenNumber}
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-3.5 font-medium text-slate-900">
-                      <div>{apt.citizenName}</div>
-                      <span className="text-[10px] text-slate-400 font-normal">{apt.citizenPhone}</span>
-                    </td>
                     <td className="px-5 py-3.5 text-slate-700">{apt.serviceName}</td>
-                    <td className="px-5 py-3.5 text-slate-600 font-semibold">{apt.timeSlot}</td>
+
+                    {/* Message the citizen wrote when booking */}
+                    <td className="px-5 py-3.5 text-slate-700 align-top">
+                      {apt.citizenNotes ? (
+                        <p
+                          className="max-w-[220px] whitespace-pre-line break-words line-clamp-3 text-[11px] leading-snug"
+                          title={apt.citizenNotes}
+                        >
+                          {apt.citizenNotes}
+                        </p>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3.5">
                       <StatusBadge status={apt.status} />
                     </td>

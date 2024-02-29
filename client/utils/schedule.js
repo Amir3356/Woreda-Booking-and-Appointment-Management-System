@@ -25,7 +25,7 @@ export function weekdayOfIso(iso) {
   return WEEKDAYS[(new Date(y, m - 1, d).getDay() + 6) % 7];
 }
 
-function addDays(iso, n) {
+export function addDays(iso, n) {
   const [y, m, d] = iso.split("-").map(Number);
   return localIsoDate(new Date(y, m - 1, d + n));
 }
@@ -121,6 +121,8 @@ export function closedMessage(reason, { date, schedule } = {}) {
       return `This service is closed on ${date ? DAY_NAMES[weekdayOfIso(date)] + "s" : "that day"}${
         schedule ? `. Open ${formatWorkingDays(schedule.workingDays)}` : ""
       }. Choose another date.`;
+    case "DAY_OVER":
+      return "All of today's appointment times have already passed. Choose another date.";
     case "DAILY_CAPACITY_REACHED":
       return "All appointments for that day are taken. Choose another date.";
     default:

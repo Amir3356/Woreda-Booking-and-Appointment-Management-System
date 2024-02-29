@@ -2,6 +2,14 @@
 // instead of reading the services/departments collections.
 import grpc from "@grpc/grpc-js";
 import { NotFoundError, UnavailableError } from "../utils/errors.js";
+import { histogram } from "../config/metrics.js";
+
+const catalogCalls = histogram(
+  "woreda_grpc_catalog_call_duration_seconds",
+  "gRPC catalog lookups to department-service, by result code.",
+  ["code"],
+  [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 3],
+);
 
 // Bounds one lookup, retries included, so a slow catalog cannot stall a booking.
 export const CALL_TIMEOUT_MS = 3000;
@@ -12,7 +20,9 @@ export function createCatalogRepository(client) {
      *  UnavailableError when department-service cannot answer. */
     getService(id) {
       return new Promise((resolve, reject) => {
+        const end = catalogCalls.startTimer();
         client.GetService({ serviceId: id }, { deadline: Date.now() + CALL_TIMEOUT_MS }, (err, resp) => {
+          end({ code: err ? grpc.status[err.code] ?? String(err.code) : "OK" });
           if (err) return reject(mapError(err, id));
           resolve(toCatalogService(resp));
         });

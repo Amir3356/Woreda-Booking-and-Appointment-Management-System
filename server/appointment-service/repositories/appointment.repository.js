@@ -16,6 +16,10 @@ export async function create(doc) {
 
 export const findById = (id) => Appointment.findById(id).lean();
 
+/** Appointments of a service on a date that take a place (not CANCELLED or REJECTED). */
+export const countHoldingPlace = (serviceId, date) =>
+  Appointment.countDocuments({ serviceId, date, status: { $nin: ["CANCELLED", "REJECTED"] } });
+
 /** Latest appointment whose reference number or citizen phone equals ref. */
 export const findLatestByReferenceOrPhone = (ref) =>
   Appointment.findOne({ $or: [{ referenceNumber: ref }, { citizenPhone: ref }] }).sort({ createdAt: -1 }).lean();

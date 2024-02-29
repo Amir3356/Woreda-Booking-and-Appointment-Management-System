@@ -7,6 +7,9 @@ import { randomBytes } from "node:crypto";
 import { Kafka, logLevel } from "kafkajs";
 import { config } from "./index.js";
 import { logger } from "./logger.js";
+import { counter } from "./metrics.js";
+
+const kafkaEvents = counter("woreda_kafka_events_total", "Events published to Kafka, by topic and result (sent or failed).", ["topic", "result"]);
 
 export const APPOINTMENTS_TOPIC = "woreda.appointments";
 export const CATALOG_TOPIC = "woreda.catalog";
@@ -29,9 +32,19 @@ function createPublisher(topic, keyField) {
   }
   const kafka = new Kafka({ clientId: SOURCE, brokers: config.kafkaBrokers.split(","), logLevel: logLevel.NOTHING });
   const producer = kafka.producer({ allowAutoTopicCreation: false });
-  let ready = producer.connect().then(
-    () => logger.info({ brokers: config.kafkaBrokers, topic }, "streaming events to kafka"),
-    (err) => logger.error({ err: err.message }, "kafka connect failed; events will retry on next publish"),
+  // Track the connection, so a publish after a failed start (Kafka not ready yet) or a broker
+  // restart connects again instead of failing with "The producer is disconnected".
+  let connected = false;
+  producer.on(producer.events.CONNECT, () => {
+    connected = true;
+  });
+  producer.on(producer.events.DISCONNECT, () => {
+    connected = false;
+  });
+  const connect = () =>
+    producer.connect().then(() => logger.info({ brokers: config.kafkaBrokers, topic }, "streaming events to kafka"));
+  let ready = connect().catch((err) =>
+    logger.error({ err: err.message }, "kafka connect failed; events will retry on next publish"),
   );
 
   return {
@@ -41,8 +54,13 @@ function createPublisher(topic, keyField) {
         occurredAt: new Date().toISOString(), [keyField]: key, ...(data == null ? {} : { data }),
       };
       ready = ready
+        .then(() => (connected ? undefined : connect()))
         .then(() => producer.send({ topic, acks: -1, messages: [{ key, value: JSON.stringify(event), headers: { type } }] }))
-        .catch((err) => logger.error({ type, key, err: err.message }, "event not delivered to kafka"));
+        .then(() => kafkaEvents.inc({ topic: topic, result: "sent" }))
+        .catch((err) => {
+          kafkaEvents.inc({ topic: topic, result: "failed" });
+          logger.error({ type, key, err: err.message }, "event not delivered to kafka");
+        });
     },
     async close() {
       await ready;

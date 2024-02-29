@@ -7,6 +7,13 @@ import {
 import { newId } from "../utils/id.js";
 import { TOKEN_TTL_SECONDS, issueToken } from "../utils/token.js";
 import * as users from "../repositories/user.repository.js";
+import { counter } from "../config/metrics.js";
+
+const logins = counter(
+  "woreda_auth_logins_total",
+  "Sign-in attempts, by result (success, failure, locked, deactivated) and role.",
+  ["result", "role"],
+);
 
 export const MAX_LOGIN_FAILURES = 5;
 export const LOGIN_LOCKOUT_WINDOW_SECONDS = 15 * 60;
@@ -33,7 +40,7 @@ export function validateRegistration(input) {
     fullName: str(input.fullName).trim(),
     email: str(input.email).trim(),
     phone: str(input.phone).trim(),
-    nationalId: str(input.nationalId),
+    nationalId: str(input.nationalId).trim(), // optional; the sign-up form does not ask for it
     kebele: str(input.kebele),
     houseNumber: str(input.houseNumber),
     password: str(input.password),
@@ -42,7 +49,6 @@ export function validateRegistration(input) {
   if (byteLen(f.fullName) < 3) v.add("fullName", "Full name is required (min 3 characters).");
   if (!isValidEthiopianPhone(f.phone)) v.add("phone", "Phone number must match valid Ethiopian format (+2519XXXXXXXX).");
   if (!f.email.includes("@")) v.add("email", "A valid email address is required.");
-  if (!f.nationalId.trim()) v.add("nationalId", "National ID is required.");
   if (!isStrongPassword(f.password)) v.add("password", "Password must be at least 8 characters and include a digit or symbol.");
   v.throwIfAny();
   return f;
@@ -78,14 +84,19 @@ export function createAuthService({ sessions, jwtSecret, logger }) {
     /** Creates a CITIZEN account and returns a session token. */
     async register(input) {
       const f = validateRegistration(input);
-      const exists = (await users.existsByEmail(f.email)) || (await users.existsByNationalId(f.nationalId));
+      const exists =
+        (await users.existsByEmail(f.email)) || (f.nationalId !== "" && (await users.existsByNationalId(f.nationalId)));
       const conflict = () => new ConflictError("email or national ID already registered");
       if (exists) throw conflict();
+      const id = newId("usr");
+      // users.nationalId is required and unique in the shared schema: without one, store an internal
+      // placeholder from the account id (as provisioned staff get "ET-EMP-...").
+      const nationalId = f.nationalId || `ET-CIT-${id.slice(4)}`;
       const passwordHash = await bcrypt.hash(f.password, BCRYPT_COST);
       let doc;
       try {
         doc = await users.create({
-          _id: newId("usr"), fullName: f.fullName, email: f.email, phone: f.phone, nationalId: f.nationalId,
+          _id: id, fullName: f.fullName, email: f.email, phone: f.phone, nationalId,
           passwordHash, role: "CITIZEN", departmentId: null, counterNumber: null,
           address: buildAddress(f.kebele, f.houseNumber), isActive: true,
         });
@@ -103,6 +114,7 @@ export function createAuthService({ sessions, jwtSecret, logger }) {
         try {
           const n = await sessions.loginFailures(email);
           if (n >= MAX_LOGIN_FAILURES) {
+            logins.inc({ result: "locked", role: "unknown" });
             throw new TooManyAttemptsError(`too many failed sign-in attempts, try again in ${LOGIN_LOCKOUT_WINDOW_SECONDS / 60} minutes`);
           }
         } catch (err) {
@@ -117,9 +129,14 @@ export function createAuthService({ sessions, jwtSecret, logger }) {
           await sessions.recordLoginFailure(email, LOGIN_LOCKOUT_WINDOW_SECONDS)
             .catch((err) => logger.warn({ err: err.message }, "record login failure"));
         }
+        logins.inc({ result: "failure", role: user?.role || "unknown" });
         throw new UnauthorizedError("invalid email or password");
       }
-      if (!user.isActive) throw new UnauthorizedError("account is deactivated");
+      if (!user.isActive) {
+        logins.inc({ result: "deactivated", role: user.role });
+        throw new UnauthorizedError("account is deactivated");
+      }
+      logins.inc({ result: "success", role: user.role });
       if (sessions) {
         await sessions.clearLoginFailures(email).catch((err) => logger.warn({ err: err.message }, "clear login failures"));
       }

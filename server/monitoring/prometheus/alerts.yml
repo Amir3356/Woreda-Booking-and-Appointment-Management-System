@@ -1,0 +1,71 @@
+# Alert rules (shown in Prometheus > Alerts and on the Grafana dashboards).
+groups:
+  - name: woreda-services
+    rules:
+      - alert: ServiceDown
+        expr: up{job="woreda-services"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.instance }} is down"
+          description: "Prometheus could not reach {{ $labels.instance }} for 1 minute."
+
+      - alert: HighErrorRate
+        expr: |
+          sum by (service) (rate(http_requests_total{status=~"5.."}[5m]))
+            / sum by (service) (rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.service }}: more than 5% of requests fail (5xx)"
+
+      - alert: SlowResponses
+        expr: |
+          histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.service }}: 95% of requests take longer than 1 second"
+
+      - alert: KafkaEventsFailing
+        expr: sum by (service, topic) (increase(woreda_kafka_events_total{result="failed"}[5m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.service }} could not deliver events to {{ $labels.topic }}"
+          description: "Live updates and cache clearing depend on these events."
+
+      - alert: CatalogLookupsFailing
+        expr: sum(increase(woreda_grpc_catalog_call_duration_seconds_count{code!~"OK|NOT_FOUND"}[5m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "appointment-service cannot reach the catalog (department-service gRPC)"
+
+  - name: woreda-infrastructure
+    rules:
+      - alert: MongoDown
+        expr: mongodb_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "MongoDB is not reachable"
+
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "Redis is not reachable (cache, sign-out and login lockout are degraded)"
+
+      - alert: KafkaDown
+        expr: kafka_brokers < 1
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "No Kafka broker available (events and live updates stop)"
+
+      - alert: NginxDown
+        expr: nginx_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "nginx (public entry point) is down"

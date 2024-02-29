@@ -10,6 +10,7 @@ import {
 } from "@/services";
 import { EthiopianFlag } from "@/components/ui";
 import { http } from "@/api/httpClient";
+import { normalizeEthiopianPhone } from "@/utils";
 import {
   Building,
   User,
@@ -26,7 +27,7 @@ import {
 
 export default function AuthPage() {
   const router = useRouter();
-  const { setCurrentUser, addUser, departments, users, provisionedAccounts } = useStore();
+  const { setCurrentUser } = useStore();
 
   const [mode, setMode] = useState("signin"); // "signin" | "signup"
 
@@ -79,7 +80,7 @@ export default function AuthPage() {
         const isOfficer = u.role === "OFFICER" || u.role === "Department Officer";
         const isAdmin = u.role === "ADMIN" || u.role === "Central Administrator";
         const role = isOfficer ? "OFFICER" : isAdmin ? "ADMIN" : "CITIZEN";
-        const portalPath = isOfficer ? "/officer" : isAdmin ? "/admin" : "/citizen";
+        const portalPath = isOfficer ? "/officer/appointments" : isAdmin ? "/admin" : "/citizen/book";
 
         const currentDepts = useStore.getState().departments || [];
         const matchedDept = currentDepts.find((d) => d.id === u.departmentId);
@@ -98,14 +99,17 @@ export default function AuthPage() {
 
         setCurrentUser(authenticatedUser, data.token);
 
-        // Keep local store synchronized with authenticated account
-        useStore.getState().addProvisionedAccount({
-          fullName: u.fullName,
-          email: u.email,
-          password: passwordClean,
-          role: departmentName || "Department Officer",
-          departmentId: u.departmentId,
-        });
+        // Keep Admin > Account Provision in sync with a server officer account (officers only:
+        // citizens and the administrator are not provisioned staff).
+        if (isOfficer) {
+          useStore.getState().addProvisionedAccount({
+            fullName: u.fullName,
+            email: u.email,
+            password: passwordClean,
+            role: departmentName || "Department Officer",
+            departmentId: u.departmentId,
+          });
+        }
 
         router.push(portalPath);
         return;
@@ -271,17 +275,20 @@ export default function AuthPage() {
   };
 
   // Handle Sign Up (Public self-registration for Citizens ONLY)
-  const handleSignUp = (e) => {
+  // Handle Sign Up (public self-registration for citizens only). The account is created in
+  // auth-service (MongoDB), so the citizen can sign in from any device and their bookings are
+  // visible to the officers of the department that provides the service.
+  const handleSignUp = async (e) => {
     e.preventDefault();
     setError("");
     setSuccessMsg("");
 
     const fullNameClean = signUpFullName.trim();
     const emailClean = signUpEmail.trim().toLowerCase();
-    const phoneClean = signUpPhone.trim();
+    const phoneClean = normalizeEthiopianPhone(signUpPhone);
 
-    if (!fullNameClean) {
-      setError("Please enter your full legal name.");
+    if (fullNameClean.length < 3) {
+      setError("Please enter your full legal name (at least 3 characters).");
       return;
     }
     if (!emailClean || !isValidEmail(emailClean)) {
@@ -301,45 +308,42 @@ export default function AuthPage() {
       return;
     }
 
-    // Duplicate account verification
-    const alreadyExists =
-      (users || []).some((u) => u.email?.toLowerCase() === emailClean) ||
-      (provisionedAccounts || []).some((a) => a.email?.toLowerCase() === emailClean);
-    if (alreadyExists) {
-      setError("An account with this email address already exists. Please sign in.");
+    if (!/^\+2519\d{8}$/.test(phoneClean)) {
+      setError("Please enter an Ethiopian mobile number, e.g. +251 911 234 567 or 0911 234 567.");
       return;
     }
-
-    if (!signUpPassword || signUpPassword.length < 6) {
-      setError("Password must be at least 6 characters long.");
+    if (signUpPassword.length < 8 || !/[\p{Nd}\p{P}\p{S}]/u.test(signUpPassword)) {
+      setError("Password must be at least 8 characters and include a number or symbol.");
       return;
     }
 
     setLoading(true);
-
-    // Register strictly as CITIZEN
-    const newUser = addUser({
-      fullName: fullNameClean,
-      email: emailClean,
-      password: signUpPassword,
-      phone: phoneClean || "+251911000000",
-      role: "CITIZEN",
-      departmentId: null,
-      departmentName: null,
-      nationalId: `ET-CIT-${Math.floor(1000 + Math.random() * 9000)}`,
-      address: "Kebele 03, Woreda Center",
-      isActive: true,
-    });
-
-    setCurrentUser(newUser);
-    setSuccessMsg("Citizen account registered successfully! Redirecting...");
-
-    setTimeout(() => {
+    try {
+      const { data } = await http.post("/auth/register", {
+        fullName: fullNameClean,
+        email: emailClean,
+        phone: phoneClean,
+        password: signUpPassword,
+      });
+      setCurrentUser({ ...data.user, role: "CITIZEN", departmentName: null }, data.token);
+      setSuccessMsg("Citizen account registered successfully! Redirecting...");
+      setTimeout(() => {
+        setLoading(false);
+        router.push("/citizen/book");
+      }, 500);
+    } catch (err) {
       setLoading(false);
-      router.push("/citizen");
-    }, 500);
+      if (err?.status === 409) {
+        setError("An account with this email address already exists. Please sign in.");
+      } else if (err?.status === 422 && err.details?.length) {
+        setError(err.details.map((d) => d.issue).join(" "));
+      } else if (err?.status === 429) {
+        setError("Too many attempts. Please wait a few minutes and try again.");
+      } else {
+        setError("Could not create your account: the server is unreachable. Please try again later.");
+      }
+    }
   };
-
 
   return (
     <div className="auth-page">
@@ -508,7 +512,7 @@ export default function AuthPage() {
 
               <div className="auth-form-group">
                 <label className="auth-label">
-                  Phone Number
+                  Phone Number *
                 </label>
                 <div className="auth-input-wrapper">
                   <div className="auth-input-icon flex items-center gap-2 pointer-events-none select-none">

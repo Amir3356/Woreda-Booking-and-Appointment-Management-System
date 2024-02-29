@@ -2,10 +2,10 @@
 import { SlotReservation } from "../models/slotReservation.model.js";
 import { isDuplicateKey } from "../utils/errors.js";
 
-/** Creates the counter at 0 when missing. */
-export async function ensure(key) {
+/** Creates the counter at `initial` (default 0) when missing. */
+export async function ensure(key, initial = 0) {
   try {
-    await SlotReservation.collection.updateOne({ _id: key }, { $setOnInsert: { count: 0 } }, { upsert: true });
+    await SlotReservation.collection.updateOne({ _id: key }, { $setOnInsert: { count: initial } }, { upsert: true });
   } catch (err) {
     if (!isDuplicateKey(err)) throw err; // a concurrent booking created it first
   }

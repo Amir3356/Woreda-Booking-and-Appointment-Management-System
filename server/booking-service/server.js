@@ -3,6 +3,7 @@
 // (woreda.catalog).
 import { config } from "./config/index.js";
 import { logger } from "./config/logger.js";
+import { startMetricsServer } from "./config/metrics.js";
 import { connectDatabase, disconnectDatabase } from "./config/database.js";
 import { createCatalogPublisher, createEventPublisher } from "./config/kafka.js";
 import { createApp } from "./app.js";
@@ -19,6 +20,7 @@ const catalogEvents = createCatalogPublisher();
 const app = createApp({ events, catalogEvents });
 
 const httpServer = app.listen(config.port, () => logger.info({ addr: `:${config.port}` }, "listening"));
+const metricsServer = startMetricsServer(); // internal /metrics for Prometheus
 
 let stopping = false;
 async function shutdown(signal) {
@@ -26,6 +28,7 @@ async function shutdown(signal) {
   stopping = true;
   logger.info({ signal }, "shutting down");
   httpServer.close();
+  metricsServer.close();
   for (const step of [() => events.close(), () => catalogEvents.close(), () => disconnectDatabase()]) {
     try {
       await step();

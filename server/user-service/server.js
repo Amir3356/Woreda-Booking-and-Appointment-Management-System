@@ -1,6 +1,7 @@
 // user-service: citizen profiles, staff provisioning and system settings (REST :8082).
 import { config } from "./config/index.js";
 import { logger } from "./config/logger.js";
+import { startMetricsServer } from "./config/metrics.js";
 import { connectDatabase, disconnectDatabase } from "./config/database.js";
 import { seedDefaults } from "./config/seed.js";
 import { createApp } from "./app.js";
@@ -15,6 +16,7 @@ try {
 
 const app = createApp();
 const httpServer = app.listen(config.port, () => logger.info({ addr: `:${config.port}` }, "listening"));
+const metricsServer = startMetricsServer(); // internal /metrics for Prometheus
 
 let stopping = false;
 async function shutdown(signal) {
@@ -22,6 +24,7 @@ async function shutdown(signal) {
   stopping = true;
   logger.info({ signal }, "shutting down");
   httpServer.close();
+  metricsServer.close();
   try {
     await disconnectDatabase();
   } catch (err) {

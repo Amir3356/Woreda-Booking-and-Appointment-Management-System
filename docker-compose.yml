@@ -215,9 +215,120 @@ services:
       kafka-init:
         condition: service_completed_successfully
 
+  # ---------------------------------------------------------------------------------------------
+  # Monitoring (server/monitoring/): Prometheus collects metrics, Grafana shows them.
+  #   Grafana     http://localhost:3001  (no sign-in)
+  #   Prometheus  http://localhost:9090
+  # Every service serves /metrics on its internal port 9464 (never through nginx); the exporters
+  # below translate MongoDB, Redis, Kafka and nginx statistics into Prometheus metrics.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # node-exporter on the host (172.17.0.1:9100)
+    volumes:
+      - ./server/monitoring/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks: [backend]
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    restart: unless-stopped
+    environment:
+      # No sign-in: every visitor is let in as an administrator. Safe only because the port is
+      # published on 127.0.0.1 (this machine); add a login back before exposing it on a network.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_NAME: Main Org.
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_AUTH_DISABLE_SIGNOUT_MENU: "true"
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_USERS_DEFAULT_THEME: dark
+      # The overview dashboard's sidebar and diagram are HTML text panels (local-only Grafana).
+      GF_PANELS_DISABLE_SANITIZE_HTML: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/overview.json
+    volumes:
+      - ./server/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./server/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      - prometheus
+    networks: [backend]
+
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.42.0
+    restart: unless-stopped
+    command:
+      - --mongodb.uri=mongodb://mongo:27017/?directConnection=true
+      - --collector.diagnosticdata
+      - --compatible-mode
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks: [backend]
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [backend]
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.8.0
+    restart: unless-stopped
+    command: ["--kafka.server=kafka:9092"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [backend]
+
+  # Host CPU, memory, disk and network (the gauges on the overview dashboard). It runs on the host
+  # network to see the real network cards, but listens only on Docker's bridge address
+  # (172.17.0.1), so it is reachable from the containers and this machine, not from the LAN.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - --web.listen-address=172.17.0.1:9100
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+)($$|/)
+      - --collector.netdev.device-exclude=^(lo|veth.*|docker.*|br-.*)$$
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro,rslave
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.3.0
+    restart: unless-stopped
+    command: ["--nginx.scrape-uri=http://nginx:8081/stub_status"]
+    depends_on:
+      - nginx
+    networks: [backend]
+
 volumes:
   mongo-data:
   kafka-data:
+  prometheus-data:
+  grafana-data:
 
 networks:
   backend:

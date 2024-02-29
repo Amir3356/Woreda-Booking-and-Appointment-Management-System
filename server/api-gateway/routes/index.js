@@ -17,6 +17,7 @@ const ROUTES = [
   // Appointment lifecycle and reports -> appointment-service
   ["/api/v1/appointments", "appointment"],
   ["/api/v1/reports", "appointment"],
+  ["/api/v1/audit-logs", "appointment"], // Admin > Audit Trail
   // Operating schedules and live counter queue -> booking-service
   ["/api/v1/schedules", "booking"],
   ["/api/v1/queue", "booking"],

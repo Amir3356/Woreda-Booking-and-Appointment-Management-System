@@ -628,7 +628,7 @@ function BookingContent() {
 
               <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Link
-                  href="/citizen/appointments"
+                  href="/citizen/book"
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#0b2545] text-white text-xs font-semibold shadow hover:bg-[#133b5c]"
                 >
                   <CalendarIcon className="w-4 h-4 text-amber-300" />

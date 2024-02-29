@@ -1,5 +1,12 @@
 // Response cache in front of the proxy: serves cached GETs (X-Cache: HIT), records misses
 // (X-Cache: MISS) and invalidates on successful writes. The rules live in services/cache.service.js.
+import { counter } from "../config/metrics.js";
+
+const cacheLookups = counter(
+  "woreda_gateway_cache_lookups_total",
+  "Response cache lookups at the gateway, by cache group and result (hit or miss).",
+  ["group", "result"],
+);
 
 /**
  * Calls fn(statusCode, bodyBuffer) once the downstream handler ends the response, and only then
@@ -46,6 +53,7 @@ export function cache(cacheService) {
     const qi = req.url.indexOf("?");
     const key = cacheService.cacheKey(route, qi < 0 ? "" : req.url.slice(qi + 1));
     const hit = await cacheService.lookup(key, req.headers["x-request-id"] || "");
+    cacheLookups.inc({ group: route.group, result: hit ? "hit" : "miss" });
     if (hit) {
       res.statusCode = 200;
       res.setHeader("Content-Type", hit.ct);

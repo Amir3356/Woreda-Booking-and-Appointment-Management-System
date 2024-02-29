@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useStore } from "@/context";
+import { profileApi } from "@/api";
+import { subscribe } from "@/api/realtime";
 
 // Layouts
 import { AdminLayout, OfficerLayout, CitizenLayout } from "@/layout";
@@ -25,18 +27,16 @@ import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminAccountProvisionPage from "@/pages/admin/AdminAccountProvisionPage";
 import AdminReportsPage from "@/pages/admin/AdminReportsPage";
 import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
+import AdminAuditPage from "@/pages/admin/AdminAuditPage";
 
 // Officer pages
-import OfficerDashboardPage from "@/pages/officer/OfficerDashboardPage";
 import OfficerAppointmentsPage from "@/pages/officer/OfficerAppointmentsPage";
 import OfficerQueuePage from "@/pages/officer/OfficerQueuePage";
 import OfficerVerifyPage from "@/pages/officer/OfficerVerifyPage";
 import OfficerReportsPage from "@/pages/officer/OfficerReportsPage";
 
 // Citizen pages
-import CitizenDashboardPage from "@/pages/citizen/CitizenDashboardPage";
 import CitizenBookAppointmentPage from "@/pages/citizen/CitizenBookAppointmentPage";
-import CitizenAppointmentsPage from "@/pages/citizen/CitizenAppointmentsPage";
 import CitizenProfilePage from "@/pages/citizen/CitizenProfilePage";
 import CitizenNotificationsPage from "@/pages/citizen/CitizenNotificationsPage";
 
@@ -47,6 +47,57 @@ export default function App() {
   useEffect(() => {
     loadDepartments().catch(() => {});
   }, [loadDepartments]);
+
+  // A session restored from the token only knows the officer's department id: show its real
+  // name (sidebar, page headings) once the departments are loaded.
+  const deptId = useStore((state) => state.currentUser?.departmentId || "");
+  const deptName = useStore(
+    (state) => state.departments.find((d) => d.id === state.currentUser?.departmentId)?.name || ""
+  );
+  useEffect(() => {
+    const user = useStore.getState().currentUser;
+    if (deptId && deptName && user?.departmentName !== deptName) {
+      useStore.setState({ currentUser: { ...user, departmentName: deptName } });
+    }
+  }, [deptId, deptName]);
+
+  // Appointments come from appointment-service, each role seeing its own part (a citizen their
+  // bookings, an officer their department's). Re-read them whenever the server reports a booking
+  // or a status change, so an officer sees a new booking and a citizen sees Approved/Rejected
+  // without refreshing.
+  const userKey = useStore((state) => (state.currentUser ? `${state.currentUser.id}|${state.currentUser.role}` : ""));
+  const loadAppointments = useStore((state) => state.loadAppointments);
+  useEffect(() => {
+    if (!userKey) {
+      useStore.setState({ appointments: [] });
+      return undefined;
+    }
+    // A burst of changes (several bookings in a second) is fetched once, 300 ms after the last one.
+    let timer = null;
+    const refreshSoon = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => loadAppointments().catch(() => {}), 300);
+    };
+    loadAppointments().catch(() => {});
+    // A citizen session restored from the token has no phone number; fill it from the profile.
+    const { currentUser } = useStore.getState();
+    if (currentUser?.role === "CITIZEN" && !currentUser.phone) {
+      profileApi
+        .get()
+        .then(({ data }) => {
+          const now = useStore.getState().currentUser;
+          if (now?.id === currentUser.id) useStore.setState({ currentUser: { ...now, ...data, role: "CITIZEN" } });
+        })
+        .catch(() => {});
+    }
+    const offChange = subscribe("appointments.changed", refreshSoon);
+    const offReconnect = subscribe("reconnected", refreshSoon);
+    return () => {
+      clearTimeout(timer);
+      offChange();
+      offReconnect();
+    };
+  }, [userKey, loadAppointments]);
 
   return (
     <Routes>
@@ -72,11 +123,12 @@ export default function App() {
         <Route path="account-provision" element={<AdminAccountProvisionPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
+        <Route path="audit" element={<AdminAuditPage />} />
       </Route>
 
       {/* Officer Service Desk */}
       <Route path="/officer" element={<OfficerLayout />}>
-        <Route index element={<OfficerDashboardPage />} />
+        <Route index element={<Navigate to="appointments" replace />} />
         <Route path="appointments" element={<OfficerAppointmentsPage />} />
         <Route path="queue" element={<OfficerQueuePage />} />
         <Route path="verify" element={<OfficerVerifyPage />} />
@@ -85,9 +137,10 @@ export default function App() {
 
       {/* Citizen Portal */}
       <Route path="/citizen" element={<CitizenLayout />}>
-        <Route index element={<CitizenDashboardPage />} />
+        {/* Citizens work on Book Appointment; there is no separate start or history page. */}
+        <Route index element={<Navigate to="book" replace />} />
         <Route path="book" element={<CitizenBookAppointmentPage />} />
-        <Route path="appointments" element={<CitizenAppointmentsPage />} />
+        <Route path="appointments" element={<Navigate to="/citizen/book" replace />} />
         <Route path="profile" element={<CitizenProfilePage />} />
         <Route path="notifications" element={<CitizenNotificationsPage />} />
       </Route>

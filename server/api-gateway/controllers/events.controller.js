@@ -18,6 +18,19 @@ export function createEventsController({ cacheService, realtimeService, logger }
         "availability cache cleared by event");
     },
 
+    /**
+     * woreda.appointments, per gateway instance: tells open pages that appointments changed, so a
+     * department officer sees a new booking and a citizen sees Approved/Rejected without a refresh.
+     * The notice carries no personal data; each page re-reads through the API, which only returns
+     * what its user may see (an officer: their own department).
+     */
+    async appointmentNotice(ev, { offset }) {
+      if (!ev) return logger.warn({ offset }, "skipping malformed appointment event");
+      const event = typeof ev.type === "string" ? ev.type : "";
+      realtimeService.broadcast({ type: "appointments.changed", event });
+      logger.info({ event, appointmentId: ev.appointmentId, pages: realtimeService.count() }, "appointment change pushed to pages");
+    },
+
     /** woreda.catalog (works without Redis too). */
     async catalogEvent(ev, { offset }) {
       if (!ev) return logger.warn({ offset }, "skipping malformed catalog event");

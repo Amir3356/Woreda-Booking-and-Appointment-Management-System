@@ -22,7 +22,7 @@ export default function Navbar() {
   const getDashboardLink = () => {
     if (currentUser?.role === "ADMIN") return { href: "/admin", label: "Admin Console" };
     if (currentUser?.role === "OFFICER") return { href: "/officer", label: "Officer Desk" };
-    return { href: "/citizen", label: "My Citizen Dashboard" };
+    return { href: "/citizen/book", label: "Book Appointment" };
   };
 
   const dashboard = getDashboardLink();

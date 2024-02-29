@@ -1,20 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useStore } from "@/context";
 import { subscribe, isLive } from "@/api/realtime";
 import { scheduleApi } from "@/api";
 import {
+  APPOINTMENT_STATUS_CONFIG,
   bookableRange,
   closedMessage,
   displayDate,
   displayTime,
   formatWorkingDays,
   localIsoDate,
+  addDays,
   nextWorkingDate,
   scheduleOn,
   schedulesForService,
   weekdayOfIso,
+  normalizeEthiopianPhone,
 } from "@/utils";
-import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 import { EthiopianFlag } from "@/components/ui";
 import {
   Calendar,
@@ -36,7 +38,11 @@ export default function CitizenBookAppointmentPage() {
 
   const {
     currentUser,
+    appointments = [],
     bookAppointment,
+    updateAppointmentStatus,
+    serverSessionInvalid,
+    setCurrentUser,
     departments = [],
     services = [],
     schedules = [],
@@ -67,6 +73,14 @@ export default function CitizenBookAppointmentPage() {
 
   const [slots, setSlots] = useState([]);
 
+  /** Bookings still possible on a day: free places in its times, capped by the daily capacity. */
+  const placesLeft = (data) => {
+    const free = (data?.slots || [])
+      .filter((sl) => sl.status === "Available")
+      .reduce((sum, sl) => sum + (sl.remainingCapacity || 0), 0);
+    return data?.dailyCapacity ? Math.max(0, Math.min(free, data.dailyCapacity - data.bookedForDay)) : free;
+  };
+
   // Overview table: every active service that has an opening schedule, on its next working day,
   // with that day's availability from booking-service.
   useEffect(() => {
@@ -94,19 +108,37 @@ export default function CitizenBookAppointmentPage() {
       })
       .filter(Boolean);
     setSlots(rows);
+    // Availability of a row's date; when today's times have all passed, the next working day.
+    const availabilityFor = async (row) => {
+      const first = await scheduleApi.availability({ serviceId: row.serviceId, date: row.date });
+      if (first.data?.closedReason !== "DAY_OVER") return { row, res: first };
+      const srv = (services || []).find((s) => s.id === row.serviceId);
+      const date = nextWorkingDate(srv, schedules, addDays(row.date, 1));
+      const sch = date ? scheduleOn(srv, schedules, date) : null;
+      if (!date || !sch) return { row, res: first };
+      const next = {
+        ...row,
+        id: `slot-${row.serviceId}-${date}`,
+        date,
+        dateDisplay: displayDate(date),
+        time: `${displayTime(sch.openingTime)} – ${displayTime(sch.closingTime)}`,
+        workingDays: formatWorkingDays(sch.workingDays),
+      };
+      return { row: next, res: await scheduleApi.availability({ serviceId: row.serviceId, date }) };
+    };
     Promise.all(
-      rows.map((row) =>
-        scheduleApi
-          .availability({ serviceId: row.serviceId, date: row.date })
-          .then(({ data }) => {
+      rows.map((original) =>
+        availabilityFor(original)
+          .then(({ row, res: { data } }) => {
             const open = (data?.slots || []).filter((sl) => sl.status === "Available").length;
-            // Appointments still possible that day: free times, limited by the daily capacity.
-            const left = data?.dailyCapacity ? Math.min(open, data.dailyCapacity - data.bookedForDay) : open;
+            // Appointments still possible that day: free places in the open times, limited by
+            // the daily capacity the Admin set in Schedule Management.
+            const left = placesLeft(data);
             const full = !data?.closedReason && open === 0 ? "Full" : null;
             const actionValue = left > 0 ? "Available" : full || (data?.closedReason === "DAILY_CAPACITY_REACHED" ? "Full" : "Unavailable");
             return { ...row, actionValue, availabilityText: left > 0 ? `${left} left` : actionValue };
           })
-          .catch(() => ({ ...row, availabilityText: "Unavailable" }))
+          .catch(() => ({ ...original, availabilityText: "Unavailable" }))
       )
     ).then((checked) => {
       if (!cancelled) setSlots(checked);
@@ -115,6 +147,50 @@ export default function CitizenBookAppointmentPage() {
       cancelled = true;
     };
   }, [schedules, services, departments, availabilityVersion]);
+
+  // Status column: the citizen's own latest booking for the row's service. A department officer
+  // approves or rejects it (Officer > Appointment Management); the citizen can cancel it while it
+  // is still Pending.
+  const DECISION_STATUSES = {
+    PENDING: "Pending",
+    APPROVED: "Approved",
+    REJECTED: "Rejected",
+    CANCELLED: "Cancelled",
+  };
+  // Only while Pending: once a department officer approves the booking it can't be cancelled.
+  const CANCELLABLE = ["PENDING"];
+  const [cancellingId, setCancellingId] = useState(null);
+  const [cancelError, setCancelError] = useState("");
+
+  const handleCancelBooking = async (booking) => {
+    const when = `${displayDate(booking.date)} at ${displayTime(booking.timeSlot)}`;
+    if (!window.confirm(`Cancel your ${booking.serviceName} appointment on ${when}?\n\nReference: ${booking.referenceNumber}`)) {
+      return;
+    }
+    setCancelError("");
+    setCancellingId(booking.id);
+    const ok = await updateAppointmentStatus(booking.id, "CANCELLED");
+    setCancellingId(null);
+    if (ok) {
+      setAvailabilityVersion((v) => v + 1); // the freed time is bookable again
+      showSuccess(`Appointment ${booking.referenceNumber} has been cancelled.`);
+    } else {
+      setCancelError(
+        `Could not cancel ${booking.referenceNumber}: ${
+          useStore.getState().appointmentError?.message || "please try again."
+        }`
+      );
+    }
+  };
+  const bookingStatusFor = (serviceId) =>
+    (appointments || [])
+      .filter(
+        (a) =>
+          a.serviceId === serviceId &&
+          a.citizenId === currentUser?.id &&
+          DECISION_STATUSES[a.status]
+      )
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0] || null;
 
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("ALL");
@@ -125,7 +201,15 @@ export default function CitizenBookAppointmentPage() {
   const [citizenName, setCitizenName] = useState(currentUser?.fullName || "");
   const [citizenPhone, setCitizenPhone] = useState(currentUser?.phone || "");
   const [citizenNotes, setCitizenNotes] = useState("");
-  const [bookingSuccessApt, setBookingSuccessApt] = useState(null);
+  const [successMsg, setSuccessMsg] = useState("");
+  // One timer for the success banner, so an older message's timer cannot hide a newer message.
+  const successTimer = useRef(null);
+  const showSuccess = (msg) => {
+    clearTimeout(successTimer.current);
+    setSuccessMsg(msg);
+    successTimer.current = setTimeout(() => setSuccessMsg(""), 4500);
+  };
+  useEffect(() => () => clearTimeout(successTimer.current), []);
 
   // Modal service dropdown: every active service from Admin > Services Management.
   // The department is taken from the chosen service, so citizens don't pick it separately.
@@ -171,6 +255,17 @@ export default function CitizenBookAppointmentPage() {
       .availability({ serviceId, date })
       .then(({ data }) => {
         if (cancelled) return;
+        if (data?.closedReason === "DAY_OVER" && date === localIsoDate()) {
+          // All of today's times have passed: go to the service's next working day instead.
+          const srv = (useStore.getState().services || []).find((s) => s.id === serviceId);
+          const next = nextWorkingDate(srv, useStore.getState().schedules || [], addDays(date, 1));
+          if (next) {
+            setSelectedSlot((prev) => (prev?.serviceId === serviceId && prev.date === date
+              ? { ...prev, date: next, dateDisplay: displayDate(next), time: "" }
+              : prev));
+            return;
+          }
+        }
         setAvailability({ loading: false, data, error: "" });
         // Keep the chosen time if it is still free, otherwise take the first free slot.
         const free = (data?.slots || []).filter((sl) => sl.status === "Available");
@@ -216,6 +311,8 @@ export default function CitizenBookAppointmentPage() {
   const handleServiceChange = (serviceId) => {
     const srv = activeServices.find((s) => s.id === serviceId);
     setSelectedSlot((prev) => {
+      // Same service chosen again: keep the date and time already picked.
+      if (prev?.serviceId === serviceId) return prev;
       // Keep the date if the new service is open then; otherwise move to its next working day.
       const sch = prev?.date && srv ? scheduleOn(srv, schedules, prev.date) : null;
       const keep = Boolean(sch && prev.date >= todayIso && (sch.workingDays || []).includes(weekdayOfIso(prev.date)));
@@ -277,6 +374,7 @@ export default function CitizenBookAppointmentPage() {
   const handleOpenBooking = (slot, bookable = activeServices) => {
     // A slot whose service was since deactivated opens with no service chosen.
     setSelectedSlot({ ...slot, time: "", ...serviceSelection(slot.serviceId, bookable) });
+    setBookingError("");
     setCitizenName(currentUser?.fullName || "");
     setCitizenPhone(currentUser?.phone || "");
     setCitizenNotes("");
@@ -310,48 +408,48 @@ export default function CitizenBookAppointmentPage() {
     );
   };
 
-  const handleConfirmBooking = (e) => {
+  // Books through appointment-service, so the booking is stored in MongoDB and appears for the
+  // officers of the department that provides the service.
+  const [submitting, setSubmitting] = useState(false);
+  const [bookingError, setBookingError] = useState("");
+  const handleConfirmBooking = async (e) => {
     e.preventDefault();
-    if (!selectedSlot || !canConfirm) return;
-
-    const refNumber = `WRD-${selectedSlot.date.replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const newApt = {
-      id: `apt-${Date.now()}`,
-      referenceNumber: refNumber,
-      citizenId: currentUser?.id || "usr-citizen-temp",
-      citizenName: citizenName || currentUser?.fullName || "Citizen Applicant",
-      citizenPhone: citizenPhone || currentUser?.phone || "",
-      citizenEmail: currentUser?.email || "",
-      departmentId: selectedSlot.departmentId,
-      departmentName: selectedSlot.department,
-      serviceId: selectedSlot.serviceId,
-      serviceName: selectedSlot.service,
-      date: selectedSlot.date,
-      timeSlot: selectedSlot.time,
-      status: "PENDING",
-      tokenNumber: null,
-      citizenNotes: citizenNotes || "",
-      officerNotes: null,
-      createdAt: new Date().toISOString(),
-    };
-
-    bookAppointment({
-      citizenName: newApt.citizenName,
-      citizenPhone: newApt.citizenPhone,
-      citizenEmail: newApt.citizenEmail,
-      departmentId: newApt.departmentId,
-      departmentName: newApt.departmentName,
-      serviceId: newApt.serviceId,
-      serviceName: newApt.serviceName,
-      date: newApt.date,
-      timeSlot: newApt.timeSlot,
-      citizenNotes: newApt.citizenNotes,
-    });
-
-
-    setSelectedSlot(null);
-    setBookingSuccessApt(newApt);
+    if (!selectedSlot || !canConfirm || submitting) return;
+    setBookingError("");
+    setSubmitting(true);
+    try {
+      const apt = await bookAppointment({
+        citizenName: (citizenName || currentUser?.fullName || "").trim(),
+        citizenPhone: normalizeEthiopianPhone(citizenPhone || currentUser?.phone || ""),
+        citizenEmail: currentUser?.email || "",
+        departmentId: selectedSlot.departmentId,
+        serviceId: selectedSlot.serviceId,
+        date: selectedSlot.date,
+        timeSlot: selectedSlot.time,
+        citizenNotes: citizenNotes || "",
+      });
+      setSelectedSlot(null);
+      setAvailabilityVersion((v) => v + 1); // the slot just taken
+      showSuccess(`Appointment booked successfully! Reference number: ${apt.referenceNumber}`);
+    } catch (err) {
+      if (err?.status === 401 || err?.status === 403) {
+        setBookingError("Please sign out and sign in again with your citizen account to book.");
+      } else if (err?.status === 409 && err.code === "DAILY_CAPACITY_REACHED") {
+        setBookingError("All appointments for that day are already booked (the daily capacity is reached). Please choose another date.");
+        setAvailabilityVersion((v) => v + 1);
+      } else if (err?.status === 409) {
+        setBookingError("That time was just taken. Please choose another time.");
+        setAvailabilityVersion((v) => v + 1);
+      } else if (err?.status === 422 && err.details?.length) {
+        setBookingError(err.details.map((d) => d.issue).join(" "));
+      } else if (err?.status === 404) {
+        setBookingError("This service is no longer available. Please choose another one.");
+      } else {
+        setBookingError("Could not book the appointment: the server is unreachable. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -385,6 +483,64 @@ export default function CitizenBookAppointmentPage() {
           <span>Book Appointment</span>
         </button>
       </div>
+
+      {/* Success Notification */}
+      {successMsg && (
+        <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold shadow-xs animate-in fade-in duration-150">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessMsg("")}
+            className="text-emerald-700 hover:text-emerald-900 cursor-pointer p-0.5"
+            aria-label="Dismiss notification"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {serverSessionInvalid && (
+        <div role="alert" className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              Your sign-in is no longer valid, so your bookings cannot be shown, booked or cancelled.
+              Please sign out and sign in again. If your account was created before today&apos;s update,
+              sign up again with your email.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentUser(null);
+              window.location.assign("/login");
+            }}
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold cursor-pointer"
+          >
+            Sign out
+          </button>
+        </div>
+      )}
+
+      {cancelError && (
+        <div role="alert" className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{cancelError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCancelError("")}
+            className="text-red-700 hover:text-red-900 cursor-pointer p-0.5"
+            aria-label="Dismiss error"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div
@@ -478,12 +634,18 @@ export default function CitizenBookAppointmentPage() {
                 <th className="px-5 py-3.5 whitespace-nowrap">Department</th>
                 <th className="px-5 py-3.5 whitespace-nowrap">Service</th>
                 <th className="px-5 py-3.5 whitespace-nowrap">Availability</th>
+                <th
+                  className="px-5 py-3.5 whitespace-nowrap"
+                  title="Your booking for this service: Pending until a department officer approves or rejects it"
+                >
+                  Status
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredSlots.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-16 text-center">
+                  <td colSpan={5} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-slate-400">
                       <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
                         <Calendar className="w-6 h-6 text-slate-400" />
@@ -506,12 +668,7 @@ export default function CitizenBookAppointmentPage() {
                   return (
                     <tr
                       key={slot.id}
-                      onClick={() => isAvailable && handleOpenBooking(slot)}
-                      className={`transition-colors ${
-                        isAvailable
-                          ? "hover:bg-emerald-50/50 cursor-pointer"
-                          : "hover:bg-slate-50/70"
-                      }`}
+                      className="hover:bg-slate-50/70 transition-colors"
                     >
                       {/* Column 1: Appointment Date&Time */}
                       <td className="px-5 py-3.5">
@@ -558,6 +715,51 @@ export default function CitizenBookAppointmentPage() {
                             Unavailable
                           </span>
                         )}
+                      </td>
+
+                      {/* Column 5: Status of the citizen's booking (decided by a department officer) */}
+                      <td className="px-5 py-3.5">
+                        {(() => {
+                          const booking = bookingStatusFor(slot.serviceId);
+                          if (!booking) {
+                            return <span className="text-[11px] text-slate-400">Not booked</span>;
+                          }
+                          const cfg = APPOINTMENT_STATUS_CONFIG[booking.status];
+                          return (
+                            <div>
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${cfg.bg}`}
+                                title={`${booking.referenceNumber} · ${displayDate(booking.date)} ${displayTime(booking.timeSlot)}`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`}></span>
+                                {DECISION_STATUSES[booking.status]}
+                              </span>
+                              {booking.status === "REJECTED" && booking.rejectionReason && (
+                                <span
+                                  className="text-[10px] text-rose-600 block mt-0.5 truncate max-w-[160px]"
+                                  title={booking.rejectionReason}
+                                >
+                                  Reason: {booking.rejectionReason}
+                                </span>
+                              )}
+                              {CANCELLABLE.includes(booking.status) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCancelBooking(booking);
+                                  }}
+                                  disabled={cancellingId === booking.id}
+                                  className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                                  title={`Cancel appointment ${booking.referenceNumber}`}
+                                >
+                                  <X className="w-3 h-3" />
+                                  {cancellingId === booking.id ? "Cancelling…" : "Cancel"}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );
@@ -691,6 +893,14 @@ export default function CitizenBookAppointmentPage() {
                       Open {formatWorkingDays(scheduleForDate.workingDays)}, {displayTime(scheduleForDate.openingTime)} –{" "}
                       {displayTime(scheduleForDate.closingTime)}
                       {dateRange?.max ? ` · bookable until ${displayDate(dateRange.max)}` : ""}
+                      {availability.data?.dailyCapacity ? (
+                        <>
+                          {" · "}
+                          <span className={placesLeft(availability.data) > 0 ? "font-semibold text-emerald-700" : "font-semibold text-rose-700"}>
+                            {placesLeft(availability.data)} of {availability.data.dailyCapacity} places left that day
+                          </span>
+                        </>
+                      ) : null}
                     </p>
                   )}
                   {(dateNotice || availability.error) && (
@@ -769,6 +979,13 @@ export default function CitizenBookAppointmentPage() {
                 </div>
               </div>
 
+              {bookingError && (
+                <p role="alert" className="flex items-start gap-1.5 text-xs font-semibold text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{bookingError}</span>
+                </p>
+              )}
+
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
@@ -780,42 +997,14 @@ export default function CitizenBookAppointmentPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!canConfirm}
+                  disabled={!canConfirm || submitting}
                   className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
                 >
                   <CheckCircle className="w-4 h-4" />
-                  <span>Confirm Booking</span>
+                  <span>{submitting ? "Booking…" : "Confirm Booking"}</span>
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Booking Success Slip Modal */}
-      {bookingSuccessApt && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 my-8">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto mb-2">
-                <CheckCircle className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-bold text-slate-900">Appointment Booked!</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Your reservation has been recorded in the municipal queue.
-              </p>
-            </div>
-
-            <AppointmentSlip appointment={bookingSuccessApt} />
-
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <button
-                onClick={() => setBookingSuccessApt(null)}
-                className="w-full py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold transition-colors cursor-pointer"
-              >
-                Done
-              </button>
-            </div>
           </div>
         </div>
       )}

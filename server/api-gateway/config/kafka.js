@@ -104,5 +104,12 @@ export function startConsumers({ eventsController, cacheEnabled }) {
     onMessage: eventsController.catalogEvent,
   }));
 
+  // Appointment changes for open pages (WebSocket): like catalog changes, one group per instance.
+  stops.push(runConsumer({
+    kafka, groupId: `api-gateway-ws-appointments-${os.hostname()}`, topic: TOPIC_APPOINTMENTS, toLatest: true,
+    startMessage: "listening for appointment changes",
+    onMessage: eventsController.appointmentNotice,
+  }));
+
   return () => Promise.all(stops.map((s) => s()));
 }

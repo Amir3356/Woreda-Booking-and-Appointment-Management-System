@@ -76,7 +76,7 @@ export default function RegisterPage() {
     setCurrentUser(newUser);
     setSuccess(true);
     setTimeout(() => {
-      router.push("/citizen");
+      router.push("/citizen/book");
     }, 1200);
   };
 

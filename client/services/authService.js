@@ -352,7 +352,7 @@ export function resolveUserSession(
     const isAdmin =
       matchedUser.role === "ADMIN" || matchedUser.role === "Central Administrator";
     const role = isOfficer ? "OFFICER" : isAdmin ? "ADMIN" : "CITIZEN";
-    const portalPath = isOfficer ? "/officer" : isAdmin ? "/admin" : "/citizen";
+    const portalPath = isOfficer ? "/officer/appointments" : isAdmin ? "/admin" : "/citizen/book";
     const matchedDept =
       departmentsList.find((d) => d.id === matchedUser.departmentId || d.name === matchedUser.role) || departmentsList[0];
 

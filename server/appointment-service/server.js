@@ -2,6 +2,7 @@
 // gRPC (department-service), appointment lifecycle events (Kafka topic woreda.appointments).
 import { config } from "./config/index.js";
 import { logger } from "./config/logger.js";
+import { startMetricsServer } from "./config/metrics.js";
 import { connectDatabase, disconnectDatabase } from "./config/database.js";
 import { createEventPublisher } from "./config/kafka.js";
 import { createCatalogClient } from "./config/grpc.js";
@@ -27,6 +28,7 @@ logger.info({ addr: config.catalogGrpcAddr }, "catalog lookups via gRPC");
 
 const app = createApp({ events, catalogClient });
 const httpServer = app.listen(config.port, () => logger.info({ addr: `:${config.port}` }, "listening"));
+const metricsServer = startMetricsServer(); // internal /metrics for Prometheus
 
 // Shutdown steps run in order; a failing step is logged and the next one still runs.
 const shutdownSteps = [() => events.close(), () => catalogClient.close(), () => disconnectDatabase()];
@@ -37,6 +39,7 @@ async function shutdown(signal) {
   stopping = true;
   logger.info({ signal }, "shutting down");
   httpServer.close();
+  metricsServer.close();
   for (const step of shutdownSteps) {
     try {
       await step();

@@ -48,7 +48,7 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/citizen" className="hover:text-white transition-colors">
+                <Link href="/citizen/book" className="hover:text-white transition-colors">
                   Citizen Portal
                 </Link>
               </li>

@@ -3,17 +3,14 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
-  generateReferenceNumber,
-  getStatusNotificationType,
   calculateAvailableSlots,
-  generateTokenNumber,
   currentClockTime,
   setJwtCookie,
   clearJwtCookie,
   createJwtToken,
   getUserFromJwtCookie,
 } from "@/services";
-import { serviceApi, departmentApi, scheduleApi } from "@/api";
+import { serviceApi, departmentApi, scheduleApi, appointmentApi, queueApi } from "@/api";
 import { http } from "@/api/httpClient";
 
 export const DEFAULT_TIME_SLOTS = [
@@ -54,6 +51,9 @@ export const DEFAULT_SCHEDULE_CONFIGS = {
 export const DEFAULT_DEPARTMENTS = [];
 
 export const DEFAULT_PROVISIONED_ACCOUNTS = [];
+
+// Sequence number of the latest loadAppointments call (see there).
+let appointmentLoadSeq = 0;
 
 export const useStore = create(
   persist(
@@ -453,74 +453,122 @@ export const useStore = create(
         return data;
       },
 
-      // Appointments State
+      // Appointments State: appointments live in appointment-service (MongoDB). Each role reads
+      // its own view: a citizen their bookings (GET /appointments/my), an officer only the
+      // appointments of the department the Admin assigned in Account Provision (GET /appointments,
+      // scoped on the server by the officer's token), the administrator all of them.
       appointments: [],
-      bookAppointment: (bookingData) => {
-        const refNumber = generateReferenceNumber(bookingData.date);
-
-        const newAppointment = {
-          id: `apt-${Date.now()}`,
-          referenceNumber: refNumber,
-          citizenId: get().currentUser?.id || `usr-temp-${Date.now()}`,
-          citizenName: bookingData.citizenName,
-          citizenPhone: bookingData.citizenPhone,
-          citizenEmail: bookingData.citizenEmail,
-          departmentId: bookingData.departmentId,
-          departmentName: bookingData.departmentName,
-          serviceId: bookingData.serviceId,
-          serviceName: bookingData.serviceName,
-          date: bookingData.date,
-          timeSlot: bookingData.timeSlot,
-          status: "PENDING",
-          tokenNumber: null,
-          citizenNotes: bookingData.citizenNotes || "",
-          officerNotes: null,
-          createdAt: new Date().toISOString(),
-        };
-
-        set((state) => ({
-          appointments: [newAppointment, ...state.appointments],
-        }));
-
-        // Trigger in-app notification
-        get().addNotification({
-          userId: newAppointment.citizenId,
-          title: "Appointment Submitted",
-          message: `Your appointment request for ${newAppointment.serviceName} has been submitted (Ref: ${newAppointment.referenceNumber}).`,
-          type: "INFO",
+      serverSessionInvalid: false,
+      loadAppointments: async () => {
+        // Several reloads can overlap (a burst of bookings); only the newest one may write the
+        // list, otherwise an older, shorter answer arriving last would hide new appointments.
+        const seq = ++appointmentLoadSeq;
+        const role = get().currentUser?.role;
+        let list = [];
+        try {
+          if (role === "CITIZEN") {
+            const { data } = await appointmentApi.myHistory();
+            list = Array.isArray(data) ? data : [];
+          } else if (role === "OFFICER" || role === "ADMIN") {
+            const { data } = await appointmentApi.list({ limit: 200 });
+            list = Array.isArray(data) ? data : [];
+          }
+        } catch (err) {
+          // 401/403: the session is not a server account (made in this browser before accounts
+          // moved to the server) or it expired. Pages tell the user to sign in again.
+          if (err?.status === 401 || err?.status === 403) set({ serverSessionInvalid: true, appointments: [] });
+          throw err;
+        }
+        if (get().serverSessionInvalid) set({ serverSessionInvalid: false });
+        // Desk steps after check-in (call, serve, complete) are still kept in this browser:
+        // keep them over the server's CHECKED_IN state.
+        const local = new Map(get().appointments.map((a) => [a.id, a]));
+        const merged = list.map((a) => {
+          const mine = local.get(a.id);
+          const deskStage = ["IN_PROGRESS", "COMPLETED", "NO_SHOW"].includes(mine?.status);
+          return deskStage && a.status === "CHECKED_IN"
+            ? { ...a, status: mine.status, completedAt: mine.completedAt }
+            : a;
         });
-
-        // Trigger audit log
-        get().addAuditLog({
-          userName: bookingData.citizenName,
-          userRole: "CITIZEN",
-          action: "CREATE_BOOKING",
-          entity: refNumber,
-          details: `Booked ${newAppointment.serviceName} for ${newAppointment.date} at ${newAppointment.timeSlot}`,
-        });
-
-        return newAppointment;
+        if (seq !== appointmentLoadSeq) return get().appointments;
+        set({ appointments: merged });
+        return merged;
       },
 
-      updateAppointmentStatus: (id, status, notes = "", officerReason = "") => {
+      /** POST /appointments as the signed-in citizen; resolves to the stored appointment. */
+      bookAppointment: async (bookingData) => {
+        const { data } = await appointmentApi.book({
+          citizenName: bookingData.citizenName,
+          citizenPhone: bookingData.citizenPhone,
+          citizenEmail: bookingData.citizenEmail || "",
+          departmentId: bookingData.departmentId,
+          serviceId: bookingData.serviceId,
+          date: bookingData.date,
+          timeSlot: bookingData.timeSlot,
+          citizenNotes: bookingData.citizenNotes || "",
+        });
+        await get().loadAppointments().catch(() => {});
+
+        get().addNotification({
+          userId: data.citizenId,
+          title: "Appointment Submitted",
+          message: `Your appointment request for ${data.serviceName} has been submitted (Ref: ${data.referenceNumber}).`,
+          type: "INFO",
+        });
+        return data;
+      },
+
+      /**
+       * Status changes go to the server: APPROVED / REJECTED (department officer review),
+       * CANCELLED (citizen) and CHECKED_IN (reception desk). The later desk steps
+       * (IN_PROGRESS, COMPLETED, NO_SHOW) are still recorded in this browser.
+       */
+      // The last failed status change, for pages that show it ({ id, status, message }).
+      appointmentError: null,
+      clearAppointmentError: () => set({ appointmentError: null }),
+
+      /** Resolves to true when the change was saved; on failure sets appointmentError instead. */
+      updateAppointmentStatus: async (id, status, notes = "", officerReason = "") => {
+        try {
+          await get().changeAppointmentStatus(id, status, notes, officerReason);
+          set({ appointmentError: null });
+          return true;
+        } catch (err) {
+          const message =
+            err?.status === 409 && /approved appointment can no longer be cancelled/i.test(err.message || "")
+              ? "A department officer has already approved this appointment, so it can no longer be cancelled."
+              : err?.status === 409
+              ? "This appointment was already decided or changed. The list has been refreshed."
+              : err?.status === 403
+                ? "This appointment belongs to another department."
+                : err?.status === 401
+                  ? "Your session has expired. Please sign in again."
+                  : err?.status === 422 && err.details?.length
+                    ? err.details.map((d) => d.issue).join(" ")
+                    : "Could not save the change: the server is unreachable.";
+          set({ appointmentError: { id, status, message } });
+          await get().loadAppointments().catch(() => {});
+          return false;
+        }
+      },
+
+      changeAppointmentStatus: async (id, status, notes = "", officerReason = "") => {
         const apt = get().appointments.find((a) => a.id === id);
         if (!apt) return;
 
-        let tokenNumber = apt.tokenNumber;
-        let checkedInAt = apt.checkedInAt;
-        let completedAt = apt.completedAt;
-
-        // When checking in, generate queue token
-        if (status === "CHECKED_IN" && !tokenNumber) {
-          const dept = get().departments.find((d) => d.id === apt.departmentId);
-          const deptQueueLength = get().queue.filter((q) => q.departmentId === apt.departmentId).length;
-          tokenNumber = generateTokenNumber(dept?.code, deptQueueLength);
-          checkedInAt = new Date().toISOString();
-
-          // Add to queue
+        if (status === "APPROVED" || status === "REJECTED") {
+          await appointmentApi.updateStatus(id, {
+            status,
+            officerNotes: notes || "",
+            rejectionReason: status === "REJECTED" ? officerReason || notes || "Not specified" : "",
+          });
+        } else if (status === "CANCELLED") {
+          await appointmentApi.cancel(id);
+        } else if (status === "CHECKED_IN") {
+          const { data } = await queueApi.verifyCheckIn({ appointmentId: id, verifiedDocuments: [], notes: notes || "" });
           get().addToQueue({
             appointmentId: apt.id,
-            tokenNumber,
+            tokenNumber: data?.tokenNumber || apt.tokenNumber,
             citizenName: apt.citizenName,
             serviceName: apt.serviceName,
             departmentId: apt.departmentId,
@@ -531,70 +579,27 @@ export const useStore = create(
             calledTime: null,
             estimatedMinutesRemaining: 15,
           });
+        } else {
+          set((state) => ({
+            appointments: state.appointments.map((a) =>
+              a.id === id
+                ? {
+                    ...a,
+                    status,
+                    completedAt: status === "COMPLETED" ? new Date().toISOString() : a.completedAt,
+                    officerNotes: notes || a.officerNotes,
+                  }
+                : a
+            ),
+          }));
+          return;
         }
-
-        if (status === "COMPLETED") {
-          completedAt = new Date().toISOString();
-        }
-
-        set((state) => ({
-          appointments: state.appointments.map((a) =>
-            a.id === id
-              ? {
-                  ...a,
-                  status,
-                  tokenNumber,
-                  checkedInAt,
-                  completedAt,
-                  officerNotes: notes || a.officerNotes,
-                  rejectionReason: officerReason || a.rejectionReason,
-                }
-              : a
-          ),
-        }));
-
-        // Notifications
-        get().addNotification({
-          userId: apt.citizenId,
-          title: `Appointment ${status.replace("_", " ")}`,
-          message: `Your appointment ${apt.referenceNumber} status changed to ${status}. ${officerReason ? `Reason: ${officerReason}` : ""}`,
-          type: getStatusNotificationType(status),
-        });
-
-        // Audit log
-        get().addAuditLog({
-          userName: get().currentUser?.fullName || "Officer",
-          userRole: get().currentUser?.role || "OFFICER",
-          action: `STATUS_${status}`,
-          entity: apt.referenceNumber,
-          details: `Changed status to ${status}. ${notes || officerReason || ""}`,
-        });
+        await get().loadAppointments().catch(() => {});
       },
 
-      rescheduleAppointment: (id, newDate, newTimeSlot, reason = "") => {
-        const apt = get().appointments.find((a) => a.id === id);
-        if (!apt) return;
-
-        set((state) => ({
-          appointments: state.appointments.map((a) =>
-            a.id === id
-              ? {
-                  ...a,
-                  date: newDate,
-                  timeSlot: newTimeSlot,
-                  status: "APPROVED",
-                  officerNotes: reason ? `Rescheduled: ${reason}` : a.officerNotes,
-                }
-              : a
-          ),
-        }));
-
-        get().addNotification({
-          userId: apt.citizenId,
-          title: "Appointment Rescheduled",
-          message: `Your appointment ${apt.referenceNumber} has been rescheduled to ${newDate} at ${newTimeSlot}.`,
-          type: "WARNING",
-        });
+      rescheduleAppointment: async (id, newDate, newTimeSlot, reason = "") => {
+        await appointmentApi.reschedule(id, { newDate, newTimeSlot, reason });
+        await get().loadAppointments().catch(() => {});
       },
 
       // Queue Management
@@ -680,7 +685,6 @@ export const useStore = create(
         // DO NOT persist currentUser to localStorage! Authentication is strictly JWT in browser cookie.
         users: state.users,
         provisionedAccounts: state.provisionedAccounts,
-        appointments: state.appointments,
         queue: state.queue,
         notifications: state.notifications,
         scheduleConfigs: state.scheduleConfigs,
@@ -789,22 +793,6 @@ export const useStore = create(
 
         const cleanedProvisioned = Array.from(provMap.values());
 
-        // Strip legacy mock appointments
-        const LEGACY_MOCK_APT_IDS = new Set([
-          "apt-1",
-          "apt-2",
-          "apt-3",
-          "apt-4",
-          "apt-5",
-          "apt-6",
-          "apt-7",
-          "apt-8",
-          "apt-9",
-        ]);
-        const cleanedAppointments = (safePersisted.appointments || []).filter(
-          (a) => !LEGACY_MOCK_APT_IDS.has(a.id)
-        );
-
         // Strip legacy mock queue
         const LEGACY_MOCK_QUEUE_IDS = new Set(["q-1", "q-2"]);
         const cleanedQueue = (safePersisted.queue || []).filter(
@@ -882,7 +870,7 @@ export const useStore = create(
           departments: currentDepartments,
           services: currentState.services, // loaded from the API, never from storage
           users: cleanedUsers,
-          appointments: cleanedAppointments,
+          appointments: currentState.appointments, // loaded from the API, never from storage
           queue: cleanedQueue,
           provisionedAccounts: cleanedProvisioned,
           schedules: currentState.schedules, // loaded from the API, never from storage

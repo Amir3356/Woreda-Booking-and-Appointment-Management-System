@@ -72,6 +72,12 @@ export class UnavailableError extends AppError {
 export const isDuplicateKey = (err) => err?.code === 11000;
 
 /** 409 when a time slot already holds system_settings.maxParallelSlots appointments. */
+export class DailyCapacityError extends AppError {
+  constructor(capacity, date) {
+    super(409, "DAILY_CAPACITY_REACHED", `Daily capacity reached: all ${capacity} appointments for this service on ${date} are booked.`);
+  }
+}
+
 export class SlotFullError extends AppError {
   constructor() {
     super(409, "SLOT_FULL", "Desired time slot capacity reached maximum parallel limit.");

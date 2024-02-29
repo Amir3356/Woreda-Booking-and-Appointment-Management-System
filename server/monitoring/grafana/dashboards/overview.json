@@ -1,0 +1,1970 @@
+{
+  "uid": "woreda-overview",
+  "title": "WoredaCare \u2014 Microservices Overview",
+  "description": "System health, performance and bookings at a glance.",
+  "tags": [
+    "woredacare"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "woredacare"
+      ],
+      "asDropdown": true,
+      "title": "WoredaCare dashboards",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ],
+  "panels": [
+    {
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 3,
+        "h": 38
+      },
+      "transparent": false,
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"display:flex;flex-direction:column;height:100%;font-family:Inter,Helvetica,Arial,sans-serif\"><div style=\"display:flex;align-items:center;gap:10px;padding:6px 10px 14px;border-bottom:1px solid #2c3235\"><div style=\"width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#f5b73b,#e8590c);display:flex;align-items:center;justify-content:center;font-weight:800;color:#111;font-size:16px\">W</div><div><div style=\"font-weight:700;font-size:14px;color:#fff\">WoredaCare</div><div style=\"font-size:11px;color:#8e96a3\">Monitoring</div></div></div><div style=\"margin:16px 12px 6px;font-size:10px;letter-spacing:.08em;color:#6e7685;text-transform:uppercase\">Dashboards</div><a href=\"/d/woreda-overview\" style=\"display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;background:#1f60c4;color:#fff;\"><span style=\"width:18px;text-align:center;font-size:15px\">\u2302</span>Overview</a><a href=\"/d/woreda-health\" style=\"display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;color:#c7d0d9;\"><span style=\"width:18px;text-align:center;font-size:15px\">\u2b21</span>Microservices</a><a href=\"/d/woreda-booking\" style=\"display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;color:#c7d0d9;\"><span style=\"width:18px;text-align:center;font-size:15px\">\u25a6</span>Booking Activity</a><a href=\"/d/woreda-infra\" style=\"display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;color:#c7d0d9;\"><span style=\"width:18px;text-align:center;font-size:15px\">\u25a4</span>Infrastructure</a><div style=\"margin:16px 12px 6px;font-size:10px;letter-spacing:.08em;color:#6e7685;text-transform:uppercase\">Infrastructure</div><a href=\"/d/woreda-infra\" style=\"display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;color:#c7d0d9;\"><span style=\"width:18px;text-align:center;font-size:15px\">\u26c1</span>Database (MongoDB)</a><a href=\"/d/woreda-infra\" style=\"display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;color:#c7d0d9;\"><span style=\"width:18px;text-align:center;font-size:15px\">\u25c6</span>Redis</a><a href=\"/d/woreda-infra\" style=\"display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;color:#c7d0d9;\"><span style=\"width:18px;text-align:center;font-size:15px\">\u21c4</span>Kafka</a><a href=\"/d/woreda-infra\" style=\"display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;color:#c7d0d9;\"><span style=\"width:18px;text-align:center;font-size:15px\">\u21c6</span>nginx</a><div style=\"margin:16px 12px 6px;font-size:10px;letter-spacing:.08em;color:#6e7685;text-transform:uppercase\">Tools</div><a href=\"http://localhost:9090/alerts\" target=\"_blank\" rel=\"noopener\" style=\"display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;color:#c7d0d9;\"><span style=\"width:18px;text-align:center;font-size:15px\">\ud83d\udd14</span>Alerts</a><a href=\"/explore\" style=\"display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;color:#c7d0d9;\"><span style=\"width:18px;text-align:center;font-size:15px\">\u2315</span>Explore metrics</a><a href=\"http://localhost:9090\" target=\"_blank\" rel=\"noopener\" style=\"display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;color:#c7d0d9;\"><span style=\"width:18px;text-align:center;font-size:15px\">\u25ce</span>Prometheus</a><a href=\"http://localhost:3000\" target=\"_blank\" rel=\"noopener\" style=\"display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;color:#c7d0d9;\"><span style=\"width:18px;text-align:center;font-size:15px\">\u2197</span>WoredaCare app</a><div style=\"margin-top:auto;padding:12px;font-size:11px;color:#6e7685\">Data: Prometheus \u00b7 refresh 10 s</div></div>"
+      },
+      "datasource": null,
+      "id": 1
+    },
+    {
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "x": 3,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "transparent": true,
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"display:flex;align-items:center;gap:16px;height:100%;padding-left:6px;font-family:Inter,Helvetica,Arial,sans-serif\"><div style=\"width:58px;height:58px;border-radius:14px;background:linear-gradient(135deg,#3d71d9,#1f60c4);display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff;box-shadow:0 0 0 4px rgba(61,113,217,.18)\">\u2b21</div><div><div style=\"font-size:20px;font-weight:700;color:#fff;line-height:1.2;white-space:nowrap\">WoredaCare Monitoring</div><div style=\"font-size:14px;color:#9fa7b3;margin-top:4px\">Health \u2022 Performance \u2022 Bookings</div></div></div>"
+      },
+      "datasource": null,
+      "id": 2
+    },
+    {
+      "type": "stat",
+      "title": "Overall Health",
+      "description": "",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg(avg_over_time(up{job=\"woreda-services\"}[1h]))",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "percent",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 95
+              },
+              {
+                "color": "green",
+                "value": 99
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "id": 3,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Running Services",
+      "description": "",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(up{job=\"woreda-services\"})",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "suffix: / 6",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "green",
+                "value": 6
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total Requests",
+      "description": "",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(http_requests_total{service=\"api-gateway\"}[5m])) * 60",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "suffix: /min",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "id": 5,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Error Rate",
+      "description": "",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * (sum(rate(http_requests_total{service=\"api-gateway\",status=~\"5..\"}[5m])) or vector(0)) / sum(rate(http_requests_total{service=\"api-gateway\"}[5m]))",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "id": 6,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Service Health",
+      "gridPos": {
+        "x": 3,
+        "y": 4,
+        "w": 9,
+        "h": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (service) (label_replace(up{job=\"woreda-services\"}, \"service\", \"$1\", \"instance\", \"([^:]+):.*\"))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * max by (service) (label_replace(avg_over_time(up{job=\"woreda-services\"}[24h]), \"service\", \"$1\", \"instance\", \"([^:]+):.*\"))",
+          "legendFormat": "",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (service) (rate(http_requests_total[5m])) * 60 or max by (service) (label_replace(up{job=\"woreda-services\"}, \"service\", \"$1\", \"instance\", \"([^:]+):.*\")) * 0",
+          "legendFormat": "",
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * (sum by (service) (rate(http_requests_total{status=~\"5..\"}[5m])) or sum by (service) (rate(http_requests_total[5m])) * 0) / sum by (service) (rate(http_requests_total[5m])) or max by (service) (label_replace(up{job=\"woreda-services\"}, \"service\", \"$1\", \"instance\", \"([^:]+):.*\")) * 0",
+          "legendFormat": "",
+          "refId": "D",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "service": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3,
+              "Value #D": 4
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "service"
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "service"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Service"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Status"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "\u25cf Healthy",
+                        "color": "green"
+                      },
+                      "0": {
+                        "text": "\u25cf Down",
+                        "color": "red"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 92
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #B"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Uptime (24h)"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #C"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Req/min"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 72
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #D"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Error Rate"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 7,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Rate & Latency",
+      "description": "Traffic through the API gateway and the time 95% of requests finish within.",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 6,
+        "h": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(http_requests_total{service=\"api-gateway\"}[1m]))",
+          "legendFormat": "Request Rate (RPS)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{service=\"api-gateway\"}[5m])))",
+          "legendFormat": "P95 Latency",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 18,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisBorderShow": false
+          },
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P95 Latency"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Request Rate (RPS)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P95 Latency"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff9830"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 8,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP Errors",
+      "description": "4xx = refused by the rules (not signed in, wrong role, day full, invalid input, rate limited); 5xx = server failures.",
+      "gridPos": {
+        "x": 18,
+        "y": 4,
+        "w": 6,
+        "h": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * (sum(rate(http_requests_total{service=\"api-gateway\",status=~\"4..\"}[5m])) or vector(0)) / sum(rate(http_requests_total{service=\"api-gateway\"}[5m]))",
+          "legendFormat": "4xx Errors",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * (sum(rate(http_requests_total{service=\"api-gateway\",status=~\"5..\"}[5m])) or vector(0)) / sum(rate(http_requests_total{service=\"api-gateway\"}[5m]))",
+          "legendFormat": "5xx Errors",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 18,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisBorderShow": false
+          },
+          "unit": "percent"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4xx Errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx Errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f2495c"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 9,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "gauge",
+      "title": "System Resources",
+      "gridPos": {
+        "x": 3,
+        "y": 13,
+        "w": 9,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{instance=\"host.docker.internal:9100\",mode=\"idle\"}[2m])))",
+          "legendFormat": "CPU",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes{instance=\"host.docker.internal:9100\"} / node_memory_MemTotal_bytes{instance=\"host.docker.internal:9100\"})",
+          "legendFormat": "Memory",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(100 * (1 - node_filesystem_avail_bytes{instance=\"host.docker.internal:9100\",mountpoint=\"/\"} / node_filesystem_size_bytes{instance=\"host.docker.internal:9100\",mountpoint=\"/\"}))",
+          "legendFormat": "Disk",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(node_network_receive_bytes_total{instance=\"host.docker.internal:9100\"}[2m]) + rate(node_network_transmit_bytes_total{instance=\"host.docker.internal:9100\"}[2m]))",
+          "legendFormat": "Network",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#ff9830",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 90
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Disk"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#5794f2",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 90
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Network"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Bps"
+              },
+              {
+                "id": "max",
+                "value": 12500000
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#b877d9",
+                      "value": null
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdMarkers": false,
+        "showThresholdLabels": false,
+        "orientation": "auto",
+        "sizing": "auto",
+        "minVizHeight": 75
+      },
+      "description": "This computer: CPU, memory and disk use; Network = traffic in + out (gauge scaled to 100 Mbit/s).",
+      "id": 10,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Concurrency & Workload",
+      "description": "Open sockets/timers in the six Node.js services, requests in progress, and browser pages connected for live updates.",
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(nodejs_active_handles_total{job=\"woreda-services\"})",
+          "legendFormat": "Active handles",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(nodejs_active_requests_total{job=\"woreda-services\"})",
+          "legendFormat": "Active requests",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(woreda_websocket_clients)",
+          "legendFormat": "Live pages (WebSocket)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 18,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisBorderShow": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Live pages (WebSocket)"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Active handles"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Active requests"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73bf69"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Live pages (WebSocket)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff9830"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 11,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Node.js Runtime Metrics",
+      "description": "Average garbage-collection pause and JavaScript heap in use, all six services together.",
+      "gridPos": {
+        "x": 18,
+        "y": 13,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(nodejs_gc_duration_seconds_sum{job=\"woreda-services\"}[5m])) / sum(rate(nodejs_gc_duration_seconds_count{job=\"woreda-services\"}[5m]))",
+          "legendFormat": "GC Pauses",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(nodejs_heap_size_used_bytes{job=\"woreda-services\"})",
+          "legendFormat": "Heap Used",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 18,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisBorderShow": false
+          },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Heap Used"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GC Pauses"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Heap Used"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73bf69"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 12,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Database Performance (MongoDB)",
+      "description": "",
+      "gridPos": {
+        "x": 3,
+        "y": 21,
+        "w": 7,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mongodb_ss_connections{conn_type=\"current\"}",
+          "legendFormat": "Connections",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(mongodb_ss_opcounters[1m]))",
+          "legendFormat": "Operations/s",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(mongodb_ss_opLatencies_latency{op_type=\"reads\"}[5m]) / rate(mongodb_ss_opLatencies_ops{op_type=\"reads\"}[5m]) / 1000",
+          "legendFormat": "Read latency",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(mongodb_ss_opLatencies_latency{op_type=\"writes\"}[5m]) / rate(mongodb_ss_opLatencies_ops{op_type=\"writes\"}[5m]) / 1000",
+          "legendFormat": "Write latency",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 18,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisBorderShow": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Read latency"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Write latency"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Connections"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Operations/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73bf69"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Read latency"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff9830"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Write latency"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f2495c"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 13,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Redis Performance",
+      "description": "Redis holds cached API responses, signed-out tokens and failed-login counters.",
+      "gridPos": {
+        "x": 10,
+        "y": 21,
+        "w": 7,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]))",
+          "legendFormat": "Hit Ratio",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "redis_memory_used_bytes",
+          "legendFormat": "Memory Usage",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 18,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisBorderShow": false
+          },
+          "unit": "percent"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory Usage"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Hit Ratio"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73bf69"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory Usage"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 14,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Container Health",
+      "gridPos": {
+        "x": 17,
+        "y": 21,
+        "w": 7,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (service) (label_replace(up{job=\"woreda-services\"}, \"service\", \"$1\", \"instance\", \"([^:]+):.*\"))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (service) (time() - process_start_time_seconds{job=\"woreda-services\"})",
+          "legendFormat": "",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * max by (service) (rate(process_cpu_seconds_total{job=\"woreda-services\"}[2m]))",
+          "legendFormat": "",
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (service) (process_resident_memory_bytes{job=\"woreda-services\"})",
+          "legendFormat": "",
+          "refId": "D",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "service": 0,
+              "Value #A": 1,
+              "Value #C": 2,
+              "Value #D": 3,
+              "Value #B": 4
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "service"
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "service"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Container"
+              },
+              {
+                "id": "custom.width",
+                "value": 140
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Status"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "\u25cf Running",
+                        "color": "green"
+                      },
+                      "0": {
+                        "text": "\u25cf Stopped",
+                        "color": "red"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 88
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #B"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Uptime"
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #C"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "CPU"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 58
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #D"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Memory"
+              },
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 72
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "description": "The six WoredaCare service containers (each reports its own process CPU, memory and start time).",
+      "id": 15,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "text",
+      "title": "Service Dependencies",
+      "gridPos": {
+        "x": 3,
+        "y": 29,
+        "w": 7,
+        "h": 9
+      },
+      "transparent": false,
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"font-family:Inter,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;gap:4px;padding:2px 4px\"><div style=\"border:1.5px solid #8e96a3;background:#8e96a322;color:#fff;border-radius:8px;padding:6px 10px;text-align:center;font-size:12px;font-weight:600;line-height:1.25\">nginx<div style=\"font-size:10px;font-weight:400;color:#aab2bd\">rate limiting \u00b7 :8080</div></div><div style=\"color:#73bf69;text-align:center;font-size:14px;line-height:1\">\u25bc</div><div style=\"border:1.5px solid #3d71d9;background:#3d71d922;color:#fff;border-radius:8px;padding:6px 10px;text-align:center;font-size:12px;font-weight:600;line-height:1.25\">API Gateway<div style=\"font-size:10px;font-weight:400;color:#aab2bd\">auth \u00b7 cache \u00b7 proxy \u00b7 live updates</div></div><div style=\"color:#73bf69;text-align:center;font-size:14px;line-height:1\">\u25bc</div><div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:5px\"><div style=\"border:1.5px solid #73bf69;background:#73bf6922;color:#fff;border-radius:8px;padding:6px 10px;text-align:center;font-size:12px;font-weight:600;line-height:1.25\">Auth</div><div style=\"border:1.5px solid #73bf69;background:#73bf6922;color:#fff;border-radius:8px;padding:6px 10px;text-align:center;font-size:12px;font-weight:600;line-height:1.25\">User</div><div style=\"border:1.5px solid #ff9830;background:#ff983022;color:#fff;border-radius:8px;padding:6px 10px;text-align:center;font-size:12px;font-weight:600;line-height:1.25\">Department<div style=\"font-size:10px;font-weight:400;color:#aab2bd\">gRPC catalog</div></div><div style=\"border:1.5px solid #b877d9;background:#b877d922;color:#fff;border-radius:8px;padding:6px 10px;text-align:center;font-size:12px;font-weight:600;line-height:1.25\">Appointment</div><div style=\"border:1.5px solid #5794f2;background:#5794f222;color:#fff;border-radius:8px;padding:6px 10px;text-align:center;font-size:12px;font-weight:600;line-height:1.25\">Booking</div></div><div style=\"display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:6px\"><div style=\"border:1.5px solid #56a64b;background:#56a64b22;color:#fff;border-radius:8px;padding:6px 10px;text-align:center;font-size:12px;font-weight:600;line-height:1.25\">MongoDB<div style=\"font-size:10px;font-weight:400;color:#aab2bd\">data</div></div><div style=\"border:1.5px solid #e02f44;background:#e02f4422;color:#fff;border-radius:8px;padding:6px 10px;text-align:center;font-size:12px;font-weight:600;line-height:1.25\">Redis<div style=\"font-size:10px;font-weight:400;color:#aab2bd\">cache</div></div><div style=\"border:1.5px solid #8e96a3;background:#8e96a322;color:#fff;border-radius:8px;padding:6px 10px;text-align:center;font-size:12px;font-weight:600;line-height:1.25\">Kafka<div style=\"font-size:10px;font-weight:400;color:#aab2bd\">events</div></div></div></div>"
+      },
+      "datasource": null,
+      "id": 16
+    },
+    {
+      "type": "stat",
+      "title": "Key Insights",
+      "gridPos": {
+        "x": 10,
+        "y": 29,
+        "w": 7,
+        "h": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(up{job=\"woreda-services\"}) == bool 6",
+          "legendFormat": "All 6 services are up",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "1 - (histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{service=\"api-gateway\"}[5m]))) > bool 0.5) or vector(1)",
+          "legendFormat": "P95 latency under 500 ms",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(sum(increase(http_requests_total{status=~\"5..\"}[1h])) or vector(0)) == bool 0",
+          "legendFormat": "No server errors in the last hour",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(sum(increase(woreda_kafka_events_total{result=\"failed\"}[1h])) or vector(0)) == bool 0",
+          "legendFormat": "All Kafka events delivered",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(sum(kafka_consumergroup_lag and on (consumergroup) (kafka_consumergroup_members > 0)) or vector(0)) < bool 10",
+          "legendFormat": "Live updates in sync (Kafka lag)",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(mongodb_up) * min(redis_up) * min(nginx_up) * clamp_max(min(kafka_brokers), 1)",
+          "legendFormat": "MongoDB, Redis, Kafka and nginx up",
+          "refId": "F"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "\u2714 OK",
+                  "color": "green"
+                },
+                "0": {
+                  "text": "\u2716 Check",
+                  "color": "red"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal",
+        "justifyMode": "auto",
+        "wideLayout": true,
+        "text": {
+          "titleSize": 13,
+          "valueSize": 14
+        }
+      },
+      "description": "Live checks, recalculated every refresh.",
+      "id": 17,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Recent Alerts",
+      "gridPos": {
+        "x": 17,
+        "y": 29,
+        "w": 7,
+        "h": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "ALERTS",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "description": true
+            },
+            "indexByName": {
+              "alertstate": 0,
+              "alertname": 1,
+              "severity": 2,
+              "service": 3
+            },
+            "renameByName": {
+              "alertstate": "State",
+              "alertname": "Alert",
+              "severity": "Severity",
+              "service": "Service"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "\u2714 No active alerts \u2014 all clear",
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "firing": {
+                        "text": "\u25cf firing",
+                        "color": "red"
+                      },
+                      "pending": {
+                        "text": "\u25cf pending",
+                        "color": "orange"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "links": [
+        {
+          "title": "View all alerts",
+          "url": "http://localhost:9090/alerts",
+          "targetBlank": true
+        }
+      ],
+      "description": "Alerts from the Prometheus rules (server/monitoring/prometheus/alerts.yml). Pending = condition true, waiting for its delay.",
+      "id": 18,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import { config } from "./config/index.js";
 import { logger } from "./config/logger.js";
 import { authenticate } from "./middleware/auth.js";
 import { requestLogger } from "./middleware/requestLogger.js";
+import { httpMetrics } from "./middleware/metrics.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { createDepartmentService } from "./services/department.service.js";
 import { createPublicServiceService } from "./services/publicService.service.js";
@@ -21,6 +22,7 @@ export function createApp({ events }) {
   app.disable("x-powered-by");
   app.use(express.json({ limit: "1mb" }));
   app.use(requestLogger(logger));
+  app.use(httpMetrics());
   app.use(authenticate(config.jwtSecret));
   app.use(createRoutes({
     departmentController: createDepartmentController(departmentService),
