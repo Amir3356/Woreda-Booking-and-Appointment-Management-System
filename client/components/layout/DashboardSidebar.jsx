@@ -11,7 +11,6 @@ import {
   Users,
   BarChart3,
   UserCog,
-  Settings,
   CheckCircle2,
   Layers,
   Bell,
@@ -44,7 +43,6 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
     { href: "/admin/users", label: "Staff & Citizens", icon: Users },
     { href: "/admin/reports", label: "Reports & Analytics", icon: BarChart3 },
     { href: "/admin/account-provision", label: "Account Provision", icon: UserCog },
-    { href: "/admin/settings", label: "Woreda Settings", icon: Settings },
   ];
 
   const officerNav = [
