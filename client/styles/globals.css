@@ -4,11 +4,11 @@
    Pure Standard External CSS - Zero Tailwind Dependency
    ========================================================================== */
 
-@import "../styles/variables.css";
-@import "../styles/reset.css";
-@import "../styles/layout.css";
-@import "../styles/components.css";
-@import "../styles/auth.css";
-@import "../styles/dashboard.css";
-@import "../styles/booking.css";
-@import "../styles/utilities.css";
+@import "./variables.css";
+@import "./reset.css";
+@import "./layout.css";
+@import "./components.css";
+@import "./auth.css";
+@import "./dashboard.css";
+@import "./booking.css";
+@import "./utilities.css";
