@@ -41,7 +41,6 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
     },
     { href: "/admin/schedule", label: "Schedules & Capacity", icon: Clock },
     { href: "/admin/users", label: "Staff & Citizens", icon: Users },
-    { href: "/admin/reports", label: "Reports & Analytics", icon: BarChart3 },
     { href: "/admin/account-provision", label: "Account Provision", icon: UserCog },
   ];
 
