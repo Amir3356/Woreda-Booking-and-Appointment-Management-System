@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
-import { INITIAL_USERS } from "@/lib/mock-data";
 import {
   Building,
   User,
@@ -33,7 +32,6 @@ export default function AuthPage() {
   // Sign Up Form State
   const [signUpFullName, setSignUpFullName] = useState("");
   const [signUpEmail, setSignUpEmail] = useState("");
-  const [signUpPhone, setSignUpPhone] = useState("+251 9");
   const [signUpRole, setSignUpRole] = useState("Citizen");
   const [signUpDeptId, setSignUpDeptId] = useState("dept-1");
   const [signUpPassword, setSignUpPassword] = useState("");
@@ -117,15 +115,11 @@ export default function AuthPage() {
     setSuccessMsg("");
 
     if (!signUpFullName.trim()) {
-      setError("Please enter your full legal name.");
+      setError("Please enter your fullname.");
       return;
     }
     if (!signUpEmail.trim()) {
       setError("Please enter your email address.");
-      return;
-    }
-    if (!signUpPhone.trim()) {
-      setError("Please enter your phone number.");
       return;
     }
     if (!signUpPassword || signUpPassword.length < 6) {
@@ -143,7 +137,7 @@ export default function AuthPage() {
     const newUser = addUser({
       fullName: signUpFullName.trim(),
       email: signUpEmail.trim(),
-      phone: signUpPhone.trim(),
+      phone: "+251911000000",
       role: targetRole,
       departmentId: deptId,
       departmentName: deptName,
@@ -160,20 +154,6 @@ export default function AuthPage() {
     }, 600);
   };
 
-  // Quick fill helper for easy testing
-  const handleQuickFill = (roleName) => {
-    setSignInRole(roleName);
-    if (roleName === "Citizen") {
-      setSignInEmail("bekele@citizen.et");
-      setSignInPassword("password123");
-    } else if (roleName === "Department Officer") {
-      setSignInEmail("tigist.kbl@woreda.gov.et");
-      setSignInPassword("password123");
-    } else if (roleName === "Admin") {
-      setSignInEmail("admin@woreda.gov.et");
-      setSignInPassword("password123");
-    }
-  };
 
   return (
     <div className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-b from-[#0b2545] via-[#103058] to-[#133b5c] p-4 text-slate-800">
@@ -311,7 +291,7 @@ export default function AuthPage() {
                 disabled={loading}
                 className="w-full py-3 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 mt-2 active:scale-98 disabled:opacity-70"
               >
-                <span>{loading ? "Signing In..." : `Sign In as ${signInRole}`}</span>
+                <span>{loading ? "Signing In..." : "Sign In"}</span>
                 <ArrowRight className="w-4 h-4 text-amber-300" />
               </button>
 
@@ -329,46 +309,6 @@ export default function AuthPage() {
                 </button>
               </div>
 
-              <div className="pt-3 border-t border-slate-100">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2 text-center">
-                  Quick Test Credentials
-                </span>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickFill("Citizen")}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border transition-all text-center ${
-                      signInRole === "Citizen"
-                        ? "bg-blue-50 border-blue-300 text-blue-700 font-bold"
-                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    Citizen
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickFill("Department Officer")}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border transition-all text-center ${
-                      signInRole === "Department Officer"
-                        ? "bg-emerald-50 border-emerald-300 text-emerald-700 font-bold"
-                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    Officer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickFill("Admin")}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border transition-all text-center ${
-                      signInRole === "Admin"
-                        ? "bg-purple-50 border-purple-300 text-purple-700 font-bold"
-                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    Admin
-                  </button>
-                </div>
-              </div>
             </form>
           )}
 
@@ -377,7 +317,7 @@ export default function AuthPage() {
             <form onSubmit={handleSignUp} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Full Legal Name *
+                  Fullname *
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -404,23 +344,6 @@ export default function AuthPage() {
                     value={signUpEmail}
                     onChange={(e) => setSignUpEmail(e.target.value)}
                     placeholder="e.g. almaz@citizen.et"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none bg-slate-50/50"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Phone Number (SMS alerts) *
-                </label>
-                <div className="relative">
-                  <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="tel"
-                    required
-                    value={signUpPhone}
-                    onChange={(e) => setSignUpPhone(e.target.value)}
-                    placeholder="+251 9XX XXX XXX"
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none bg-slate-50/50"
                   />
                 </div>
@@ -485,7 +408,7 @@ export default function AuthPage() {
                 disabled={loading}
                 className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 mt-2 active:scale-98 disabled:opacity-70"
               >
-                <span>{loading ? "Creating Account..." : `Sign Up as ${signUpRole}`}</span>
+                <span>{loading ? "Creating Account..." : "Sign Up"}</span>
                 <UserPlus className="w-4 h-4 text-white" />
               </button>
 
