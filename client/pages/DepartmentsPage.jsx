@@ -3,6 +3,7 @@
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { useStore } from "@/lib/store";
+import mockData from "@/data/mock-data.json";
 import Link from "next/link";
 import {
   Building2,
@@ -15,7 +16,9 @@ import {
 } from "lucide-react";
 
 export default function DepartmentsPage() {
-  const { departments, services } = useStore();
+  const { departments: storeDepartments, services: storeServices } = useStore();
+  const departments = storeDepartments?.length ? storeDepartments : mockData.departments;
+  const services = storeServices?.length ? storeServices : mockData.services;
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
