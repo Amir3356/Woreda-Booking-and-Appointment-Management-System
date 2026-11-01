@@ -22,3 +22,4 @@ export default function OfficerLayout({ children }) {
     </div>
   );
 }
+

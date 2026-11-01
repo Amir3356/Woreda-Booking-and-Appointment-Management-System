@@ -604,3 +604,4 @@ export const TIME_SLOTS = [
   "13:30 PM", "14:00 PM", "14:30 PM", "15:00 PM",
   "15:30 PM", "16:00 PM", "16:30 PM",
 ];
+

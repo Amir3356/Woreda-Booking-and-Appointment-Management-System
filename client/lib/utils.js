@@ -81,3 +81,4 @@ export const APPOINTMENT_STATUS_CONFIG = {
     dot: "bg-red-500",
   },
 };
+
