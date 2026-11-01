@@ -117,6 +117,18 @@ export const useStore = create(
           ),
         }));
       },
+      deleteService: (id) => {
+        set((state) => ({
+          services: state.services.filter((s) => s.id !== id),
+        }));
+        get().addAuditLog({
+          userName: get().currentUser?.fullName || "Admin",
+          userRole: "ADMIN",
+          action: "DELETE_SERVICE",
+          entity: `Srv-${id}`,
+          details: `Deleted service record`,
+        });
+      },
 
       // Users Management
       users: INITIAL_USERS,

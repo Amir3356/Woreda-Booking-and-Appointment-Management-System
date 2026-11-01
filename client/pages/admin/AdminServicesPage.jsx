@@ -17,7 +17,14 @@ import {
 } from "lucide-react";
 
 export default function AdminServicesPage() {
-  const { services, departments, addService, updateService, toggleServiceStatus } = useStore();
+  const {
+    services,
+    departments,
+    addService,
+    updateService,
+    toggleServiceStatus,
+    deleteService,
+  } = useStore();
   const [search, setSearch] = useState("");
   const [selectedDeptFilter, setSelectedDeptFilter] = useState("ALL");
   const [modalOpen, setModalOpen] = useState(false);
@@ -110,18 +117,18 @@ export default function AdminServicesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Government Services Catalog</h2>
-          <p className="text-xs text-slate-500">
-            Define public services, time durations, required document checklists, and daily booking quotas.
+          <h2 className="text-xl font-bold text-slate-900">Service Management</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Manage Woreda public services, assigned departments, and operating statuses.
           </p>
         </div>
 
         <button
           onClick={handleOpenAdd}
-          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4 text-amber-300" />
-          <span>Create New Service</span>
+          <span>Add New Service</span>
         </button>
       </div>
 
@@ -143,7 +150,7 @@ export default function AdminServicesPage() {
           <select
             value={selectedDeptFilter}
             onChange={(e) => setSelectedDeptFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700"
+            className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 cursor-pointer"
           >
             <option value="ALL">All Departments</option>
             {departments.map((d) => (
@@ -159,66 +166,72 @@ export default function AdminServicesPage() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold text-[10px]">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
               <tr>
-                <th className="px-5 py-3">Code</th>
-                <th className="px-5 py-3">Service Name</th>
-                <th className="px-5 py-3">Department</th>
-                <th className="px-5 py-3">Duration</th>
-                <th className="px-5 py-3">Daily Quota</th>
-                <th className="px-5 py-3">Fee</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3 text-right">Actions</th>
+                <th className="px-5 py-3.5">Service Name</th>
+                <th className="px-5 py-3.5">Department</th>
+                <th className="px-5 py-3.5">Status</th>
+                <th className="px-5 py-3.5 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredServices.map((service) => {
-                const dept = departments.find((d) => d.id === service.departmentId);
-                return (
-                  <tr key={service.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-5 py-3.5 font-mono font-bold text-blue-700">
-                      {service.code}
-                    </td>
-                    <td className="px-5 py-3.5 font-bold text-slate-900 max-w-xs">
-                      <div>{service.name}</div>
-                      <span className="text-[10px] text-slate-400 line-clamp-1 font-normal">
-                        {service.description}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-600">{dept?.name || "N/A"}</td>
-                    <td className="px-5 py-3.5 text-slate-600 font-medium">
-                      {service.durationMinutes} mins
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-600 font-medium">
-                      {service.dailyQuota} citizens/day
-                    </td>
-                    <td className="px-5 py-3.5 font-bold text-emerald-700">
-                      {formatETB(service.feeETB)}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <button
-                        onClick={() => toggleServiceStatus(service.id)}
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors ${
-                          service.isActive
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-slate-100 text-slate-500 border-slate-200"
-                        }`}
-                      >
-                        {service.isActive ? "ACTIVE" : "INACTIVE"}
-                      </button>
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <button
-                        onClick={() => handleOpenEdit(service)}
-                        className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
-                        title="Edit Service"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {filteredServices.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-5 py-12 text-center text-slate-400">
+                    <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-xs font-medium">No services found matching your criteria</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredServices.map((service) => {
+                  const dept = departments.find((d) => d.id === service.departmentId);
+                  return (
+                    <tr key={service.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-5 py-3.5 font-bold text-slate-900 max-w-xs">
+                        <div>{service.name}</div>
+                        {service.description && (
+                          <span className="text-[10px] text-slate-400 line-clamp-1 font-normal block mt-0.5">
+                            {service.description}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-600 font-medium">
+                        {dept?.name || "N/A"}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <button
+                          onClick={() => toggleServiceStatus(service.id)}
+                          className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+                            service.isActive
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-slate-100 text-slate-500 border-slate-200"
+                          }`}
+                        >
+                          {service.isActive ? "ACTIVE" : "INACTIVE"}
+                        </button>
+                      </td>
+                      <td className="px-5 py-3.5 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => handleOpenEdit(service)}
+                            className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 transition-all cursor-pointer"
+                            title="Edit Service"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => deleteService(service.id)}
+                            className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all cursor-pointer"
+                            title="Delete Service"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
