@@ -8,7 +8,6 @@ import {
   FileText,
   Calendar,
   Clock,
-  BarChart3,
   UserCog,
   CheckCircle2,
   ShieldAlert,
@@ -46,7 +45,6 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
       badge: pendingAppointmentsCount > 0 ? pendingAppointmentsCount : null,
     },
     { href: "/officer/verify", label: "Citizen Check-In", icon: CheckCircle2 },
-    { href: "/officer/reports", label: "Department Report", icon: BarChart3 },
   ];
 
   const citizenNav = [
