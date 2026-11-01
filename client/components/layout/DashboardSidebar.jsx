@@ -109,9 +109,11 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
           <div>
             <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
               WoredaCare
-              <span className={`text-[9px] uppercase px-1.5 py-0.2 rounded font-semibold ${badgeColor}`}>
-                {role}
-              </span>
+              {role !== "ADMIN" && !isAdmin && (
+                <span className={`text-[9px] uppercase px-1.5 py-0.2 rounded font-semibold ${badgeColor}`}>
+                  {role}
+                </span>
+              )}
             </h2>
             <p className="text-[10px] text-slate-400 truncate max-w-[150px]">{subtitle}</p>
           </div>
