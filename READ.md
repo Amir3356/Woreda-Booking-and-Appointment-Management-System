@@ -10,27 +10,13 @@ The platform should provide a user-friendly interface for citizens and a compreh
 
 The design should reflect a professional Ethiopian government digital service platform.
 
-## 2. Technology Stack
 
-Use the following technologies:
-
-- Frontend: Next.js (App Router)
-- Programming Language: JavaScript (JSX, not TypeScript)
-- Styling: Tailwind CSS
-- UI Components: shadcn/ui
-- Icons: Lucide React
-- Charts: Recharts
-- Form Validation: React Hook Form + Zod
-- State Management: Zustand
-- API Integration: REST API
-- Authentication: JWT-based authentication
-- Responsive Design: Mobile-first approach
 
 ## 3. User Roles and Permissions
 
 Implement Role-Based Access Control (RBAC) with exactly THREE user roles.
 
-Do not create a Receptionist role or any additional user role.
+
 
 ### A. Citizen
 
