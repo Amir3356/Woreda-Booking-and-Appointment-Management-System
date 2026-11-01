@@ -10,7 +10,8 @@ import { formatTime } from "@/lib/utils";
 export default function DashboardHeader({ title, subtitle, showNotifications }) {
   const pathname = usePathname();
   const isAdmin = pathname?.startsWith("/admin");
-  const shouldShowNotifications = showNotifications !== undefined ? showNotifications : !isAdmin;
+  const isOfficer = pathname?.startsWith("/officer");
+  const shouldShowNotifications = showNotifications !== undefined ? showNotifications : (!isAdmin && !isOfficer);
 
   const { notifications, markNotificationAsRead, markAllNotificationsAsRead, currentUser } = useStore();
   const [notifOpen, setNotifOpen] = useState(false);
