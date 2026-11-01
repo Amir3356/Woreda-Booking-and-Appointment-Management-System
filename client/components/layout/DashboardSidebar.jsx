@@ -44,6 +44,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
 
   const citizenNav = [
     { href: "/citizen", label: "Overview", icon: LayoutDashboard },
+    { href: "/citizen/book", label: "Book Appointment", icon: Calendar },
   ];
 
   let items = adminNav;

@@ -35,6 +35,7 @@ import OfficerReportsPage from "@/pages/officer/OfficerReportsPage";
 // Citizen layout & pages
 import CitizenLayout from "@/pages/citizen/CitizenLayout";
 import CitizenDashboardPage from "@/pages/citizen/CitizenDashboardPage";
+import CitizenBookAppointmentPage from "@/pages/citizen/CitizenBookAppointmentPage";
 import CitizenAppointmentsPage from "@/pages/citizen/CitizenAppointmentsPage";
 import CitizenProfilePage from "@/pages/citizen/CitizenProfilePage";
 import CitizenNotificationsPage from "@/pages/citizen/CitizenNotificationsPage";
@@ -79,6 +80,7 @@ export default function App() {
       {/* Citizen Portal */}
       <Route path="/citizen" element={<CitizenLayout />}>
         <Route index element={<CitizenDashboardPage />} />
+        <Route path="book" element={<CitizenBookAppointmentPage />} />
         <Route path="appointments" element={<CitizenAppointmentsPage />} />
         <Route path="profile" element={<CitizenProfilePage />} />
         <Route path="notifications" element={<CitizenNotificationsPage />} />
