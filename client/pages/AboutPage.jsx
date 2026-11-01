@@ -2,7 +2,8 @@
 
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { Building, ShieldCheck, Clock, Users, CheckCircle2 } from "lucide-react";
+import mockData from "@/data/mock-data.json";
+import { Building, ShieldCheck, Clock, Users, CheckCircle2, FileText } from "lucide-react";
 import Link from "next/link";
 
 export default function AboutPage() {
@@ -55,6 +56,24 @@ export default function AboutPage() {
               <p className="text-[11px] text-slate-500">
                 Guaranteed time slots empower citizens and service officers with orderly desks.
               </p>
+            </div>
+          </div>
+
+          {/* Static Mock Data Highlights */}
+          <div className="grid grid-cols-3 gap-3 p-4 bg-blue-50/50 rounded-xl border border-blue-100 text-center">
+            <div>
+              <p className="text-xl font-black text-blue-900">{mockData.departments?.length || 6}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Woreda Departments</p>
+            </div>
+            <div>
+              <p className="text-xl font-black text-blue-900">{mockData.services?.length || 15}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Public Services</p>
+            </div>
+            <div>
+              <p className="text-xl font-black text-blue-900">
+                {mockData.users?.filter((u) => u.role === "OFFICER")?.length || 6}
+              </p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Desk Officers</p>
             </div>
           </div>
 
