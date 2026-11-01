@@ -39,19 +39,6 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   ];
 
   const officerNav = [
-    { href: "/officer", label: "Officer Desk", icon: LayoutDashboard },
-    {
-      href: "/officer/appointments",
-      label: "Department Bookings",
-      icon: Calendar,
-      badge: pendingAppointmentsCount > 0 ? pendingAppointmentsCount : null,
-    },
-    {
-      href: "/officer/queue",
-      label: "Live Queue Board",
-      icon: Layers,
-      badge: waitingQueueCount > 0 ? waitingQueueCount : null,
-    },
     { href: "/officer/verify", label: "Citizen Check-In", icon: CheckCircle2 },
     { href: "/officer/reports", label: "Department Report", icon: BarChart3 },
   ];
@@ -87,7 +74,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   }
 
   const isAdmin = role === "ADMIN" || pathname?.startsWith("/admin");
-  const brandHref = role === "ADMIN" ? "/admin" : role === "OFFICER" ? "/officer" : "/citizen";
+  const brandHref = role === "ADMIN" ? "/admin" : role === "OFFICER" ? "/officer/verify" : "/citizen";
 
   return (
     <aside
