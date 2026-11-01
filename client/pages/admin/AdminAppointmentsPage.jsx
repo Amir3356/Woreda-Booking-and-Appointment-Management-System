@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useStore } from "@/lib/store";
+import { INITIAL_APPOINTMENTS } from "@/lib/mock-data";
 import StatusBadge from "@/components/shared/StatusBadge";
 import AppointmentSlip from "@/components/shared/AppointmentSlip";
 import { formatDate } from "@/lib/utils";
@@ -29,10 +30,18 @@ export default function AdminAppointmentsPage() {
     rescheduleAppointment,
   } = useStore();
 
+  const [timeFilter, setTimeFilter] = useState("TODAY");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [deptFilter, setDeptFilter] = useState("ALL");
   const [search, setSearch] = useState("");
   const [selectedSlipApt, setSelectedSlipApt] = useState(null);
+
+  // Guarantee upcoming and today sample appointments are available
+  const existingIds = new Set(appointments.map((a) => a.id));
+  const effectiveAppointments = [
+    ...appointments,
+    ...INITIAL_APPOINTMENTS.filter((a) => !existingIds.has(a.id)),
+  ];
 
   // Reject dialog state
   const [rejectTargetId, setRejectTargetId] = useState(null);
@@ -43,14 +52,34 @@ export default function AdminAppointmentsPage() {
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("10:00 AM");
 
-  const filtered = appointments.filter((a) => {
+  const getTodayStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const filtered = effectiveAppointments.filter((a) => {
     const matchesSearch =
       a.referenceNumber.toLowerCase().includes(search.toLowerCase()) ||
       a.citizenName.toLowerCase().includes(search.toLowerCase()) ||
       a.citizenPhone.includes(search);
     const matchesStatus = statusFilter === "ALL" || a.status === statusFilter;
     const matchesDept = deptFilter === "ALL" || a.departmentId === deptFilter;
-    return matchesSearch && matchesStatus && matchesDept;
+
+    const todayStr = getTodayStr();
+    const aptDate = (a.date || "").split("T")[0];
+    let matchesTime = true;
+    if (timeFilter === "TODAY") {
+      matchesTime = aptDate === todayStr;
+    } else if (timeFilter === "UPCOMING") {
+      matchesTime = aptDate > todayStr;
+    } else if (timeFilter === "ALL") {
+      matchesTime = true;
+    }
+
+    return matchesSearch && matchesStatus && matchesDept && matchesTime;
   });
 
   const handleApprove = (id) => {
@@ -128,6 +157,20 @@ export default function AdminAppointmentsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          {/* Timeframe Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-blue-600" />
+            <select
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
+            >
+              <option value="TODAY">Today's Appointments</option>
+              <option value="UPCOMING">Upcoming Appointments</option>
+              <option value="ALL">All Appointments</option>
+            </select>
+          </div>
+
           <select
             value={deptFilter}
             onChange={(e) => setDeptFilter(e.target.value)}

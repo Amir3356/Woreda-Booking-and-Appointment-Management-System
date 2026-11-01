@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useStore } from "@/lib/store";
+import { INITIAL_APPOINTMENTS } from "@/lib/mock-data";
 import StatusBadge from "@/components/shared/StatusBadge";
 import AppointmentSlip from "@/components/shared/AppointmentSlip";
 import { formatDate } from "@/lib/utils";
@@ -27,11 +28,19 @@ export default function OfficerAppointmentsPage() {
   } = useStore();
 
   const officerDeptId = currentUser?.departmentId || "dept-1";
+  const [timeFilter, setTimeFilter] = useState("TODAY");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [search, setSearch] = useState("");
   const [selectedSlipApt, setSelectedSlipApt] = useState(null);
 
-  const deptAppointments = appointments.filter((a) => a.departmentId === officerDeptId);
+  // Guarantee upcoming and today sample appointments are available
+  const existingIds = new Set(appointments.map((a) => a.id));
+  const effectiveAppointments = [
+    ...appointments,
+    ...INITIAL_APPOINTMENTS.filter((a) => !existingIds.has(a.id)),
+  ];
+
+  const deptAppointments = effectiveAppointments.filter((a) => a.departmentId === officerDeptId);
 
   const formatRequestDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -44,13 +53,33 @@ export default function OfficerAppointmentsPage() {
     });
   };
 
+  const getTodayStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
   const filtered = deptAppointments.filter((a) => {
     const matchesSearch =
       a.referenceNumber.toLowerCase().includes(search.toLowerCase()) ||
       a.citizenName.toLowerCase().includes(search.toLowerCase()) ||
       a.citizenPhone.includes(search);
     const matchesStatus = statusFilter === "ALL" || a.status === statusFilter;
-    return matchesSearch && matchesStatus;
+
+    const todayStr = getTodayStr();
+    const aptDate = (a.date || "").split("T")[0];
+    let matchesTime = true;
+    if (timeFilter === "TODAY") {
+      matchesTime = aptDate === todayStr;
+    } else if (timeFilter === "UPCOMING") {
+      matchesTime = aptDate > todayStr;
+    } else if (timeFilter === "ALL") {
+      matchesTime = true;
+    }
+
+    return matchesSearch && matchesStatus && matchesTime;
   });
 
   return (
@@ -97,22 +126,39 @@ export default function OfficerAppointmentsPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <Filter className="w-3.5 h-3.5 text-slate-400" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="PENDING">Pending Review</option>
-            <option value="APPROVED">Approved</option>
-            <option value="CHECKED_IN">Checked In</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="CANCELLED">Cancelled</option>
-            <option value="NO_SHOW">No Show</option>
-          </select>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Timeframe Dropdown */}
+          <div className="flex items-center gap-2">
+            <Calendar className="w-3.5 h-3.5 text-blue-600" />
+            <select
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
+            >
+              <option value="TODAY">Today's Appointments</option>
+              <option value="UPCOMING">Upcoming Appointments</option>
+              <option value="ALL">All Appointments</option>
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div className="flex items-center gap-2">
+            <Filter className="w-3.5 h-3.5 text-slate-400" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="PENDING">Pending Review</option>
+              <option value="APPROVED">Approved</option>
+              <option value="CHECKED_IN">Checked In</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="NO_SHOW">No Show</option>
+            </select>
+          </div>
         </div>
       </div>
 
