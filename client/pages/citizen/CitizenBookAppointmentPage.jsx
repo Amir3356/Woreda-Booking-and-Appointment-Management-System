@@ -368,7 +368,7 @@ export default function CitizenBookAppointmentPage() {
                 <th className="px-5 py-3.5 whitespace-nowrap">Department</th>
                 <th className="px-5 py-3.5 whitespace-nowrap">Service</th>
                 <th className="px-5 py-3.5 whitespace-nowrap">Availability</th>
-                <th className="px-5 py-3.5 text-center whitespace-nowrap">Action</th>
+                <th className="px-5 py-3.5 text-center whitespace-nowrap"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -619,3 +619,4 @@ export default function CitizenBookAppointmentPage() {
     </div>
   );
 }
+
