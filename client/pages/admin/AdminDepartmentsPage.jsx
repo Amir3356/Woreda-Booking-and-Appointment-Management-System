@@ -78,23 +78,28 @@ export default function AdminDepartmentsPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="relative flex items-center w-full min-h-[48px]" style={{ position: "relative", minHeight: "48px" }}>
         <div className="w-full text-center">
-          <h2 className="text-xl font-bold text-slate-900 text-center">Department Management</h2>
-          <p className="text-xs text-slate-500 text-center mt-1">
+          <h2 className="text-xl font-bold text-slate-900">Department Management</h2>
+          <p className="text-xs text-slate-500 mt-1">
             Configure Woreda administrative departments, assigned offices, contact lines, and operating statuses.
           </p>
         </div>
 
-        <div className="sm:absolute sm:right-0 sm:top-1/2 sm:-translate-y-1/2 flex justify-center">
-          <button
-            onClick={handleOpenAdd}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-colors cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4 text-amber-300" />
-            <span>Add New Department</span>
-          </button>
-        </div>
+        <button
+          onClick={handleOpenAdd}
+          className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-colors cursor-pointer shrink-0"
+          style={{
+            position: "absolute",
+            right: 0,
+            top: "50%",
+            transform: "translateY(-50%)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <Plus className="w-4 h-4 text-amber-300" />
+          <span>Add New Department</span>
+        </button>
       </div>
 
       {/* Main Content Section */}
