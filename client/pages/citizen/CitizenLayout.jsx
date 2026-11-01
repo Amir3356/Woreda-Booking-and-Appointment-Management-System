@@ -10,6 +10,7 @@ export default function CitizenLayout({ children }) {
         <DashboardHeader
           title="Citizen Self-Service Portal"
           subtitle="Manage your public bookings, slips, and notifications"
+          showNotifications={false}
         />
         <main className="flex-1 p-6 overflow-y-auto" style={{ backgroundColor: "#f1f5f9" }}>
           {children || <Outlet />}

@@ -11,7 +11,11 @@ export default function DashboardHeader({ title, subtitle, showNotifications }) 
   const pathname = usePathname();
   const isAdmin = pathname?.startsWith("/admin");
   const isOfficer = pathname?.startsWith("/officer");
-  const shouldShowNotifications = showNotifications !== undefined ? showNotifications : (!isAdmin && !isOfficer);
+  const isCitizen = pathname?.startsWith("/citizen");
+  const shouldShowNotifications =
+    showNotifications !== undefined
+      ? showNotifications
+      : !isAdmin && !isOfficer && !isCitizen;
 
   const { notifications, markNotificationAsRead, markAllNotificationsAsRead, currentUser } = useStore();
   const [notifOpen, setNotifOpen] = useState(false);
