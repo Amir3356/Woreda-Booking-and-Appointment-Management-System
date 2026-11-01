@@ -1,58 +1,14 @@
-@import "tailwindcss";
+/* ==========================================================================
+   Woreda Booking & Appointment Management System
+   Main External CSS Entry Point
+   Pure Standard External CSS - Zero Tailwind Dependency
+   ========================================================================== */
 
-@layer base {
-  :root {
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 217 91% 32%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 160 84% 30%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 217 91% 32%;
-    --radius: 0.5rem;
-  }
-}
-
-body {
-  background-color: #f8fafc;
-  color: #0f172a;
-  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
-}
-
-/* Custom scrollbars for data tables and queue boards */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-@media print {
-  .no-print {
-    display: none !important;
-  }
-  .print-only {
-    display: block !important;
-  }
-}
-
+@import "../styles/variables.css";
+@import "../styles/reset.css";
+@import "../styles/layout.css";
+@import "../styles/components.css";
+@import "../styles/auth.css";
+@import "../styles/dashboard.css";
+@import "../styles/booking.css";
+@import "../styles/utilities.css";
