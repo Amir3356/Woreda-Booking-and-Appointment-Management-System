@@ -31,6 +31,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   const adminNav = [
     { href: "/admin/departments", label: "Department Management", icon: Building2 },
     { href: "/admin/services", label: "Service Management", icon: FileText },
+    { href: "/admin/schedule", label: "Schedule Management", icon: Clock },
     { href: "/admin/account-provision", label: "Account Provision", icon: UserCog },
   ];
 
@@ -116,9 +117,6 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
 
       {/* Navigation Items */}
       <div className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-        <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          Navigation Menu
-        </div>
         {items.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
