@@ -100,24 +100,22 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
       }}
     >
       {/* Brand & Portal Header */}
-      {!isAdmin && (
-        <div className="p-4 border-b border-white/10">
-          <Link href={brandHref} className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-900 flex items-center justify-center font-bold text-sm shadow">
-              W
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
-                WoredaCare
-                <span className={`text-[9px] uppercase px-1.5 py-0.2 rounded font-semibold ${badgeColor}`}>
-                  {role}
-                </span>
-              </h2>
-              <p className="text-[10px] text-slate-400 truncate max-w-[150px]">{subtitle}</p>
-            </div>
-          </Link>
-        </div>
-      )}
+      <div className="p-4 border-b border-white/10">
+        <Link href={brandHref} className="flex items-center gap-2.5 group">
+          <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-900 flex items-center justify-center font-bold text-sm shadow">
+            W
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
+              WoredaCare
+              <span className={`text-[9px] uppercase px-1.5 py-0.2 rounded font-semibold ${badgeColor}`}>
+                {role}
+              </span>
+            </h2>
+            <p className="text-[10px] text-slate-400 truncate max-w-[150px]">{subtitle}</p>
+          </div>
+        </Link>
+      </div>
 
       {/* Navigation Items */}
       <div className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
