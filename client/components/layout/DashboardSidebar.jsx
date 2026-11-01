@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  Building2,
   FileText,
   Calendar,
   Clock,
@@ -29,6 +30,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   const unreadNotifsCount = notifications.filter((n) => !n.isRead).length;
 
   const adminNav = [
+    { href: "/admin/departments", label: "Department Management", icon: Building2 },
     { href: "/admin/services", label: "Government Services", icon: FileText },
     { href: "/admin/schedule", label: "Schedules & Capacity", icon: Clock },
     { href: "/admin/users", label: "Staff & Citizens", icon: Users },
