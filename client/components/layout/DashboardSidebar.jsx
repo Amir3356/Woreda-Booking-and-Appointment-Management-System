@@ -9,7 +9,6 @@ import {
   Calendar,
   Clock,
   UserCog,
-  CheckCircle2,
   ShieldAlert,
   Layers,
   Bell,
@@ -44,7 +43,6 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
       icon: Calendar,
       badge: pendingAppointmentsCount > 0 ? pendingAppointmentsCount : null,
     },
-    { href: "/officer/verify", label: "Citizen Check-In", icon: CheckCircle2 },
   ];
 
   const citizenNav = [
@@ -78,7 +76,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   }
 
   const isAdmin = role === "ADMIN" || pathname?.startsWith("/admin");
-  const brandHref = role === "ADMIN" ? "/admin" : role === "OFFICER" ? "/officer/verify" : "/citizen";
+  const brandHref = role === "ADMIN" ? "/admin" : role === "OFFICER" ? "/officer/appointments" : "/citizen";
 
   return (
     <aside
