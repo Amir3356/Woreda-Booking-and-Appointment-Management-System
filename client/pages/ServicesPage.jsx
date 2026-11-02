@@ -1,12 +1,10 @@
-"use client";
-
 import { useState } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { useStore } from "@/lib/store";
-import mockData from "@/data/mock-data.json";
-import { formatETB } from "@/lib/utils";
-import Link from "next/link";
+import { useStore } from "@/context";
+import mockData from "@/data";
+import { formatETB } from "@/utils";
+import Link from "@/components/ui/Link";
 import {
   Search,
   Filter,

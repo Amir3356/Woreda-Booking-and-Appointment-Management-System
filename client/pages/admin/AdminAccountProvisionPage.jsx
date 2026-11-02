@@ -1,8 +1,6 @@
-"use client";
-
 import { useState } from "react";
-import { useStore } from "@/lib/store";
-import mockData from "@/data/mock-data.json";
+import { useStore } from "@/context";
+import mockData from "@/data";
 import {
   Plus,
   Trash2,

@@ -1,7 +1,5 @@
-"use client";
-
 import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useStore } from "@/context";
 import StatusBadge from "@/components/shared/StatusBadge";
 import {
   FileCheck2,
@@ -14,7 +12,7 @@ import {
   Clock,
   Layers,
 } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate } from "@/utils";
 
 export default function OfficerVerifyPage() {
   const { appointments, services, updateAppointmentStatus, currentUser } = useStore();

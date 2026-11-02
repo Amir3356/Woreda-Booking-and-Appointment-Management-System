@@ -1,9 +1,7 @@
-"use client";
-
-import { useStore } from "@/lib/store";
+import { useStore } from "@/context";
 import { User, LogOut, ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname } from "@/hooks";
 
 export default function RoleSwitcher() {
   const router = useRouter();

@@ -1,7 +1,5 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "@/components/ui/Link";
+import { usePathname } from "@/hooks";
 import {
   LayoutDashboard,
   Building2,
@@ -14,7 +12,7 @@ import {
   ChevronRight,
   LogOut,
 } from "lucide-react";
-import { useStore } from "@/lib/store";
+import { useStore } from "@/context";
 
 export default function DashboardSidebar({ role = "ADMIN" }) {
   const pathname = usePathname();

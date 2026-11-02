@@ -1,8 +1,6 @@
-"use client";
-
 import { useState } from "react";
-import { useStore } from "@/lib/store";
-import { formatETB } from "@/lib/utils";
+import { useStore } from "@/context";
+import { formatETB } from "@/utils";
 import {
   FileText,
   Plus,

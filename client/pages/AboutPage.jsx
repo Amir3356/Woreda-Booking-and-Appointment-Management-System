@@ -1,10 +1,8 @@
-"use client";
-
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import mockData from "@/data/mock-data.json";
+import mockData from "@/data";
 import { Building, ShieldCheck, Clock, Users, CheckCircle2, FileText } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/ui/Link";
 
 export default function AboutPage() {
   return (

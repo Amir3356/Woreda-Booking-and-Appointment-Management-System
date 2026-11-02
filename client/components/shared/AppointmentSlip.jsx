@@ -1,8 +1,6 @@
-"use client";
-
 import { Printer, Download, CheckCircle, Clock, MapPin, FileText, QrCode, Building, AlertCircle } from "lucide-react";
 import StatusBadge from "./StatusBadge";
-import { formatDate, formatETB } from "@/lib/utils";
+import { formatDate, formatETB } from "@/utils";
 
 export default function AppointmentSlip({ appointment, service }) {
   if (!appointment) return null;

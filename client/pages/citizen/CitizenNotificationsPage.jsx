@@ -1,7 +1,5 @@
-"use client";
-
-import { useStore } from "@/lib/store";
-import { Bell, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { useStore } from "@/context";
+import { Bell, CheckCheck, Info, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 export default function CitizenNotificationsPage() {
   const {

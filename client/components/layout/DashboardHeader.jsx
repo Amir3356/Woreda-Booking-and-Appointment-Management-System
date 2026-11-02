@@ -1,11 +1,9 @@
-"use client";
-
 import { useState, useRef, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/hooks";
 import { Bell, Search, Clock, CheckCheck, Sparkles } from "lucide-react";
 import RoleSwitcher from "@/components/ui/RoleSwitcher";
-import { useStore } from "@/lib/store";
-import { formatTime } from "@/lib/utils";
+import { useStore } from "@/context";
+import { formatTime } from "@/utils";
 
 export default function DashboardHeader({ title, subtitle, showNotifications }) {
   const pathname = usePathname();

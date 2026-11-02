@@ -1,7 +1,5 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "@/components/ui/Link";
+import { usePathname } from "@/hooks";
 import { useState } from "react";
 import {
   Calendar,
@@ -14,7 +12,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import RoleSwitcher from "@/components/ui/RoleSwitcher";
-import { useStore } from "@/lib/store";
+import { useStore } from "@/context";
 
 export default function Navbar() {
   const pathname = usePathname();

@@ -1,13 +1,11 @@
-"use client";
-
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams } from "@/hooks";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import StatusBadge from "@/components/shared/StatusBadge";
 import AppointmentSlip from "@/components/shared/AppointmentSlip";
-import { useStore } from "@/lib/store";
-import { formatDate, formatETB } from "@/lib/utils";
+import { useStore } from "@/context";
+import { formatDate, formatETB } from "@/utils";
 import {
   Search,
   Calendar,

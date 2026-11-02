@@ -1,7 +1,5 @@
-"use client";
-
 import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useStore } from "@/context";
 import {
   BarChart3,
   Download,
@@ -12,7 +10,7 @@ import {
   TrendingUp,
   Percent,
 } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate } from "@/utils";
 
 export default function AdminReportsPage() {
   const { appointments, departments, services } = useStore();

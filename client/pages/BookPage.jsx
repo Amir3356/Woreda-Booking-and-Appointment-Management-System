@@ -1,12 +1,10 @@
-"use client";
-
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "@/hooks";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import AppointmentSlip from "@/components/shared/AppointmentSlip";
-import { useStore } from "@/lib/store";
-import { formatETB, formatDate } from "@/lib/utils";
+import { useStore } from "@/context";
+import { formatETB, formatDate } from "@/utils";
 import {
   Building2,
   FileText,
@@ -23,7 +21,7 @@ import {
   Mail,
   MapPin,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/ui/Link";
 
 function BookingContent() {
   const router = useRouter();

@@ -1,11 +1,9 @@
-"use client";
-
 import { useState } from "react";
-import { useStore } from "@/lib/store";
-import { INITIAL_APPOINTMENTS } from "@/lib/mock-data";
+import { useStore } from "@/context";
+import { appointments as INITIAL_APPOINTMENTS } from "@/data";
 import StatusBadge from "@/components/shared/StatusBadge";
 import AppointmentSlip from "@/components/shared/AppointmentSlip";
-import { formatDate } from "@/lib/utils";
+import { formatDate } from "@/utils";
 import {
   Calendar,
   Search,
