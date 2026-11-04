@@ -29,6 +29,18 @@ departments, services, schedules, staff accounts and system settings.
 
 ## Architecture
 
+WoredaCare is built with a **microservices architecture**, and the code inside every service
+follows a **layered architecture**.
+
+- **Microservices (system level):** the backend is split into five independent business services
+  plus an API gateway. Each service has its own codebase, `package.json`, Dockerfile and container,
+  owns its own MongoDB collections, and can be built, deployed, scaled and restarted on its own.
+- **Layered code organization (service level):** inside each service the code is divided into
+  layers (routes, middleware, controllers, services, repositories, models, config, utils). Each
+  layer has one job and only calls the layer below it.
+
+### Microservices architecture
+
 ```
  Browser (React + Vite)
         │  HTTP / WebSocket
@@ -59,7 +71,79 @@ departments, services, schedules, staff accounts and system settings.
 | Monitoring | Prometheus, Grafana, exporters for MongoDB, Redis, Kafka, nginx and the host |
 | Deployment | Docker Compose |
 
-Every service follows the same layers: `routes → middleware → controllers → services → repositories → models`, with `config/` and `utils/`.
+#### Services and data ownership
+
+| Microservice | Port | Responsibility | Owns (MongoDB collections) |
+|--------------|------|----------------|----------------------------|
+| **api-gateway** | 8080 | Single entry point: routes requests to services, checks JWTs, caches responses in Redis, pushes live updates over WebSocket | — (Redis cache only) |
+| **auth-service** | 8081 | Registration, sign-in, sign-out, token issue and revocation, login lockout | reads/inserts `users` |
+| **user-service** | 8082 | Citizen profiles, staff accounts, system settings | `users`, `system_settings` |
+| **department-service** | 8083 / gRPC 9083 | Departments and public services (the catalog) | `departments`, `services` |
+| **appointment-service** | 8084 | Booking, review, reschedule, cancel, slips, reports, audit log | `appointments`, `slot_reservations`, `audit_logs` |
+| **booking-service** | 8085 | Schedules, slot availability, check-in and desk queue | `schedules`, `queue_tokens` |
+
+#### How the services communicate
+
+| Style | Used for |
+|-------|----------|
+| **REST over HTTP** (synchronous) | Browser → nginx → API gateway → service |
+| **gRPC** (synchronous, internal) | appointment-service asks department-service for catalog data while booking |
+| **Kafka events** (asynchronous) | Services publish `woreda.appointments` and `woreda.catalog` events; the gateway consumes them to clear caches and notify browsers |
+| **WebSocket** | API gateway → open browser pages (live updates) |
+
+### Layered code organization
+
+Every microservice uses the same folder layout, so a developer who knows one service can find their
+way around all of them:
+
+```
+<service>/
+├── server.js          Starts the process: connects to DB/Kafka/gRPC, starts HTTP server, graceful shutdown
+├── app.js             Builds the Express app and wires the layers together
+├── routes/            Layer 1 – maps URLs and HTTP methods to controllers, attaches middleware
+├── middleware/        Cross-cutting – authentication/roles, request logging, metrics, error handling
+├── controllers/       Layer 2 – reads the HTTP request, calls a service, sends the HTTP response
+├── services/          Layer 3 – business logic and rules (validation, capacity, status changes, events)
+├── repositories/      Layer 4 – data access: all MongoDB / Redis / gRPC queries
+├── models/            Layer 5 – Mongoose schemas, indexes and validation for the owned collections
+├── config/            Settings and connections: env vars, database, Redis, Kafka, logger, metrics
+└── utils/             Small shared helpers: IDs, errors, response format, dates, time slots
+```
+
+A request flows down through the layers and the result flows back up:
+
+```
+HTTP request
+   │
+   ▼
+routes ──► middleware (auth, role, logging, metrics)
+   │
+   ▼
+controllers   ── HTTP only: parse input, choose status code
+   │
+   ▼
+services      ── business rules, no HTTP or database code
+   │
+   ▼
+repositories  ── database / cache / gRPC access
+   │
+   ▼
+models        ── MongoDB schema
+```
+
+**Layer rules**
+
+1. A layer calls only the layer directly below it (controllers never query the database; repositories
+   never contain business rules).
+2. Controllers know about HTTP; services do not, so business logic can be tested without a web server.
+3. Only repositories talk to MongoDB, Redis or other services over gRPC, so storage can change without
+   touching business logic.
+4. Errors are thrown as typed errors (`utils/errors.js`) and turned into HTTP responses in one place
+   (`middleware/errorHandler.js`).
+5. Configuration comes only from `config/`, which reads environment variables.
+
+The API gateway has no database, so it has no `models/` folder; its `repositories/` hold Redis access
+for the response cache and revoked tokens.
 
 ---
 
@@ -310,13 +394,13 @@ The app opens at http://localhost:3000.
 │   ├── layout/                Role layouts, navbar, sidebar
 │   ├── components/ features/  Shared UI and the appointment slip
 │   └── context/ hooks/ services/ utils/ styles/
-├── server/
+├── server/                    One folder per microservice, each with the same layered layout
 │   ├── api-gateway/           Routing, auth check, cache, WebSocket
-│   ├── auth-service/
-│   ├── user-service/
-│   ├── department-service/
-│   ├── appointment-service/
-│   ├── booking-service/
+│   ├── auth-service/          Microservice: authentication
+│   ├── user-service/          Microservice: profiles, staff, settings
+│   ├── department-service/    Microservice: departments and services catalog
+│   ├── appointment-service/   Microservice: appointments, reports, audit
+│   ├── booking-service/       Microservice: schedules, availability, queue
 │   ├── nginx/                 nginx.conf (rate limits, proxy)
 │   └── monitoring/            Prometheus config and alerts, Grafana dashboards
 └── docker-compose.yml
