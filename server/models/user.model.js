@@ -1,6 +1,6 @@
 // Table "users": citizens, department officers and administrators.
 const LABEL_OFFICER = "Department Officer";
-const LABEL_ADMIN = "Central Administrator";
+const LABEL_ADMIN = "Admin";
 
 /** users row (optionally joined with department_name) -> user object (includes passwordHash). */
 export function fromRow(r) {

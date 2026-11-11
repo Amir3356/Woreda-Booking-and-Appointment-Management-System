@@ -3,7 +3,7 @@
 import { subject } from "@casl/ability";
 import { lockKey, transaction } from "../config/database.js";
 import {
-  ConflictError, DailyCapacityError, ForbiddenError, NotFoundError, SlotFullError, UnauthorizedError, invalid, isDuplicateKey,
+  ConflictError, DailyCapacityError, DepartmentCapacityError, ForbiddenError, NotFoundError, SlotFullError, UnauthorizedError, invalid, isDuplicateKey,
 } from "../utils/errors.js";
 import { newId } from "../utils/id.js";
 import { nowMinutes, today } from "../utils/date.js";
@@ -14,7 +14,7 @@ import * as appointments from "../repositories/appointment.repository.js";
 import * as publicServices from "../repositories/publicService.repository.js";
 import * as users from "../repositories/user.repository.js";
 import * as settings from "../repositories/settings.repository.js";
-import * as schedules from "../repositories/schedule.repository.js";
+import { closedIssue, effectiveDay } from "./dayRules.js";
 
 const SLIP_INSTRUCTIONS = Object.freeze([
   "Arrive 15 minutes before your time slot.",
@@ -29,9 +29,13 @@ const SLIP_INSTRUCTIONS = Object.freeze([
  * fields: the request field names for the 422 ("date"/"timeSlot" or "newDate"/"newTimeSlot").
  */
 async function reservePlace(client, { serviceId, departmentId, date, timeSlot, excludeId = null }, fields) {
+  // Lock order is always service-day, then department-day, so concurrent bookings cannot deadlock.
   await lockKey(client, `slot:${serviceId}|${date}`);
-  // The service's own schedule, else its department's (Admin > Schedule Management).
-  const schedule = await schedules.findActive(serviceId, departmentId, date, client);
+  if (departmentId) await lockKey(client, `dept:${departmentId}|${date}`);
+  // Admin > Schedule Management: booking closures, calendar exceptions, then operating hours.
+  const day = await effectiveDay({ serviceId, departmentId, date }, client);
+  if (!day.open) invalid(fields.date, closedIssue(day, date));
+  const schedule = day.schedule;
   const issue = scheduleIssue(schedule, date, timeSlot);
   if (issue) invalid(fields[issue.field], issue.issue);
   // Today, a time that has already started can no longer be booked.
@@ -41,6 +45,10 @@ async function reservePlace(client, { serviceId, departmentId, date, timeSlot, e
   const perTime = perTimeCapacity(schedule, (await settings.findMaxParallelSlots(client)) ?? DEFAULT_MAX_PARALLEL_SLOTS);
   const taken = await appointments.countTaken({ serviceId, date, timeSlot, excludeId }, client);
   if (taken.day >= schedule.dailyCapacity) throw new DailyCapacityError(schedule.dailyCapacity, date);
+  if (day.departmentCapacity) {
+    const departmentTaken = await appointments.countDepartmentDay({ departmentId, date, excludeId }, client);
+    if (departmentTaken >= day.departmentCapacity) throw new DepartmentCapacityError(day.departmentCapacity, date);
+  }
   if (taken.slot >= perTime) throw new SlotFullError();
 }
 
@@ -88,7 +96,7 @@ export function createAppointmentService({ events, audit }) {
           { date: "date", timeSlot: "timeSlot" });
         return insertWithReference(client, {
           citizenId: caller.userId, citizenName: req.citizenName, citizenPhone: req.citizenPhone,
-          citizenEmail: req.citizenEmail, departmentId: cs.departmentId, serviceId: req.serviceId,
+          departmentId: cs.departmentId, serviceId: req.serviceId,
           date: req.date, timeSlot: req.timeSlot, status: "PENDING", citizenNotes: req.citizenNotes,
         });
       });

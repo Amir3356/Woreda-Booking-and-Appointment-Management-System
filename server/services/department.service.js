@@ -1,5 +1,6 @@
 // Departments: unique code, delete protection, and catalog change events.
 import { ConflictError, NotFoundError, isDuplicateKey } from "../utils/errors.js";
+import { cursorMeta } from "../utils/pagination.js";
 import { newId } from "../utils/id.js";
 import * as departments from "../repositories/department.repository.js";
 import * as publicServices from "../repositories/publicService.repository.js";
@@ -10,8 +11,16 @@ export function createDepartmentService({ events }) {
   };
 
   const service = {
-    list(isActive) {
-      return departments.findAll(isActive);
+    list(arg) {
+      return departments.findAll(arg);
+    },
+
+    async listPaged({ isActive, departmentId, search = "", cursor = 0, pageSize = 3 }) {
+      const { total, items } = await departments.findPage({ isActive, departmentId, search, offset: cursor, limit: pageSize });
+      return {
+        items,
+        cursor: cursorMeta(cursor, pageSize, total),
+      };
     },
 
     async get(id) {
@@ -24,6 +33,14 @@ export function createDepartmentService({ events }) {
     async create(fields) {
       const { serviceIds, ...deptFields } = fields;
       const id = newId("dept");
+      if (serviceIds?.length) {
+        const conflicts = await publicServices.findConflicts(id, serviceIds);
+        if (conflicts.length) {
+          throw new ConflictError(
+            `service "${conflicts[0].name}" is already assigned to "${conflicts[0].departmentName}". A service cannot be assigned to multiple departments`
+          );
+        }
+      }
       await departments.create({ id, ...deptFields }).catch(duplicateCode(fields.code));
       if (serviceIds?.length) {
         await publicServices.assignToDepartment(id, serviceIds);
@@ -38,6 +55,14 @@ export function createDepartmentService({ events }) {
 
     async update(id, fields) {
       const { serviceIds, ...deptFields } = fields;
+      if (serviceIds?.length) {
+        const conflicts = await publicServices.findConflicts(id, serviceIds);
+        if (conflicts.length) {
+          throw new ConflictError(
+            `service "${conflicts[0].name}" is already assigned to "${conflicts[0].departmentName}". A service cannot be assigned to multiple departments`
+          );
+        }
+      }
       const found = await departments.update(id, deptFields).catch(duplicateCode(fields.code));
       if (!found) throw new NotFoundError();
       if (serviceIds !== undefined) {

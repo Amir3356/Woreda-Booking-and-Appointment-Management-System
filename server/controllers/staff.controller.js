@@ -8,11 +8,14 @@ export function createStaffController(staffService) {
       okWithCursor(res, "Accounts retrieved successfully.", items, cursor);
     },
     async listCitizens(req, res) {
-      const { items, cursor } = await staffService.listCitizens(req.validatedQuery);
-      okWithCursor(res, "Citizens retrieved successfully.", items, cursor);
+      const { items, cursor, totalRegistered, filters } = await staffService.listCitizens(req.validatedQuery);
+      okWithCursor(res, "Citizens retrieved successfully.", items, cursor, { totalRegistered, filters });
     },
     async provision(req, res) {
       ok(res, 201, "Staff account provisioned successfully.", { id: await staffService.provision(req.body) });
+    },
+    async update(req, res) {
+      ok(res, 200, "Staff account updated successfully.", await staffService.update(req.params.id, req.body));
     },
     async toggleStatus(req, res) {
       ok(res, 200, "Account status updated.", { id: req.params.id, isActive: await staffService.toggleStatus(req.params.id) });

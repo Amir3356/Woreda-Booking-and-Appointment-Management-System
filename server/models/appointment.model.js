@@ -14,7 +14,6 @@ export function fromRow(r) {
     citizenId: r.citizen_id,
     citizenName: r.citizen_name,
     citizenPhone: r.citizen_phone,
-    citizenEmail: r.citizen_email ?? null,
     departmentId: r.department_id,
     departmentName: r.department_name ?? "",
     serviceId: r.service_id,

@@ -1,24 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useStore } from "@/context";
 import { DataTable } from "@/components/ui";
 import { useEscapeKey } from "@/hooks";
 import { subscribe } from "@/api/realtime";
+import { serviceApi } from "@/api/serviceApi";
 import { describeError } from "@/utils";
 import {
   FileText,
   Plus,
   Search,
-  Filter,
   Edit2,
   X,
   Trash2,
-  AlertCircle,
+  Filter,
+  RotateCcw,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 export default function AdminServicesPage() {
   const {
-    services,
     departments,
     addService,
     updateService,
@@ -26,17 +29,68 @@ export default function AdminServicesPage() {
     deleteService,
     loadServices,
     loadDepartments,
-    servicesLoaded,
   } = useStore();
-  const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // The catalog lives in department-service; fetch it when this page opens and whenever the
-  // server announces a change (e.g. another administrator edited a service).
+  // Search box and dropdown filters state
+  const [search, setSearch] = useState("");
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState("ALL");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState("ALL");
+
+  // Server-side cursor-based pagination state (4 real data items per page)
+  const PAGE_SIZE = 4;
+  const [cursor, setCursor] = useState(0);
+  const [pagedServices, setPagedServices] = useState([]);
+  const [cursorMetaState, setCursorMetaState] = useState({
+    current: 0,
+    pageSize: PAGE_SIZE,
+    totalCount: 0,
+    hasPrev: false,
+    hasNext: false,
+    nextCursor: null,
+    prevCursor: null,
+  });
+  const [loadingPage, setLoadingPage] = useState(false);
+
+  // Fetch services using server-side cursor-based pagination
+  const fetchPagedServices = useCallback(async () => {
+    setLoadingPage(true);
+    try {
+      const res = await serviceApi.listPaged({
+        search: search.trim() || undefined,
+        departmentId: selectedDeptFilter,
+        status: selectedStatusFilter,
+        cursor,
+        pageSize: PAGE_SIZE,
+      });
+      if (res && res.data) {
+        setPagedServices(res.data);
+        if (res.meta?.cursor) {
+          setCursorMetaState(res.meta.cursor);
+          if (cursor > 0 && res.meta.cursor.totalCount <= cursor) {
+            setCursor(0);
+          }
+        }
+      }
+    } catch (err) {
+      toast.error(describeError(err, "load services page"), { duration: 5000 });
+    } finally {
+      setLoadingPage(false);
+    }
+  }, [search, selectedDeptFilter, selectedStatusFilter, cursor]);
+
+  useEffect(() => {
+    fetchPagedServices();
+  }, [fetchPagedServices]);
+
+  // Fetch departments and services on mount and whenever catalog updates via real-time WebSocket
   useEffect(() => {
     const refresh = () => {
-      loadServices().catch((err) => setErrorMsg(describeError(err, "load services")));
-      loadDepartments().catch((err) => setErrorMsg(describeError(err, "load departments")));
+      fetchPagedServices();
+      loadServices().catch((err) => toast.error(describeError(err, "load services"), { duration: 5000 }));
+      if (typeof loadDepartments === "function") {
+        loadDepartments().catch(() => {});
+      }
     };
     refresh();
     const offChange = subscribe("catalog.changed", refresh);
@@ -45,14 +99,23 @@ export default function AdminServicesPage() {
       offChange();
       offReconnect();
     };
-  }, [loadServices, loadDepartments]);
+  }, [fetchPagedServices, loadServices, loadDepartments]);
 
   const showSuccess = (msg) => {
-    setErrorMsg("");
-    toast.success(msg);
+    toast.success(msg, { duration: 5000 });
   };
-  const [search, setSearch] = useState("");
-  const [selectedDeptFilter, setSelectedDeptFilter] = useState("ALL");
+
+  const hasActiveFilters = Boolean(
+    search.trim() || selectedDeptFilter !== "ALL" || selectedStatusFilter !== "ALL"
+  );
+
+  const handleResetFilters = () => {
+    setSearch("");
+    setSelectedDeptFilter("ALL");
+    setSelectedStatusFilter("ALL");
+    setCursor(0);
+  };
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
   const closeServiceModal = () => {
@@ -63,20 +126,14 @@ export default function AdminServicesPage() {
 
   const [form, setForm] = useState({
     name: "",
-  });
-
-  const filteredServices = (services || []).filter((s) => {
-    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase());
-    const matchesDept =
-      selectedDeptFilter === "ALL" ||
-      (selectedDeptFilter === "UNASSIGNED" ? !s.departmentId : s.departmentId === selectedDeptFilter);
-    return matchesSearch && matchesDept;
+    departmentId: "",
   });
 
   const handleOpenAdd = () => {
     setEditingService(null);
     setForm({
       name: "",
+      departmentId: "",
     });
     setModalOpen(true);
   };
@@ -85,6 +142,7 @@ export default function AdminServicesPage() {
     setEditingService(srv);
     setForm({
       name: srv.name,
+      departmentId: srv.departmentId || "",
     });
     setModalOpen(true);
   };
@@ -95,7 +153,7 @@ export default function AdminServicesPage() {
 
     const payload = {
       name: form.name.trim(),
-      departmentId: editingService?.departmentId || null,
+      departmentId: form.departmentId ? form.departmentId : (editingService?.departmentId || null),
       code: editingService?.code || `SRV-${Date.now().toString(36).toUpperCase()}`,
       durationMinutes: editingService?.durationMinutes || 30,
       dailyQuota: editingService?.dailyQuota || 40,
@@ -115,9 +173,10 @@ export default function AdminServicesPage() {
       }
       setModalOpen(false);
       setEditingService(null);
+      await fetchPagedServices();
     } catch (err) {
-      setErrorMsg(describeError(err, editingService ? "update the service" : "create the service"));
-      setModalOpen(false);
+      const msg = describeError(err, editingService ? "update the service" : "create the service");
+      toast.error(msg, { duration: 5000 });
     } finally {
       setSaving(false);
     }
@@ -128,8 +187,9 @@ export default function AdminServicesPage() {
     try {
       await deleteService(service.id);
       showSuccess(`Service "${service.name}" deleted.`);
+      await fetchPagedServices();
     } catch (err) {
-      setErrorMsg(describeError(err, `delete "${service.name}"`));
+      toast.error(describeError(err, `delete "${service.name}"`), { duration: 5000 });
     }
   };
 
@@ -137,35 +197,49 @@ export default function AdminServicesPage() {
     try {
       await toggleServiceStatus(service.id);
       showSuccess(`Service "${service.name}" is now ${!service.isActive ? "ACTIVE" : "INACTIVE"}.`);
+      await fetchPagedServices();
     } catch (err) {
-      setErrorMsg(describeError(err, `change the status of "${service.name}"`));
+      toast.error(describeError(err, `change the status of "${service.name}"`), { duration: 5000 });
     }
   };
 
   // Service table columns (TanStack Table via components/ui/DataTable).
-  const departmentName = (service) =>
-    !service.departmentId ? "Unassigned" : departments.find((d) => d.id === service.departmentId)?.name || "Unassigned";
   const serviceColumns = [
     {
       id: "name",
       accessorKey: "name",
-      header: "Service Name",
+      header: "Services",
       sortFn: "text",
       meta: { className: "font-bold text-slate-900 max-w-xs" },
-      cell: ({ row }) => row.original.name,
+      cell: ({ row }) => (
+        <div>
+          <span className="font-bold text-slate-900">{row.original.name}</span>
+          {row.original.code && (
+            <span className="block text-[11px] font-mono text-slate-400 mt-0.5">
+              {row.original.code}
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       id: "department",
-      accessorFn: departmentName,
       header: "Department",
+      accessorFn: (s) => {
+        const dept = (departments || []).find((d) => d.id === s.departmentId);
+        return dept ? dept.name : "Unassigned";
+      },
       sortFn: "text",
-      meta: { className: "text-slate-600 font-medium" },
+      meta: { className: "text-slate-600 text-xs" },
       cell: ({ row }) => {
-        const name = departmentName(row.original);
-        return name === "Unassigned" ? (
-          <span className="text-slate-400 italic text-[11px]">Unassigned</span>
+        const dept = (departments || []).find((d) => d.id === row.original.departmentId);
+        return dept ? (
+          <span className="inline-flex items-center gap-1 font-medium text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+            <Building2 className="w-3 h-3 text-slate-400" />
+            {dept.name}
+          </span>
         ) : (
-          name
+          <span className="text-slate-400 italic text-[11px]">Unassigned</span>
         );
       },
     },
@@ -225,7 +299,7 @@ export default function AdminServicesPage() {
         <div className="w-full text-center">
           <h2 className="text-xl font-bold text-slate-900">Service Management</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Manage Woreda public services, assigned departments, and operating statuses.
+            Manage Woreda public services and operating statuses.
           </p>
         </div>
 
@@ -245,71 +319,182 @@ export default function AdminServicesPage() {
         </button>
       </div>
 
-      {errorMsg && (
-        <div role="alert" className="flex items-start gap-2 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold shadow-xs">
-          <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-px" />
-          <span className="flex-1">{errorMsg}</span>
-          <button type="button" onClick={() => setErrorMsg("")} className="text-red-500 hover:text-red-700 cursor-pointer" aria-label="Dismiss error">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-4 items-center justify-between">
+      {/* Filter and Search Bar with Search Box + Dropfilter */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
+        {/* Search Box Filter */}
         <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search service by name..."
-            className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCursor(0);
+            }}
+            placeholder="Search service by name, code, or department..."
+            className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50/50"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setCursor(0);
+              }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+              title="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto">
-          <Filter className="w-3.5 h-3.5 text-slate-400" />
-          <select
-            value={selectedDeptFilter}
-            onChange={(e) => setSelectedDeptFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 cursor-pointer"
-          >
-            <option value="ALL">All Departments</option>
-            <option value="UNASSIGNED">Unassigned</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
+        {/* Dropdown Filters (Dropfilter) */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          {/* Department Dropdown Filter */}
+          <div className="flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={selectedDeptFilter}
+              onChange={(e) => {
+                setSelectedDeptFilter(e.target.value);
+                setCursor(0);
+              }}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 cursor-pointer focus:ring-2 focus:ring-[#0b2545] focus:outline-none shadow-2xs max-w-xs"
+              title="Filter by department"
+            >
+              <option value="ALL">All Departments</option>
+              {(departments || []).map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+              <option value="UNASSIGNED">Unassigned Services</option>
+            </select>
+          </div>
+
+          {/* Status Dropdown Filter */}
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={selectedStatusFilter}
+              onChange={(e) => {
+                setSelectedStatusFilter(e.target.value);
+                setCursor(0);
+              }}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 cursor-pointer focus:ring-2 focus:ring-[#0b2545] focus:outline-none shadow-2xs"
+              title="Filter by status"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="ACTIVE">Active Only</option>
+              <option value="INACTIVE">Inactive Only</option>
+            </select>
+          </div>
+
+          {/* Reset Filters Button */}
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer border border-rose-200 shadow-2xs"
+              title="Reset all filters"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset</span>
+            </button>
+          )}
+
+          {/* Services Counter Badge */}
+          <div className="text-xs text-slate-500 font-medium ml-auto md:ml-2">
+            Total: <strong className="text-slate-800">{cursorMetaState.totalCount}</strong>{" "}
+            {cursorMetaState.totalCount === 1 ? "service" : "services"}
+          </div>
         </div>
       </div>
 
-      {/* Services Table */}
+      {/* Services Table with 4 real data items per page */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <DataTable
-          data={filteredServices}
+          data={pagedServices}
           columns={serviceColumns}
           getRowId={(s) => s.id}
           initialSorting={[{ id: "name", desc: false }]}
+          pageSize={null}
           itemLabel="services"
           emptyState={
-            <div className="flex flex-col items-center gap-3 text-slate-400">
+            <div className="flex flex-col items-center gap-3 text-slate-400 py-12">
               <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
                 <FileText className="w-6 h-6 text-slate-400" />
               </div>
-              <div>
+              <div className="text-center">
                 <p className="text-sm font-bold text-slate-700">
-                  {servicesLoaded ? "No services added yet" : "Loading services…"}
+                  {loadingPage
+                    ? "Loading services…"
+                    : cursorMetaState.totalCount === 0 && !hasActiveFilters
+                      ? "No services added yet"
+                      : "No matching services found"}
                 </p>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  Public services and department counter designations configured by Central Administration will appear here.
+                  {loadingPage
+                    ? "Fetching public service catalog from server..."
+                    : cursorMetaState.totalCount === 0 && !hasActiveFilters
+                      ? "Public services and department counter designations configured by Central Administration will appear here."
+                      : "Try adjusting your search keywords or resetting the dropdown filters."}
                 </p>
               </div>
             </div>
           }
         />
+
+        {/* Cursor-Based Pagination Navigation Footer (4 real data items per page) */}
+        <div className="bg-slate-50/70 px-5 py-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+          <div className="text-xs text-slate-500 font-medium">
+            Showing <strong className="text-slate-800">{pagedServices.length > 0 ? cursor + 1 : 0}</strong> to{" "}
+            <strong className="text-slate-800">{Math.min(cursor + PAGE_SIZE, cursorMetaState.totalCount || 0)}</strong> of{" "}
+            <strong className="text-slate-800">{cursorMetaState.totalCount || 0}</strong> services
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (cursorMetaState.prevCursor !== null && cursorMetaState.prevCursor !== undefined) {
+                  setCursor(cursorMetaState.prevCursor);
+                } else {
+                  setCursor((prev) => Math.max(0, prev - PAGE_SIZE));
+                }
+              }}
+              disabled={!cursorMetaState.hasPrev || loadingPage}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs"
+              aria-label="Previous page"
+              title="Previous"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <span className="text-xs font-semibold text-slate-700 px-2.5 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs">
+              Page {Math.floor(cursor / PAGE_SIZE) + 1} of{" "}
+              {Math.max(1, Math.ceil((cursorMetaState.totalCount || 0) / PAGE_SIZE))}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (cursorMetaState.nextCursor !== null && cursorMetaState.nextCursor !== undefined) {
+                  setCursor(cursorMetaState.nextCursor);
+                } else {
+                  setCursor((prev) => prev + PAGE_SIZE);
+                }
+              }}
+              disabled={!cursorMetaState.hasNext || loadingPage}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs"
+              aria-label="Next page"
+              title="Next"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Add / Edit Service Modal */}
@@ -338,13 +523,26 @@ export default function AdminServicesPage() {
                 />
               </div>
 
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Department (Optional)</label>
+                <select
+                  value={form.departmentId || ""}
+                  onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50"
+                >
+                  <option value="">Unassigned (Assign later in Department Management)</option>
+                  {(departments || []).map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => {
-                    setModalOpen(false);
-                    setEditingService(null);
-                  }}
+                  onClick={closeServiceModal}
                   className="modal-btn"
                 >
                   Cancel

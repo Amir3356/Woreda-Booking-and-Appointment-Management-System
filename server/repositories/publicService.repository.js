@@ -4,12 +4,16 @@ import { fromRow } from "../models/publicService.model.js";
 import { containsPattern } from "../utils/pagination.js";
 
 /** Filters: departmentId, search (name or code, case-insensitive), isActive. Sorted by name. */
-export async function findAll({ departmentId, search, isActive }) {
+export async function findAll({ departmentId, search, isActive } = {}) {
   const where = [];
   const params = [];
-  if (departmentId) {
-    params.push(departmentId);
-    where.push(`department_id = $${params.length}`);
+  if (departmentId && departmentId !== "ALL") {
+    if (departmentId === "UNASSIGNED") {
+      where.push("department_id IS NULL");
+    } else {
+      params.push(departmentId);
+      where.push(`department_id = $${params.length}`);
+    }
   }
   if (search) {
     params.push(containsPattern(search));
@@ -21,6 +25,52 @@ export async function findAll({ departmentId, search, isActive }) {
   }
   const sql = `SELECT * FROM services ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY name`;
   return (await rows(sql, params)).map(fromRow);
+}
+
+/** Cursor-paged public services matching search, departmentId & status. */
+export async function findPage({ isActive, departmentId, search = "", offset = 0, limit = 4 } = {}) {
+  const params = [];
+  const where = [];
+
+  if (departmentId && departmentId !== "ALL") {
+    if (departmentId === "UNASSIGNED") {
+      where.push("s.department_id IS NULL");
+    } else {
+      params.push(departmentId);
+      where.push(`s.department_id = $${params.length}`);
+    }
+  }
+
+  if (isActive !== undefined) {
+    params.push(isActive);
+    where.push(`s.is_active = $${params.length}`);
+  }
+
+  if (search && search.trim()) {
+    params.push(`%${search.trim()}%`);
+    const pIdx = params.length;
+    where.push(
+      `(s.name ILIKE $${pIdx} OR s.code ILIKE $${pIdx} OR s.description ILIKE $${pIdx} OR d.name ILIKE $${pIdx})`
+    );
+  }
+
+  const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const countRow = await one(
+    `SELECT COUNT(*)::int AS count FROM services s LEFT JOIN departments d ON d.id = s.department_id ${whereClause}`,
+    params
+  );
+  const total = countRow?.count ?? 0;
+
+  params.push(limit);
+  const limitIdx = params.length;
+  params.push(offset);
+  const offsetIdx = params.length;
+
+  const list = await rows(
+    `SELECT s.* FROM services s LEFT JOIN departments d ON d.id = s.department_id ${whereClause} ORDER BY s.name, s.id LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+    params
+  );
+  return { total, items: list.map(fromRow) };
 }
 
 export async function findById(id) {
@@ -95,6 +145,26 @@ export async function assignToDepartment(departmentId, serviceIds = []) {
     "UPDATE services SET department_id = $1, updated_at = now() WHERE id = ANY($2::text[])",
     [departmentId, serviceIds],
   );
+}
+
+/** Finds services in serviceIds that are already assigned to a different department. */
+export async function findConflicts(departmentId, serviceIds = []) {
+  if (!serviceIds.length) return [];
+  const r = await rows(
+    `SELECT s.id, s.name, s.department_id, d.name AS department_name
+     FROM services s
+     JOIN departments d ON d.id = s.department_id
+     WHERE s.id = ANY($1::text[])
+       AND s.department_id IS NOT NULL
+       AND s.department_id <> $2`,
+    [serviceIds, departmentId],
+  );
+  return r.map((row) => ({
+    id: row.id,
+    name: row.name,
+    departmentId: row.department_id,
+    departmentName: row.department_name,
+  }));
 }
 
 /** Unassigns services from a department, optionally preserving excluded IDs. */

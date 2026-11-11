@@ -65,7 +65,7 @@ export function createJwtMiddleware({
 
     if (!raw) {
       if (!optional) {
-        return next(new UnauthorizedError("Missing or expired bearer token."));
+        return next(new UnauthorizedError("Missing bearer token."));
       }
       const ability = defineAbilityFor(req.caller);
       req.ability = ability;
@@ -77,7 +77,7 @@ export function createJwtMiddleware({
     const claims = verifyJwtClaims(secret, raw);
     if (!claims?.sub) {
       if (!optional) {
-        return next(new UnauthorizedError("Invalid or expired bearer token."));
+        return next(new UnauthorizedError("Invalid bearer token."));
       }
       const ability = defineAbilityFor(req.caller);
       req.ability = ability;

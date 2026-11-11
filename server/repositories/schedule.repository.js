@@ -13,6 +13,28 @@ export async function findAll() {
   return (await rows(`${SELECT_WITH_NAMES} ORDER BY d.name, sc.effective_start_date DESC`)).map(fromRow);
 }
 
+/** ACTIVE schedules, optionally of one department or only those for a service / its department. */
+export async function findActiveList({ departmentId, serviceId } = {}, client) {
+  const params = [];
+  const where = ["sc.status = 'ACTIVE'"];
+  if (departmentId) {
+    params.push(departmentId);
+    where.push(`sc.department_id = $${params.length}`);
+  }
+  if (serviceId) {
+    params.push(serviceId);
+    where.push(`(sc.service_id = $${params.length} OR sc.service_id IS NULL)`);
+  }
+  return (await rows(`${SELECT_WITH_NAMES} WHERE ${where.join(" AND ")} ORDER BY d.name, sc.effective_start_date`, params, client))
+    .map(fromRow);
+}
+
+/** Schedules of one department (all statuses): the read-only view of department staff. */
+export async function findByDepartment(departmentId) {
+  return (await rows(`${SELECT_WITH_NAMES} WHERE sc.department_id = $1 ORDER BY sc.effective_start_date DESC`, [departmentId]))
+    .map(fromRow);
+}
+
 export async function findById(id) {
   return fromRow(await one(`${SELECT_WITH_NAMES} WHERE sc.id = $1`, [id]));
 }

@@ -72,6 +72,13 @@ export class DailyCapacityError extends AppError {
   }
 }
 
+/** 409 when a department has reached the daily capacity set in Schedule Management. */
+export class DepartmentCapacityError extends AppError {
+  constructor(capacity, date) {
+    super(409, "DEPARTMENT_CAPACITY_REACHED", `Daily capacity reached: the department accepts ${capacity} appointments on ${date} and all are booked.`);
+  }
+}
+
 /** 409 when a time slot already holds its parallel-booking limit. */
 export class SlotFullError extends AppError {
   constructor() {

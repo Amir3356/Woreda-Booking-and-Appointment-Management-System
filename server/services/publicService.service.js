@@ -1,6 +1,7 @@
 // Public services (the catalog citizens book from): parent department must exist,
 // unique code, delete protection, and catalog change events.
 import { ConflictError, NotFoundError, invalid, isDuplicateKey } from "../utils/errors.js";
+import { cursorMeta } from "../utils/pagination.js";
 import { newId } from "../utils/id.js";
 import * as departments from "../repositories/department.repository.js";
 import * as publicServices from "../repositories/publicService.repository.js";
@@ -17,6 +18,20 @@ export function createPublicServiceService({ events }) {
   const service = {
     list(filter) {
       return publicServices.findAll(filter);
+    },
+
+    async listPaged({ isActive, departmentId, search = "", cursor = 0, pageSize = 4 }) {
+      const { total, items } = await publicServices.findPage({
+        isActive,
+        departmentId,
+        search,
+        offset: cursor,
+        limit: pageSize,
+      });
+      return {
+        items,
+        cursor: cursorMeta(cursor, pageSize, total),
+      };
     },
 
     async get(id) {

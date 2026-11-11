@@ -12,7 +12,7 @@ export const profileSchema = z.object({
   address: optionalText,
 });
 
-const ROLE = 'Role must be "Department Officer" or "Central Administrator".';
+const ROLE = 'Role must be "Department Officer" or "Admin".';
 
 export const provisionSchema = z
   .object({
@@ -21,10 +21,32 @@ export const provisionSchema = z
     email: z.string().trim().nullish().transform((v) => (v ? v : null))
       .pipe(z.union([z.null(), z.email({ error: "A valid email address is required." })]))
       .optional(),
-    password: z.string({ error: "Password must be at least 8 characters." }).min(8, { error: "Password must be at least 8 characters." }),
+    password: z.string({ error: "Password is required." }).min(1, { error: "Password is required." }),
     // The admin form sends the label; the role code is accepted too.
     role: z
-      .enum(["Department Officer", "Central Administrator", "OFFICER", "ADMIN"], { error: ROLE })
+      .enum(["Department Officer", "Central Administrator", "Admin", "OFFICER", "ADMIN"], { error: ROLE })
+      .transform((r) => (r === "Department Officer" || r === "OFFICER" ? "OFFICER" : "ADMIN")),
+    departmentId: z.string().trim().nullish().transform((v) => (v ? v : null)),
+  })
+  .refine((s) => s.role !== "OFFICER" || s.departmentId !== null, {
+    error: "Officers must be assigned to a department.",
+    path: ["departmentId"],
+  })
+  .refine((s) => Boolean(s.email || s.phone), {
+    error: "Either phone number or email address is required.",
+    path: ["phone"],
+  });
+
+export const updateStaffSchema = z
+  .object({
+    fullName: requiredText("Full name is required (min 3 characters).", 3),
+    phone: phone.optional(),
+    email: z.string().trim().nullish().transform((v) => (v ? v : null))
+      .pipe(z.union([z.null(), z.email({ error: "A valid email address is required." })]))
+      .optional(),
+    password: z.string().nullish().transform((v) => (v ? v.trim() : "")),
+    role: z
+      .enum(["Department Officer", "Central Administrator", "Admin", "OFFICER", "ADMIN"], { error: ROLE })
       .transform((r) => (r === "Department Officer" || r === "OFFICER" ? "OFFICER" : "ADMIN")),
     departmentId: z.string().trim().nullish().transform((v) => (v ? v : null)),
   })
@@ -39,6 +61,17 @@ export const provisionSchema = z
 
 export const staffListQuery = z.object({
   search: queryText,
+  role: queryText,
+  departmentId: queryText,
+  cursor: queryInt(0, 0, Number.MAX_SAFE_INTEGER),
+  pageSize: queryInt(4, 1, 100),
+});
+
+export const citizenListQuery = z.object({
+  search: queryText,
+  woreda: queryText,
+  kebele: queryText,
+  location: queryText,
   cursor: queryInt(0, 0, Number.MAX_SAFE_INTEGER),
   pageSize: queryInt(5, 1, 100),
 });

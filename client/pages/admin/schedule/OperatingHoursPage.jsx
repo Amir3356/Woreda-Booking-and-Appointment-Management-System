@@ -1,10 +1,14 @@
+// Admin > Schedule Management > Operating Hours: working days and opening / closing times per
+// department (department-wide) or per service, each with its own per-service daily limit and an
+// effective period. A weekly view shows the hours in force for every department.
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useStore } from "@/context";
 import { DataTable } from "@/components/ui";
 import { useEscapeKey } from "@/hooks";
 import { subscribe } from "@/api/realtime";
-import { describeError, formatWorkingDays, localIsoDate, displayDate } from "@/utils";
+import { addDays, describeError, formatWorkingDays, localIsoDate, displayDate } from "@/utils";
+import { ConfirmDialog } from "@/features/schedule";
 import {
   Calendar,
   Clock,
@@ -16,8 +20,6 @@ import {
   Search,
   Filter,
   Circle,
-  AlertTriangle,
-  AlertCircle,
 } from "lucide-react";
 
 const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -25,7 +27,26 @@ const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 // Department-wide schedule: applies to every service of the department that has no schedule of its own.
 const ALL_SERVICES = "";
 
-export default function AdminSchedulePage() {
+/** Booked appointments a change to this schedule could affect: from today to its end (or a year ahead). */
+function impactOf(sch) {
+  const today = localIsoDate();
+  const start = sch.effectiveStartDate > today ? sch.effectiveStartDate : today;
+  const end = sch.effectiveEndDate || addDays(today, 365);
+  return end < start ? null : { from: start, to: end, departmentIds: [sch.departmentId] };
+}
+
+/** Hours of a department on a weekday, from its schedules in force today (department-wide first). */
+function hoursOn(deptSchedules, day) {
+  const wide = deptSchedules.find((s) => !s.serviceId);
+  const list = wide ? [wide] : deptSchedules;
+  const open = list.filter((s) => (s.workingDays || []).includes(day));
+  if (open.length === 0) return null;
+  const opening = open.map((s) => s.openingTime).sort()[0];
+  const closing = open.map((s) => s.closingTime).sort().at(-1);
+  return { opening, closing, services: wide ? null : open.length };
+}
+
+export default function OperatingHoursPage() {
   const {
     departments,
     services,
@@ -50,16 +71,16 @@ export default function AdminSchedulePage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  useEscapeKey(modalOpen, () => setModalOpen(false));
-  useEscapeKey(Boolean(deleteTarget), () => setDeleteTarget(null));
-  const [errorMsg, setErrorMsg] = useState("");
+  // Confirmation before saving an edit or deactivating: { kind: "save" | "toggle", sch, payload? }
+  const [pending, setPending] = useState(null);
+  useEscapeKey(modalOpen && !pending, () => setModalOpen(false));
   const [saving, setSaving] = useState(false);
 
   // Schedules live in booking-service. Re-read them (and the departments/services the form
   // offers) when the page opens and whenever the server announces a catalog change.
   useEffect(() => {
     const refresh = () => {
-      loadSchedules().catch((err) => setErrorMsg(describeError(err, "load schedules")));
+      loadSchedules().catch((err) => toast.error(describeError(err, "load schedules"), { duration: 5000 }));
       loadServices().catch(() => {});
       loadDepartments().catch(() => {});
     };
@@ -73,8 +94,7 @@ export default function AdminSchedulePage() {
   }, [loadSchedules, loadServices, loadDepartments]);
 
   const triggerToast = (msg) => {
-    setErrorMsg("");
-    toast.success(msg);
+    toast.success(msg, { duration: 5000 });
   };
 
   // Department names for the table filter
@@ -86,7 +106,7 @@ export default function AdminSchedulePage() {
 
   const emptyForm = {
     departmentId: departments?.[0]?.id || "",
-    serviceId: getServicesForDept(departments?.[0]?.id)[0]?.id || ALL_SERVICES,
+    serviceId: ALL_SERVICES,
     workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
     openingTime: "08:30",
     closingTime: "17:30",
@@ -106,7 +126,7 @@ export default function AdminSchedulePage() {
     setForm((prev) => ({
       ...prev,
       departmentId,
-      serviceId: getServicesForDept(departmentId)[0]?.id || ALL_SERVICES,
+      serviceId: ALL_SERVICES,
     }));
   };
 
@@ -115,7 +135,6 @@ export default function AdminSchedulePage() {
   const handleOpenCreate = () => {
     setEditingSchedule(null);
     setForm(emptyForm);
-    setErrorMsg("");
     setModalOpen(true);
   };
 
@@ -132,7 +151,6 @@ export default function AdminSchedulePage() {
       effectiveEndDate: sch.effectiveEndDate || "",
       status: sch.status || "Active",
     });
-    setErrorMsg("");
     setModalOpen(true);
   };
 
@@ -141,7 +159,8 @@ export default function AdminSchedulePage() {
       await fn();
       return true;
     } catch (err) {
-      setErrorMsg(describeError(err, action));
+      const msg = describeError(err, action);
+      toast.error(msg, { duration: 5000 });
       return false;
     }
   };
@@ -155,11 +174,26 @@ export default function AdminSchedulePage() {
     }
   };
 
-  const handleToggleStatus = async (sch) => {
+  const toggleNow = async (sch) => {
     const nextStatus = sch.status === "Active" ? "Inactive" : "Active";
     if (await run(`change the status of schedule ${sch.id}`, () => toggleScheduleStatus(sch.id))) {
       triggerToast(`Schedule ${sch.id} marked as ${nextStatus}.`);
     }
+  };
+
+  const handleToggleStatus = (sch) => setPending({ kind: "toggle", sch });
+
+  const confirmPending = async () => {
+    const p = pending;
+    if (p.kind === "toggle") {
+      setSaving(true);
+      await toggleNow(p.sch);
+      setSaving(false);
+      setPending(null);
+      return;
+    }
+    await save(p.payload);
+    setPending(null);
   };
 
   const toggleDayInForm = (day) => {
@@ -176,11 +210,11 @@ export default function AdminSchedulePage() {
     e.preventDefault();
     if (saving) return;
     if (!form.departmentId) {
-      setErrorMsg("Could not save the schedule: choose a department.");
+      toast.error("Could not save the schedule: choose a department.", { duration: 5000 });
       return;
     }
     if (form.workingDays.length === 0) {
-      setErrorMsg("Could not save the schedule: choose at least one working day.");
+      toast.error("Could not save the schedule: choose at least one working day.", { duration: 5000 });
       return;
     }
 
@@ -196,6 +230,15 @@ export default function AdminSchedulePage() {
       status: form.status,
     };
 
+    // Changing an existing schedule: confirm, showing appointments booked under it.
+    if (editingSchedule) {
+      setPending({ kind: "save", sch: editingSchedule, payload });
+      return;
+    }
+    await save(payload);
+  };
+
+  const save = async (payload) => {
     setSaving(true);
     const action = editingSchedule ? `update schedule ${editingSchedule.id}` : "create the schedule";
     let saved = null;
@@ -284,7 +327,7 @@ export default function AdminSchedulePage() {
     {
       id: "capacity",
       accessorKey: "dailyCapacity",
-      header: "Daily Capacity",
+      header: "Limit / Service",
       sortFn: "basic",
       meta: { className: "text-slate-600" },
       cell: ({ row }) => (
@@ -370,44 +413,22 @@ export default function AdminSchedulePage() {
   ];
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Header with Title, Description, and Create Schedule Button at the right edge */}
-      <div
-        className="relative flex items-center w-full min-h-[48px]"
-        style={{ position: "relative", minHeight: "48px" }}
-      >
-        <div className="w-full text-center">
-          <h2 className="text-xl font-bold text-slate-900">Schedule Management</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Configure working days, operating hours, and daily capacity.
+    <div className="sm-page">
+      <header className="sm-header">
+        <div>
+          <p className="sm-eyebrow">Schedule Management</p>
+          <h1 className="sm-title">Operating Hours</h1>
+          <p className="sm-subtitle">
+            Working days and opening hours for each department, or for individual services. A department-wide schedule applies
+            to every service of the department that has no schedule of its own. Holidays and exceptional days are set in
+            Calendar Exceptions.
           </p>
         </div>
-
-        <button
-          onClick={handleOpenCreate}
-          className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-colors cursor-pointer shrink-0"
-          style={{
-            position: "absolute",
-            right: 0,
-            top: "50%",
-            transform: "translateY(-50%)",
-            whiteSpace: "nowrap",
-          }}
-        >
-          <Plus className="w-4 h-4 text-amber-300" />
-          <span>Create Schedule</span>
+        <button type="button" onClick={handleOpenCreate} className="sm-btn sm-btn--primary">
+          <Plus aria-hidden="true" />
+          Create Schedule
         </button>
-      </div>
-
-      {errorMsg && !modalOpen && (
-        <div role="alert" className="flex items-start gap-2 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold shadow-xs">
-          <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-px" />
-          <span className="flex-1">{errorMsg}</span>
-          <button type="button" onClick={() => setErrorMsg("")} className="text-red-500 hover:text-red-700 cursor-pointer" aria-label="Dismiss error">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      </header>
 
       {/* A. Summary Cards - Displayed Horizontally */}
       <div
@@ -469,6 +490,74 @@ export default function AdminSchedulePage() {
           </div>
         </div>
       </div>
+
+      {/* Weekly view: hours in force today for every department */}
+      <section className="sm-card" aria-label="Weekly operating hours">
+        <div className="sm-card-header">
+          <div>
+            <h2 className="sm-card-title">Weekly view</h2>
+            <p className="sm-card-sub">Operating hours in force today, by department and weekday</p>
+          </div>
+        </div>
+        <div className="sm-table-wrap">
+          <table className="sm-table">
+            <thead>
+              <tr>
+                <th>Department</th>
+                {ALL_DAYS.map((d) => (
+                  <th key={d}>{d}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(departments || [])
+                .filter((d) => deptFilter === "ALL" || d.name === deptFilter)
+                .map((dept) => {
+                  const today = localIsoDate();
+                  const inForce = schedules.filter(
+                    (s) =>
+                      s.departmentId === dept.id &&
+                      s.status === "Active" &&
+                      s.effectiveStartDate <= today &&
+                      (!s.effectiveEndDate || s.effectiveEndDate >= today)
+                  );
+                  return (
+                    <tr key={dept.id}>
+                      <td>
+                        <b style={{ color: "#0f172a" }}>{dept.name}</b>
+                        {inForce.length > 0 && !inForce.some((s) => !s.serviceId) && (
+                          <div className="sm-hint">Service schedules only</div>
+                        )}
+                      </td>
+                      {ALL_DAYS.map((day) => {
+                        const h = hoursOn(inForce, day);
+                        return (
+                          <td key={day} className={`sm-hours-cell${h ? "" : " is-off"}`}>
+                            {h ? (
+                              <>
+                                {h.opening}–{h.closing}
+                                {h.services ? <div className="sm-hint">{h.services} service{h.services > 1 ? "s" : ""}</div> : null}
+                              </>
+                            ) : (
+                              "Closed"
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              {(departments || []).length === 0 && (
+                <tr>
+                  <td colSpan={8}>
+                    <div className="sm-empty">No departments yet: add one in Department Management.</div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -579,12 +668,6 @@ export default function AdminSchedulePage() {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-              {errorMsg && (
-                <div role="alert" className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold">
-                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-px" />
-                  <span className="flex-1">{errorMsg}</span>
-                </div>
-              )}
               {/* Department * */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -619,15 +702,17 @@ export default function AdminSchedulePage() {
                   onChange={(e) => setForm({ ...form, serviceId: e.target.value })}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
+                  <option value={ALL_SERVICES}>All services (department-wide)</option>
                   {formServiceOptions.map((srv) => (
                     <option key={srv.id} value={srv.id}>
                       {srv.name}
                     </option>
                   ))}
-                  <option value={ALL_SERVICES}>All services in this department</option>
                 </select>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Citizens can book this service only on the working days, hours and dates set here.
+                  {form.serviceId
+                    ? "Citizens can book this service only on the working days, hours and dates set here."
+                    : "Applies to every service of the department that has no schedule of its own."}
                 </p>
               </div>
 
@@ -707,7 +792,7 @@ export default function AdminSchedulePage() {
               {/* Daily Capacity */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Daily Capacity (Slots)
+                  Daily Appointment Capacity
                 </label>
                 <input
                   type="number"
@@ -720,6 +805,9 @@ export default function AdminSchedulePage() {
                   }
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Bookings per day for each service under this schedule.
+                </p>
               </div>
 
               {/* Effective Start Date & Effective End Date (Optional) */}
@@ -810,39 +898,53 @@ export default function AdminSchedulePage() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete confirmation, with the appointments booked under this schedule */}
       {deleteTarget && (
-        <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setDeleteTarget(null)}>
-          <div className="modal-panel modal-panel--form modal-panel--compact text-center space-y-4" role="alertdialog" aria-modal="true" aria-labelledby="delete-schedule-title">
-            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 id="delete-schedule-title" className="text-base font-bold text-slate-900">Delete Schedule</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Are you sure you want to delete schedule{" "}
-                <span className="font-semibold text-slate-800">{deleteTarget.id}</span> ({deleteTarget.service || "all services"})?
-                This action cannot be undone.
-              </p>
-            </div>
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(null)}
-                className="modal-btn"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDelete}
-                className="modal-btn modal-btn--danger"
-              >
-                Yes, Delete
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Delete schedule?"
+          tone="danger"
+          confirmLabel="Delete schedule"
+          busy={saving}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleConfirmDelete}
+          impact={impactOf(deleteTarget)}
+          message={
+            <>
+              Schedule <strong>{deleteTarget.id}</strong> ({deleteTarget.department} · {deleteTarget.service || "all services"}) will be
+              deleted. Without another schedule in force, citizens can no longer book these services.
+            </>
+          }
+        />
+      )}
+
+      {/* Confirmation before saving an edit or deactivating */}
+      {pending && (
+        <ConfirmDialog
+          title={pending.kind === "save" ? "Save changes to this schedule?" : pending.sch.status === "Active" ? "Deactivate schedule?" : "Activate schedule?"}
+          tone={pending.kind === "toggle" && pending.sch.status === "Active" ? "danger" : "primary"}
+          confirmLabel={pending.kind === "save" ? "Save changes" : pending.sch.status === "Active" ? "Deactivate" : "Activate"}
+          busy={saving}
+          onCancel={() => setPending(null)}
+          onConfirm={confirmPending}
+          impact={pending.kind === "toggle" && pending.sch.status !== "Active" ? null : impactOf(pending.sch)}
+          message={
+            pending.kind === "save" ? (
+              <>
+                The new hours apply to bookings made from now on for{" "}
+                <strong>{pending.sch.department} · {pending.sch.service || "all services"}</strong>.
+              </>
+            ) : pending.sch.status === "Active" ? (
+              <>
+                Citizens will no longer be able to book under schedule <strong>{pending.sch.id}</strong> ({pending.sch.department} ·{" "}
+                {pending.sch.service || "all services"}).
+              </>
+            ) : (
+              <>
+                Schedule <strong>{pending.sch.id}</strong> will be used for bookings again.
+              </>
+            )
+          }
+        />
       )}
     </div>
   );

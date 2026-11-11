@@ -94,7 +94,7 @@ export default function AuthPage() {
       if (data?.token && data?.user) {
         const u = data.user;
         const isOfficer = u.role === "OFFICER" || u.role === "Department Officer";
-        const isAdmin = u.role === "ADMIN" || u.role === "Central Administrator";
+        const isAdmin = u.role === "ADMIN" || u.role === "Admin" || u.role === "Central Administrator";
         const role = isOfficer ? "OFFICER" : isAdmin ? "ADMIN" : "CITIZEN";
         const portalPath = isOfficer ? "/officer/appointments" : isAdmin ? "/admin" : "/citizen/book";
 

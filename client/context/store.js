@@ -11,7 +11,7 @@ import {
   getUserFromJwtCookie,
 } from "@/services";
 import { serviceApi, departmentApi, scheduleApi, appointmentApi, queueApi } from "@/api";
-import { http } from "@/api/httpClient";
+import { http, tokenStorage } from "@/api/httpClient";
 
 const DEFAULT_TIME_SLOTS = [
   "08:30 AM",
@@ -60,12 +60,14 @@ export const useStore = create(
         if (user) {
           const token = customToken || user.token || createJwtToken(user);
           setJwtCookie(token);
+          tokenStorage.set(token);
         } else {
           // Revokes a token issued by auth-service (real admin login). Browser-made tokens are
-          // rejected by the server with 401, which is ignored. The request reads the cookie
+          // rejected by the server with 401, which is ignored. The request reads the token
           // before it is cleared below.
           http.post("/auth/logout").catch(() => {});
           clearJwtCookie();
+          tokenStorage.clear();
         }
         set({ currentUser: user });
         get().addAuditLog({
@@ -157,26 +159,8 @@ export const useStore = create(
         await get().loadServices();
       },
 
-      // Users Management
+      // Users Management (Synchronized with provisioned accounts)
       users: [],
-      addUser: (user) => {
-        const { password: _p, passwordHash: _ph, ...safeUser } = user || {};
-        const newUser = {
-          ...safeUser,
-          id: user?.id || `usr-${Date.now()}`,
-          isActive: user?.isActive !== undefined ? user.isActive : true,
-          createdAt: user?.createdAt || new Date().toISOString(),
-        };
-        set((state) => ({ users: [...state.users, newUser] }));
-        return newUser;
-      },
-      toggleUserStatus: (id) => {
-        set((state) => ({
-          users: state.users.map((u) =>
-            u.id === id ? { ...u, isActive: !u.isActive } : u
-          ),
-        }));
-      },
 
       // Registered Citizens Management (Populated during citizen sign-up)
       registeredCitizens: [],
@@ -224,7 +208,7 @@ export const useStore = create(
       addProvisionedAccount: (acc) => {
         const cleanEmail = (acc.email || "").trim().toLowerCase();
         const cleanPhone = (acc.phone || "").trim();
-        const role = acc.role === "Central Administrator" ? "ADMIN" : "OFFICER";
+        const role = (acc.role === "Central Administrator" || acc.role === "Admin") ? "ADMIN" : "OFFICER";
         const cleanPassword = (acc.password || "").trim() || "Password@123";
         const newAccount = {
           id: acc.id || `staff-${Date.now()}`,
@@ -324,7 +308,7 @@ export const useStore = create(
       updateProvisionedAccount: (originalKey, updatedAcc) => {
         const cleanKey = (originalKey || "").trim().toLowerCase();
         const cleanPhone = (updatedAcc.phone || "").trim();
-        const role = updatedAcc.role === "Central Administrator" ? "ADMIN" : "OFFICER";
+        const role = (updatedAcc.role === "Central Administrator" || updatedAcc.role === "Admin") ? "ADMIN" : "OFFICER";
         const cleanPassword = (updatedAcc.password || "").trim() || "Password@123";
 
         const matchesKey = (a) => {
@@ -542,7 +526,6 @@ export const useStore = create(
         const { data } = await appointmentApi.book({
           citizenName: bookingData.citizenName,
           citizenPhone: bookingData.citizenPhone,
-          citizenEmail: bookingData.citizenEmail || "",
           departmentId: bookingData.departmentId,
           serviceId: bookingData.serviceId,
           date: bookingData.date,
@@ -723,17 +706,22 @@ export const useStore = create(
     }),
     {
       name: "woreda-booking-storage",
-      partialize: (state) => ({
-        // DO NOT persist currentUser to localStorage! Authentication is strictly JWT in browser cookie.
-        users: state.users,
-        provisionedAccounts: state.provisionedAccounts,
-        registeredCitizens: state.registeredCitizens,
-        queue: state.queue,
-        notifications: state.notifications,
-        scheduleConfigs: state.scheduleConfigs,
-      }),
+      partialize: (state) => {
+        const safeCurrentUser = state.currentUser
+          ? (({ password: _p, passwordHash: _ph, ...rest }) => rest)(state.currentUser)
+          : null;
+        return {
+          currentUser: safeCurrentUser,
+          users: state.users,
+          provisionedAccounts: state.provisionedAccounts,
+          registeredCitizens: state.registeredCitizens,
+          queue: state.queue,
+          notifications: state.notifications,
+          scheduleConfigs: state.scheduleConfigs,
+        };
+      },
       merge: (persistedState, currentState) => {
-        const { currentUser: _omitted, ...safePersisted } = persistedState || {};
+        const { currentUser: persistedUser, ...safePersisted } = persistedState || {};
         
         // Departments come from the API; an old browser copy (which may hold departments the
         // server never had) is ignored.
@@ -850,7 +838,7 @@ export const useStore = create(
         cleanedProvisioned.forEach((prov) => {
           const provEmail = (prov.email || "").trim().toLowerCase();
           if (!provEmail) return;
-          const isOfficer = prov.role !== "Central Administrator" && prov.role !== "ADMIN";
+          const isOfficer = prov.role !== "Central Administrator" && prov.role !== "Admin" && prov.role !== "ADMIN";
           const role = isOfficer ? "OFFICER" : "ADMIN";
           const dept = currentDepartments.find((d) => d.id === prov.departmentId || d.name === prov.role) || currentDepartments[0];
           const existing = usersByEmail.get(provEmail);
@@ -887,12 +875,26 @@ export const useStore = create(
           }
         });
 
-        // Authenticated user is resolved exclusively from the JWT in browser cookies
+        // Resolve authenticated user from JWT storage and persisted state (never auto-expires on idle)
         const cookieUser = getUserFromJwtCookie(
           cleanedUsers,
           currentDepartments,
           cleanedProvisioned
         );
+        let restoredUser = null;
+        if (persistedUser === null && cookieUser === null) {
+          restoredUser = null;
+        } else if (currentState.currentUser?.id) {
+          restoredUser =
+            cookieUser && cookieUser.id === currentState.currentUser.id
+              ? { ...cookieUser, ...currentState.currentUser }
+              : currentState.currentUser;
+        } else {
+          restoredUser =
+            cookieUser && persistedUser && persistedUser.id === cookieUser.id
+              ? { ...cookieUser, ...persistedUser }
+              : persistedUser || cookieUser || null;
+        }
         return {
           ...currentState,
           ...safePersisted,
@@ -904,7 +906,7 @@ export const useStore = create(
           provisionedAccounts: cleanedProvisioned,
           registeredCitizens: safePersisted.registeredCitizens || currentState.registeredCitizens || [],
           schedules: currentState.schedules, // loaded from the API, never from storage
-          currentUser: cookieUser,
+          currentUser: restoredUser,
         };
       },
     }

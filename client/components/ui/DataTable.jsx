@@ -19,7 +19,7 @@ import {
   sortFn_text,
   flexRender,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const features = tableFeatures({
   rowSortingFeature,
@@ -110,13 +110,6 @@ export default function DataTable({
                         title={`Sort by ${typeof column.columnDef.header === "string" ? column.columnDef.header : column.id}`}
                       >
                         <span>{label}</span>
-                        {sorted === "asc" ? (
-                          <ArrowUp aria-hidden="true" />
-                        ) : sorted === "desc" ? (
-                          <ArrowDown aria-hidden="true" />
-                        ) : (
-                          <ArrowUpDown aria-hidden="true" />
-                        )}
                       </button>
                     ) : (
                       label

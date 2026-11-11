@@ -8,7 +8,7 @@ import {
 export const bookSchema = z.object({
   citizenName: requiredText("Citizen name is required (min 3 characters).", 3),
   citizenPhone: phone,
-  citizenEmail: nullableText,
+  citizenEmail: nullableText.optional(),
   departmentId: optionalText, // taken from the service
   serviceId: requiredText("Service is required."),
   date: bookingDate(),

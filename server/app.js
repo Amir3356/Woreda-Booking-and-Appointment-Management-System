@@ -23,6 +23,7 @@ import { createDepartmentService } from "./services/department.service.js";
 import { createPublicServiceService } from "./services/publicService.service.js";
 import { createScheduleService } from "./services/schedule.service.js";
 import { createAvailabilityService } from "./services/availability.service.js";
+import { createScheduleManagementService } from "./services/scheduleManagement.service.js";
 import { createAuditService } from "./services/audit.service.js";
 import { createAppointmentService } from "./services/appointment.service.js";
 import { createReportService } from "./services/report.service.js";
@@ -54,11 +55,15 @@ export function createApp() {
     health: createHealthController(),
     auth: createAuthController(authService),
     profile: createProfileController(createProfileService()),
-    staff: createStaffController(createStaffService()),
+    staff: createStaffController(createStaffService({ events })),
     settings: createSettingsController(createSettingsService()),
     department: createDepartmentController(createDepartmentService({ events })),
     publicService: createPublicServiceController(createPublicServiceService({ events })),
-    schedule: createScheduleController({ scheduleService: createScheduleService({ events }), availabilityService: createAvailabilityService() }),
+    schedule: createScheduleController({
+      scheduleService: createScheduleService({ events }),
+      availabilityService: createAvailabilityService(),
+      scheduleManagementService: createScheduleManagementService({ events }),
+    }),
     appointment: createAppointmentController(appointmentService),
     queue: createQueueController(createQueueService({ events })),
     report: createReportController(createReportService({ appointmentService })),

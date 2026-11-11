@@ -59,7 +59,7 @@ export default function RegisterPage() {
       emailClean.includes("officer")
     ) {
       setError(
-        "Department Officer and Administrator accounts cannot self-register. Official staff credentials are created exclusively by the Central Administrator in Account Provision."
+        "Department Officer and Administrator accounts cannot self-register. Official staff credentials are created exclusively by the Admin in Account Provision."
       );
       return;
     }

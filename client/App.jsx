@@ -22,8 +22,10 @@ import AdminDashboardPage from "@/pages/admin/AdminDashboardPage";
 import AdminAppointmentsPage from "@/pages/admin/AdminAppointmentsPage";
 import AdminDepartmentsPage from "@/pages/admin/AdminDepartmentsPage";
 import AdminServicesPage from "@/pages/admin/AdminServicesPage";
-import AdminSchedulePage from "@/pages/admin/AdminSchedulePage";
-import AdminUsersPage from "@/pages/admin/AdminUsersPage";
+import OperatingHoursPage from "@/pages/admin/schedule/OperatingHoursPage";
+import AvailabilityPage from "@/pages/admin/schedule/AvailabilityPage";
+import ExceptionsPage from "@/pages/admin/schedule/ExceptionsPage";
+import ScheduleSection from "@/pages/admin/schedule/ScheduleSection";
 import AdminAccountProvisionPage from "@/pages/admin/AdminAccountProvisionPage";
 import AdminCitizenManagementPage from "@/pages/admin/AdminCitizenManagementPage";
 import AdminReportsPage from "@/pages/admin/AdminReportsPage";
@@ -35,6 +37,7 @@ import OfficerAppointmentsPage from "@/pages/officer/OfficerAppointmentsPage";
 import OfficerQueuePage from "@/pages/officer/OfficerQueuePage";
 import OfficerVerifyPage from "@/pages/officer/OfficerVerifyPage";
 import OfficerReportsPage from "@/pages/officer/OfficerReportsPage";
+import OfficerSchedulePage from "@/pages/officer/OfficerSchedulePage";
 
 // Citizen pages
 import CitizenBookAppointmentPage from "@/pages/citizen/CitizenBookAppointmentPage";
@@ -119,8 +122,14 @@ export default function App() {
         <Route path="appointments" element={<AdminAppointmentsPage />} />
         <Route path="departments" element={<AdminDepartmentsPage />} />
         <Route path="services" element={<AdminServicesPage />} />
-        <Route path="schedule" element={<AdminSchedulePage />} />
-        <Route path="users" element={<AdminUsersPage />} />
+        {/* Schedule Management (administrator only) */}
+        <Route path="schedule" element={<ScheduleSection />}>
+          <Route index element={<Navigate to="hours" replace />} />
+          <Route path="hours" element={<OperatingHoursPage />} />
+          <Route path="availability" element={<AvailabilityPage />} />
+          <Route path="exceptions" element={<ExceptionsPage />} />
+        </Route>
+        <Route path="users" element={<Navigate to="account-provision" replace />} />
         <Route path="account-provision" element={<AdminAccountProvisionPage />} />
         <Route path="citizens" element={<AdminCitizenManagementPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
@@ -135,6 +144,7 @@ export default function App() {
         <Route path="queue" element={<OfficerQueuePage />} />
         <Route path="verify" element={<OfficerVerifyPage />} />
         <Route path="reports" element={<OfficerReportsPage />} />
+        <Route path="schedule" element={<OfficerSchedulePage />} />
       </Route>
 
       {/* Citizen Portal */}

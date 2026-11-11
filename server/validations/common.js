@@ -27,7 +27,7 @@ export const positiveInt = (fallback, message) =>
   z.preprocess((v) => (v == null || v === "" ? fallback : v), z.coerce.number({ error: message }).int({ error: message }).positive({ error: message }));
 
 /** "0911 234 567", "251911234567" or "+251 911 234 567" -> "+251911234567". */
-export function normalizePhone(value) {
+function normalizePhone(value) {
   const digits = String(value).replace(/[^\d+]/g, "");
   if (digits.startsWith("+251")) return digits;
   if (digits.startsWith("251")) return `+${digits}`;

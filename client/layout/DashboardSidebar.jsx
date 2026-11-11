@@ -5,6 +5,7 @@ import {
   Building2,
   FileText,
   Calendar,
+  CalendarClock,
   Clock,
   UserCog,
   Users,
@@ -57,6 +58,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
             icon: Calendar,
             badge: pendingAppointmentsCount > 0 ? pendingAppointmentsCount : null,
           },
+          { href: "/officer/schedule", label: "Department Schedule", icon: CalendarClock },
         ],
       },
     ],
@@ -103,7 +105,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
             <ul className="sidebar-list">
               {section.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
+                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
                   <li key={item.href}>
                     <Link

@@ -25,7 +25,12 @@ export function createScheduleService({ events }) {
   }
 
   return {
-    async list() {
+    /** Every schedule for the administrator; a department officer sees only their department's (read-only). */
+    async list(caller) {
+      if (caller?.role && caller.role !== "ADMIN") {
+        if (!caller.departmentId) return [];
+        return (await schedules.findByDepartment(caller.departmentId)).map(labelled);
+      }
       return (await schedules.findAll()).map(labelled);
     },
 

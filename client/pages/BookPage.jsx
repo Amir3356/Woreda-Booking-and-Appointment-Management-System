@@ -1,4 +1,5 @@
 import { useState, useEffect, Suspense } from "react";
+import { toast } from "sonner";
 import { useSearchParams } from "@/hooks";
 import Navbar from "@/layout/Navbar";
 import Footer from "@/layout/Footer";
@@ -41,7 +42,6 @@ function BookingContent() {
 
   const [citizenName, setCitizenName] = useState(currentUser?.fullName || "");
   const [citizenPhone, setCitizenPhone] = useState(currentUser?.phone || "+251 9");
-  const [citizenEmail, setCitizenEmail] = useState(currentUser?.email || "");
   const [citizenAddress, setCitizenAddress] = useState(currentUser?.address || "Kebele 03");
   const [citizenNotes, setCitizenNotes] = useState("");
   const [agreementChecked, setAgreementChecked] = useState(false);
@@ -76,13 +76,17 @@ function BookingContent() {
     setErrorMsg("");
     if (step === 1) {
       if (!selectedDeptId) {
-        setErrorMsg("Please select a government department to continue.");
+        const msg = "Please select a government department to continue.";
+        setErrorMsg(msg);
+        toast.error(msg, { duration: 5000 });
         return;
       }
       setStep(2);
     } else if (step === 2) {
       if (!selectedServiceId) {
-        setErrorMsg("Please choose a public service.");
+        const msg = "Please choose a public service.";
+        setErrorMsg(msg);
+        toast.error(msg, { duration: 5000 });
         return;
       }
       setStep(3);
@@ -91,25 +95,33 @@ function BookingContent() {
       setStep(4);
     } else if (step === 4) {
       if (!selectedDate) {
-        setErrorMsg("Please choose your desired appointment date.");
+        const msg = "Please choose your desired appointment date.";
+        setErrorMsg(msg);
+        toast.error(msg, { duration: 5000 });
         return;
       }
       setStep(5);
     } else if (step === 5) {
       if (!selectedTimeSlot) {
-        setErrorMsg("Please select an available desk time slot.");
+        const msg = "Please select an available desk time slot.";
+        setErrorMsg(msg);
+        toast.error(msg, { duration: 5000 });
         return;
       }
       setStep(6);
     } else if (step === 6) {
       if (!citizenName.trim() || !citizenPhone.trim()) {
-        setErrorMsg("Full name and verified phone number are mandatory.");
+        const msg = "Full name and verified phone number are mandatory.";
+        setErrorMsg(msg);
+        toast.error(msg, { duration: 5000 });
         return;
       }
       setStep(7);
     } else if (step === 7) {
       if (!agreementChecked) {
-        setErrorMsg("Please confirm that all supplied information and requirements are accurate.");
+        const msg = "Please confirm that all supplied information and requirements are accurate.";
+        setErrorMsg(msg);
+        toast.error(msg, { duration: 5000 });
         return;
       }
       handleSubmitBooking();
@@ -120,7 +132,6 @@ function BookingContent() {
     const newApt = bookAppointment({
       citizenName,
       citizenPhone,
-      citizenEmail,
       citizenNotes,
       departmentId: selectedDepartment.id,
       departmentName: selectedDepartment.name,
@@ -131,6 +142,7 @@ function BookingContent() {
     });
 
     setSubmittedAppointment(newApt);
+    toast.success("Appointment successfully scheduled!", { duration: 5000 });
     setStep(8); // Confirmation slip step
   };
 
@@ -495,19 +507,6 @@ function BookingContent() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Email Address (Optional)
-                  </label>
-                  <input
-                    type="email"
-                    value={citizenEmail}
-                    onChange={(e) => setCitizenEmail(e.target.value)}
-                    placeholder="citizen@example.et"
-                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
                     Residential Kebele / House No.
                   </label>
                   <input
@@ -582,7 +581,6 @@ function BookingContent() {
                   <div>
                     <span className="text-slate-400 block font-medium">Contact Phone</span>
                     <p className="font-bold text-slate-800">{citizenPhone}</p>
-                    <p className="text-slate-500 text-[11px]">{citizenEmail || "No email"}</p>
                   </div>
                 </div>
               </div>

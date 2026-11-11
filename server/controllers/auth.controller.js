@@ -4,7 +4,7 @@ import { AUTH_COOKIE_NAME } from "../middleware/jwt.js";
 import { setCsrfCookie, clearCsrfCookie, generateCsrfToken, CSRF_COOKIE_NAME } from "../middleware/csrf.js";
 import { config } from "../config/index.js";
 
-const COOKIE_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+const COOKIE_MAX_AGE_MS = 365 * 24 * 3600 * 1000; // 1 year (no auto-expiration on idle)
 
 const AUTH_COOKIE_OPTIONS = {
   httpOnly: true, // Critical: JavaScript cannot access this cookie, preventing XSS-based token theft

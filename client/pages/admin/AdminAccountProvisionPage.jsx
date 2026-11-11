@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { toast } from "sonner";
 import { useStore } from "@/context";
 import { DataTable, EthiopianFlag } from "@/components/ui";
 import { useEscapeKey } from "@/hooks";
-import { http } from "@/api/httpClient";
-import { normalizeEthiopianPhone } from "@/utils";
+import { staffApi } from "@/api";
+import { subscribe } from "@/api/realtime";
+import { normalizeEthiopianPhone, describeError } from "@/utils";
 import {
   Plus,
   Trash2,
@@ -13,13 +14,16 @@ import {
   Eye,
   EyeOff,
   Shield,
-  AlertCircle,
   Search,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  RotateCcw,
 } from "lucide-react";
 
 /**
  * Deterministic bcrypt-compatible modular crypt format hash ($2b$10$...)
- * Matches backend bcrypt hash specifications in staff.service.js
+ * Used for offline/store synchronization compatibility.
  */
 function hashPassword(plainText, salt = "woreda_sec_2026") {
   if (!plainText) return "$2b$10$e7K9aQ2F8xN4vL1P0mRt5u9xM2vK4lP7qW8yZ1aC3bE5dG7hI9jK";
@@ -48,13 +52,16 @@ function hashPassword(plainText, salt = "woreda_sec_2026") {
 const ROLE_BADGE = {
   "Department Officer": "bg-emerald-100 text-emerald-700 border-emerald-200",
   OFFICER: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  Admin: "bg-purple-100 text-purple-700 border-purple-200",
   "Central Administrator": "bg-purple-100 text-purple-700 border-purple-200",
   ADMIN: "bg-purple-100 text-purple-700 border-purple-200",
 };
 
+const PAGE_SIZE = 4;
+
 export default function AccountProvisionPage() {
   const {
-    provisionedAccounts,
+    currentUser,
     addProvisionedAccount,
     updateProvisionedAccount,
     deleteProvisionedAccount,
@@ -66,21 +73,93 @@ export default function AccountProvisionPage() {
     loadDepartments?.().catch(() => {});
   }, [loadDepartments]);
 
-  const accounts = provisionedAccounts || [];
-
   // Dynamic role options read directly from Department Management "Department Name" column values
   const departmentRoleOptions = Array.from(
     new Set((departments || []).map((d) => (d.name || "").trim()).filter(Boolean))
   );
 
-  // Search filter state
+  // Search filter and dropdown filter states
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState("ALL");
+
+  // Available roles for the dropdown filter: "Admin" and configured department roles
+  const availableRoles = useMemo(() => {
+    const list = ["Admin"];
+    (departmentRoleOptions || []).forEach((r) => {
+      if (r && !list.includes(r)) list.push(r);
+    });
+    return list;
+  }, [departmentRoleOptions]);
+
+  // Server-side cursor-based pagination state (4 real data items per page)
+  const [cursor, setCursor] = useState(0);
+  const [pagedAccounts, setPagedAccounts] = useState([]);
+  const [cursorMetaState, setCursorMetaState] = useState({
+    current: 0,
+    pageSize: PAGE_SIZE,
+    totalCount: 0,
+    hasPrev: false,
+    hasNext: false,
+    nextCursor: null,
+    prevCursor: null,
+  });
+  const [loadingPage, setLoadingPage] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fetchSeqRef = useRef(0);
+
+  const fetchPagedAccounts = useCallback(async () => {
+    const seq = ++fetchSeqRef.current;
+    setLoadingPage(true);
+    try {
+      const res = await staffApi.list({
+        search: searchQuery,
+        role: selectedRoleFilter,
+        cursor,
+        pageSize: PAGE_SIZE,
+      });
+      if (seq !== fetchSeqRef.current) return;
+      if (res && Array.isArray(res.data)) {
+        setPagedAccounts(res.data);
+        if (res.meta?.cursor) {
+          setCursorMetaState(res.meta.cursor);
+          if (cursor > 0 && res.meta.cursor.totalCount <= cursor) {
+            setCursor(0);
+          }
+        }
+      }
+    } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
+      toast.error(describeError(err, "load staff accounts"), { duration: 5000 });
+    } finally {
+      if (seq === fetchSeqRef.current) {
+        setLoadingPage(false);
+      }
+    }
+  }, [searchQuery, selectedRoleFilter, cursor]);
+
+  useEffect(() => {
+    fetchPagedAccounts();
+  }, [fetchPagedAccounts]);
+
+  // Real-time WebSocket subscription: updates table immediately when staff or departments change
+  useEffect(() => {
+    const refresh = () => {
+      fetchPagedAccounts();
+    };
+    const offStaff = subscribe("staff.changed", refresh);
+    const offCatalog = subscribe("catalog.changed", refresh);
+    const offReconnect = subscribe("reconnected", refresh);
+    return () => {
+      offStaff();
+      offCatalog();
+      offReconnect();
+    };
+  }, [fetchPagedAccounts]);
 
   // Modal & form states
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingKey, setEditingKey] = useState(null);
+  const [editingAccount, setEditingAccount] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
 
   const emptyForm = {
     fullName: "",
@@ -92,19 +171,22 @@ export default function AccountProvisionPage() {
   };
   const [form, setForm] = useState(emptyForm);
 
-  // Filtered accounts based on search query
-  const filteredAccounts = accounts.filter((acc) => {
-    const q = (searchQuery || "").trim().toLowerCase();
-    return (
-      (acc.fullName || "").toLowerCase().includes(q) ||
-      (acc.phone || "").toLowerCase().includes(q) ||
-      (acc.email || "").toLowerCase().includes(q)
-    );
-  });
-
-  // Paging is handled by the table (it returns to page 1 when the search changes the rows).
   const handleSearchChange = (val) => {
     setSearchQuery(val);
+    setCursor(0);
+  };
+
+  const handleRoleFilterChange = (val) => {
+    setSelectedRoleFilter(val);
+    setCursor(0);
+  };
+
+  const hasActiveFilters = Boolean(searchQuery.trim() || selectedRoleFilter !== "ALL");
+
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setSelectedRoleFilter("ALL");
+    setCursor(0);
   };
 
   const handlePhoneChange = (val) => {
@@ -139,136 +221,142 @@ export default function AccountProvisionPage() {
       role: firstDept?.name || departmentRoleOptions[0] || "",
       departmentId: firstDept?.id || "",
     });
-    setEditingKey(null);
+    setEditingAccount(null);
     setShowPassword(false);
-    setError("");
     setModalOpen(true);
   };
 
   const openEdit = (acc) => {
+    const isAdminAccount = acc.roleCode === "ADMIN" || acc.role === "Admin" || acc.role === "Central Administrator";
     const matchedDept =
-      (departments || []).find((d) => d.id === acc.departmentId || d.name === acc.role) ||
-      (departments || [])[0];
+      !isAdminAccount
+        ? (departments || []).find((d) => d.id === acc.departmentId || d.name === acc.departmentName || d.name === acc.role) ||
+          (departments || [])[0]
+        : null;
     let phoneVal = acc.phone ? normalizeEthiopianPhone(acc.phone) : "+2519";
     if (!phoneVal.startsWith("+2519")) {
       const digits = phoneVal.replace(/[^\d]/g, "").slice(-8);
-      phoneVal = `+2519${digits}`;
+      phoneVal = digits ? `+2519${digits}` : "+2519";
     }
     setForm({
-      ...acc,
+      fullName: acc.fullName || "",
       phone: phoneVal,
       email: acc.email || "",
-      password: acc.password || "Password@123",
-      role: matchedDept?.name || acc.role || departmentRoleOptions[0] || "",
-      departmentId: matchedDept?.id || acc.departmentId || "",
+      password: "",
+      role: isAdminAccount ? "Admin" : (matchedDept?.name || acc.departmentName || acc.role || departmentRoleOptions[0] || ""),
+      departmentId: isAdminAccount ? "" : (matchedDept?.id || acc.departmentId || ""),
     });
-    setEditingKey(acc.phone || acc.email);
+    setEditingAccount(acc);
     setShowPassword(false);
-    setError("");
     setModalOpen(true);
   };
 
   const closeModal = () => {
     setModalOpen(false);
-    setError("");
   };
   useEscapeKey(modalOpen, closeModal);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+    if (saving) return;
 
     const cleanFullName = form.fullName.trim();
     const phoneClean = normalizeEthiopianPhone(form.phone);
     const cleanPassword = form.password.trim();
 
-    if (!cleanFullName) return setError("Full name is required.");
-    if (!phoneClean || !/^\+2519\d{8}$/.test(phoneClean)) {
-      return setError("Please enter a valid Ethiopian mobile number starting with +2519 (e.g. +251911234567).");
+    if (!cleanFullName) {
+      toast.error("Full name is required.", { duration: 5000 });
+      return;
     }
-    if (!cleanPassword || cleanPassword.length < 8)
-      return setError("Password must be at least 8 characters.");
+    if (!phoneClean || !/^\+2519\d{8}$/.test(phoneClean)) {
+      toast.error("Please enter a valid Ethiopian mobile number starting with +2519 (e.g. +251911234567).", { duration: 5000 });
+      return;
+    }
+    if (!editingAccount && !cleanPassword) {
+      toast.error("Password is required.", { duration: 5000 });
+      return;
+    }
 
-    const matchedDept = (departments || []).find(
-      (d) => d.name === form.role || d.id === form.departmentId
-    );
-    const departmentId = matchedDept ? matchedDept.id : form.departmentId;
-    const roleName = matchedDept ? matchedDept.name : form.role;
+    const isAdminSelected = form.role === "Admin" || form.role === "Central Administrator";
+    const matchedDept = !isAdminSelected
+      ? (departments || []).find((d) => d.name === form.role || d.id === form.departmentId)
+      : null;
+    const departmentId = isAdminSelected ? null : (matchedDept ? matchedDept.id : form.departmentId || departments[0]?.id || null);
+    const roleLabelName = isAdminSelected ? "Admin" : (matchedDept ? matchedDept.name : form.role);
+    const apiRole = isAdminSelected ? "ADMIN" : "OFFICER";
 
-    if (!roleName) {
-      return setError("Please select a valid department role.");
+    if (!roleLabelName || (apiRole === "OFFICER" && !departmentId)) {
+      toast.error("Please select a valid department role.", { duration: 5000 });
+      return;
     }
 
     const cleanEmail = form.email?.trim() || `${phoneClean.replace(/\D/g, "")}@woreda.gov.et`;
 
-    // Check duplicate phone or email (excluding current edit target)
-    const duplicate = accounts.some((a) => {
-      const isCurrent =
-        (a.phone && a.phone === editingKey) ||
-        (a.email && a.email.toLowerCase() === (editingKey || "").toLowerCase());
-      if (isCurrent) return false;
-      return (
-        (a.phone && normalizeEthiopianPhone(a.phone) === phoneClean) ||
-        (a.email && a.email.toLowerCase() === cleanEmail.toLowerCase())
-      );
-    });
-    if (duplicate) return setError("An account with this phone number already exists.");
-
-    const hashedPassword = hashPassword(cleanPassword);
-
-    // Provision on the backend server so the user exists in database for /auth/login
-    if (editingKey === null) {
-      try {
-        await http.post("/admin/users/provision", {
+    setSaving(true);
+    try {
+      if (editingAccount) {
+        await staffApi.update(editingAccount.id, {
+          fullName: cleanFullName,
+          phone: phoneClean,
+          email: cleanEmail,
+          ...(cleanPassword ? { password: cleanPassword } : {}),
+          role: apiRole,
+          departmentId,
+        });
+        updateProvisionedAccount(editingAccount.phone || editingAccount.email, {
+          role: roleLabelName,
+          departmentId,
+          fullName: cleanFullName,
+          phone: phoneClean,
+          email: cleanEmail,
+          ...(cleanPassword ? { password: cleanPassword, passwordHash: hashPassword(cleanPassword) } : {}),
+        });
+        toast.success("Account updated successfully.", { duration: 5000 });
+      } else {
+        await staffApi.provision({
           fullName: cleanFullName,
           phone: phoneClean,
           email: cleanEmail,
           password: cleanPassword,
-          role: "OFFICER",
-          departmentId: departmentId || (departments[0]?.id || "dept-1"),
+          role: apiRole,
+          departmentId,
         });
-      } catch {
-        // Continue to synchronize locally even if backend throws (e.g. offline fallback)
+        addProvisionedAccount({
+          id: `staff-${Date.now()}`,
+          role: roleLabelName,
+          departmentId,
+          fullName: cleanFullName,
+          phone: phoneClean,
+          email: cleanEmail,
+          password: cleanPassword,
+          passwordHash: hashPassword(cleanPassword),
+        });
+        toast.success("Staff account provisioned successfully.", { duration: 5000 });
+        setCursor(0);
       }
+      setModalOpen(false);
+      await fetchPagedAccounts();
+    } catch (err) {
+      toast.error(describeError(err, editingAccount ? "update staff account" : "provision staff account"), { duration: 5000 });
+    } finally {
+      setSaving(false);
     }
-
-    if (editingKey !== null) {
-      // Edit existing
-      updateProvisionedAccount(editingKey, {
-        ...form,
-        role: roleName,
-        departmentId,
-        fullName: cleanFullName,
-        phone: phoneClean,
-        email: cleanEmail,
-        password: cleanPassword,
-        passwordHash: hashedPassword,
-      });
-      toast.success("Account updated successfully.");
-    } else {
-      // Add new — push to global store (provisionedAccounts + users synchronized)
-      addProvisionedAccount({
-        ...form,
-        id: `staff-${Date.now()}`,
-        role: roleName,
-        departmentId,
-        fullName: cleanFullName,
-        phone: phoneClean,
-        email: cleanEmail,
-        password: cleanPassword,
-        passwordHash: hashedPassword,
-      });
-      toast.success("Staff account provisioned successfully.");
-    }
-
-    setModalOpen(false);
   };
 
-  const handleDelete = (acc) => {
-    const targetKey = acc.phone || acc.email;
-    if (window.confirm(`Are you sure you want to remove the account for "${targetKey}"?`)) {
-      deleteProvisionedAccount(targetKey);
-      toast.success("Account removed successfully.");
+  const handleDelete = async (acc) => {
+    if (acc.id === currentUser?.id) {
+      toast.error("You cannot delete your own active administrator account.", { duration: 5000 });
+      return;
+    }
+    const label = acc.fullName || acc.phone || acc.email;
+    if (!window.confirm(`Are you sure you want to remove the account for "${label}"?`)) return;
+    try {
+      await staffApi.remove(acc.id);
+      deleteProvisionedAccount(acc.phone || acc.email);
+      toast.success("Account removed successfully.", { duration: 5000 });
+      await fetchPagedAccounts();
+    } catch (err) {
+      toast.error(describeError(err, "remove staff account"), { duration: 5000 });
     }
   };
 
@@ -297,19 +385,28 @@ export default function AccountProvisionPage() {
     },
     {
       id: "role",
-      accessorKey: "role",
+      accessorFn: (acc) => {
+        const r = acc.departmentName || acc.role || "";
+        return (r === "Central Administrator" || acc.roleCode === "ADMIN") ? "Admin" : r;
+      },
       header: "Role",
       sortFn: "text",
-      cell: ({ row }) => (
-        <span
-          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-            ROLE_BADGE[row.original.role] || "bg-slate-100 text-slate-700 border-slate-200"
-          }`}
-        >
-          <Shield className="w-3 h-3" />
-          {row.original.role}
-        </span>
-      ),
+      cell: ({ row }) => {
+        let displayRole = row.original.departmentName || row.original.role;
+        if (displayRole === "Central Administrator" || row.original.roleCode === "ADMIN") {
+          displayRole = "Admin";
+        }
+        return (
+          <span
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+              ROLE_BADGE[displayRole] || ROLE_BADGE[row.original.role] || "bg-slate-100 text-slate-700 border-slate-200"
+            }`}
+          >
+            <Shield className="w-3 h-3" />
+            {displayRole}
+          </span>
+        );
+      },
     },
     {
       id: "actions",
@@ -340,6 +437,11 @@ export default function AccountProvisionPage() {
     },
   ];
 
+  const currentPageNumber = Math.floor((cursorMetaState.current || 0) / PAGE_SIZE) + 1;
+  const totalPages = Math.max(1, Math.ceil((cursorMetaState.totalCount || 0) / PAGE_SIZE));
+  const rangeStart = cursorMetaState.totalCount === 0 ? 0 : (cursorMetaState.current || 0) + 1;
+  const rangeEnd = Math.min(cursorMetaState.totalCount || 0, (cursorMetaState.current || 0) + pagedAccounts.length);
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -361,16 +463,16 @@ export default function AccountProvisionPage() {
         </button>
       </div>
 
-      {/* Search Box Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+      {/* Search Box & Dropdown Filter (Dropfilter) Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         {/* Search Box */}
-        <div className="relative w-full max-w-md">
+        <div className="relative w-full md:max-w-xs">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Search by full name or phone number..."
+            placeholder="Search by name, phone or role..."
             className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50/50"
           />
           {searchQuery && (
@@ -384,39 +486,132 @@ export default function AccountProvisionPage() {
           )}
         </div>
 
-        <span className="text-xs text-slate-500 font-medium hidden sm:block">
-          Total: {filteredAccounts.length} account{filteredAccounts.length !== 1 ? "s" : ""}
-        </span>
+        {/* Dropdown Filter (Dropfilter) & Actions */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          {/* Role Dropdown Filter */}
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={selectedRoleFilter}
+              onChange={(e) => handleRoleFilterChange(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 cursor-pointer focus:ring-2 focus:ring-[#0b2545] focus:outline-none shadow-2xs max-w-xs"
+              title="Filter by role"
+            >
+              <option value="ALL">All Roles</option>
+              {availableRoles.map((roleName) => (
+                <option key={roleName} value={roleName}>
+                  {roleName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Reset Filters Button */}
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer border border-rose-200 shadow-2xs"
+              title="Reset all filters"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset</span>
+            </button>
+          )}
+
+          {/* Total Accounts Counter Badge */}
+          <div className="text-xs text-slate-500 font-medium ml-auto md:ml-2">
+            Total: <strong className="text-slate-800">{cursorMetaState.totalCount}</strong>{" "}
+            {cursorMetaState.totalCount === 1 ? "account" : "accounts"}
+          </div>
+        </div>
       </div>
 
-      {/* Table Card */}
+      {/* Main Content Section - Table with 4 real data items per page */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <DataTable
-          data={filteredAccounts}
+          data={pagedAccounts}
           columns={accountColumns}
           getRowId={(acc) => acc.id || acc.phone || acc.email}
-          initialSorting={[{ id: "fullName", desc: false }]}
+          initialSorting={[]}
+          pageSize={null}
           itemLabel="provisioned accounts"
           emptyState={
-            <div className="flex flex-col items-center gap-3 text-slate-400">
+            <div className="flex flex-col items-center gap-3 text-slate-400 py-12">
               <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
                 <Shield className="w-6 h-6 text-slate-400" />
               </div>
-              <div>
+              <div className="text-center">
                 <p className="text-sm font-bold text-slate-700">
-                  {accounts.length === 0
-                    ? "No accounts provisioned yet"
-                    : "No matching accounts found"}
+                  {loadingPage
+                    ? "Loading accounts…"
+                    : hasActiveFilters
+                      ? "No matching accounts found"
+                      : "No accounts provisioned yet"}
                 </p>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  {accounts.length === 0
-                    ? "Department Officers and Administrators provisioned by Central Administration will appear here."
-                    : "Try adjusting your search query to find accounts."}
+                  {loadingPage
+                    ? "Fetching staff accounts from server..."
+                    : hasActiveFilters
+                      ? "Try adjusting your search query or resetting the role filter."
+                      : "Department Officers and Administrators provisioned in the system will appear here."}
                 </p>
               </div>
             </div>
           }
         />
+
+        {/* Cursor-Based Server-Side Pagination Navigation Footer */}
+        <div className="bg-slate-50/70 px-5 py-3 border-t border-slate-200 flex items-center justify-between gap-2 text-xs text-slate-600">
+          <p className="text-xs text-slate-500">
+            Showing{" "}
+            <strong className="text-slate-700">
+              {cursorMetaState.totalCount === 0 ? "0" : `${rangeStart}–${rangeEnd}`}
+            </strong>{" "}
+            of <strong className="text-slate-700">{cursorMetaState.totalCount}</strong>{" "}
+            {cursorMetaState.totalCount === 1 ? "account" : "accounts"}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (cursorMetaState.prevCursor !== null && cursorMetaState.prevCursor !== undefined) {
+                  setCursor(cursorMetaState.prevCursor);
+                } else {
+                  setCursor((prev) => Math.max(0, prev - PAGE_SIZE));
+                }
+              }}
+              disabled={!cursorMetaState.hasPrev || loadingPage}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs"
+              aria-label="Previous page"
+              title="Previous"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <span className="text-xs font-semibold text-slate-700 px-2.5 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs">
+              Page {currentPageNumber} of {totalPages}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (cursorMetaState.nextCursor !== null && cursorMetaState.nextCursor !== undefined) {
+                  setCursor(cursorMetaState.nextCursor);
+                } else {
+                  setCursor((prev) => prev + PAGE_SIZE);
+                }
+              }}
+              disabled={!cursorMetaState.hasNext || loadingPage}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs"
+              aria-label="Next page"
+              title="Next"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Modal */}
@@ -430,7 +625,7 @@ export default function AccountProvisionPage() {
                   <Shield className="w-5 h-5" />
                 </span>
                 <h2 id="account-modal-title" className="text-sm font-bold text-slate-900">
-                  {editingKey !== null ? "Edit Staff Account" : "Provision New Staff"}
+                  {editingAccount ? "Edit Staff Account" : "Provision New Staff"}
                 </h2>
               </div>
               <button type="button" onClick={closeModal} className="modal-close" aria-label="Close">
@@ -440,13 +635,6 @@ export default function AccountProvisionPage() {
 
             {/* Modal Body */}
             <form onSubmit={handleSubmit} className="pt-5 space-y-4">
-              {error && (
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  {error}
-                </div>
-              )}
-
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Full Name *
@@ -487,16 +675,15 @@ export default function AccountProvisionPage() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Password *
+                  {editingAccount ? "New Password (Optional)" : "Password *"}
                 </label>
                 <div className="relative" style={{ position: "relative" }}>
                   <input
                     type={showPassword ? "text" : "password"}
-                    required
+                    required={!editingAccount}
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder="•••••••• (min 8 characters)"
-                    minLength={8}
+                    placeholder={editingAccount ? "Leave blank to keep existing password" : "Enter password"}
                     className="w-full px-3.5 pr-10 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50"
                     style={{ paddingRight: "2.75rem" }}
                   />
@@ -541,11 +728,14 @@ export default function AccountProvisionPage() {
                     setForm({
                       ...form,
                       role: selectedRole,
-                      departmentId: matchedDept ? matchedDept.id : form.departmentId,
+                      departmentId: (selectedRole === "Admin" || selectedRole === "Central Administrator") ? "" : (matchedDept ? matchedDept.id : form.departmentId),
                     });
                   }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-white cursor-pointer"
                 >
+                  {(editingAccount?.roleCode === "ADMIN" || editingAccount?.role === "Admin" || editingAccount?.role === "Central Administrator") && (
+                    <option value="Admin">Admin</option>
+                  )}
                   {departmentRoleOptions.length === 0 ? (
                     <option value="" disabled>
                       No departments available (configure departments first)
@@ -558,7 +748,7 @@ export default function AccountProvisionPage() {
                     ))
                   )}
                 </select>
-                {departmentRoleOptions.length === 0 && (
+                {departmentRoleOptions.length === 0 && editingAccount?.roleCode !== "ADMIN" && editingAccount?.role !== "Admin" && (
                   <p className="text-[11px] text-amber-600 mt-1">
                     No departments found. Please configure departments in Department Management first.
                   </p>
@@ -575,9 +765,10 @@ export default function AccountProvisionPage() {
                 </button>
                 <button
                   type="submit"
-                  className="modal-btn modal-btn--primary flex-1"
+                  disabled={saving}
+                  className="modal-btn modal-btn--primary flex-1 disabled:opacity-60"
                 >
-                  {editingKey !== null ? "Save Changes" : "Create Staff"}
+                  {saving ? "Saving…" : editingAccount ? "Save Changes" : "Create Staff"}
                 </button>
               </div>
             </form>

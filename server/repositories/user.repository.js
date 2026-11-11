@@ -1,6 +1,11 @@
 // Data access for "users" (citizen profiles and staff accounts).
 import { one, query, rows } from "../config/database.js";
 import { fromRow } from "../models/user.model.js";
+import { containsPattern } from "../utils/pagination.js";
+
+const WOREDA_EXPR = `COALESCE((SELECT btrim(seg) FROM unnest(string_to_array(COALESCE(u.address, ''), ',')) AS seg WHERE btrim(seg) ~* '^woreda' LIMIT 1), 'Woreda 03')`;
+const KEBELE_EXPR = `COALESCE((SELECT btrim(seg) FROM unnest(string_to_array(COALESCE(u.address, ''), ',')) AS seg WHERE btrim(seg) ~* '^kebele' LIMIT 1), 'Kebele 03')`;
+const LOCATION_EXPR = `COALESCE(NULLIF(array_to_string(ARRAY(SELECT btrim(seg) FROM unnest(string_to_array(COALESCE(u.address, ''), ',')) AS seg WHERE btrim(seg) <> '' AND btrim(seg) !~* '^(kebele|woreda|house)'), ', '), ''), 'Addis Ababa')`;
 
 const SELECT_WITH_DEPARTMENT = `
   SELECT u.*, d.name AS department_name
@@ -62,39 +67,122 @@ export async function updateCitizen(id, f) {
   return rowCount > 0;
 }
 
-/** Citizen accounts matching search on name/phone/address/national_id (ILIKE): {total, items} for one page, newest first. */
-export async function findCitizenPage(search, offset, limit) {
+/** Citizen accounts matching search + woreda/kebele/location filters: {total, totalRegistered, addresses, items} for one page, newest first. */
+export async function findCitizenPage({ search = "", woreda = "", kebele = "", location = "", offset = 0, limit = 5 }) {
   const params = [];
-  let where = "u.role = 'CITIZEN'";
+  const where = ["u.role = 'CITIZEN'"];
   if (search !== "") {
-    params.push(`%${search}%`);
-    where += ` AND (u.full_name ILIKE $1 OR u.phone ILIKE $1 OR u.address ILIKE $1 OR u.national_id ILIKE $1)`;
+    params.push(containsPattern(search));
+    const p = `$${params.length}`;
+    where.push(`(u.full_name ILIKE ${p} OR u.phone ILIKE ${p} OR COALESCE(u.address, '') ILIKE ${p})`);
   }
-  const [{ total }] = await rows(`SELECT COUNT(*)::int AS total FROM users u WHERE ${where}`, params);
+  if (woreda !== "" && woreda.toUpperCase() !== "ALL") {
+    params.push(woreda);
+    where.push(`LOWER(${WOREDA_EXPR}) = LOWER($${params.length})`);
+  }
+  if (kebele !== "" && kebele.toUpperCase() !== "ALL") {
+    params.push(kebele);
+    where.push(`LOWER(${KEBELE_EXPR}) = LOWER($${params.length})`);
+  }
+  if (location !== "" && location.toUpperCase() !== "ALL") {
+    params.push(location);
+    where.push(`LOWER(${LOCATION_EXPR}) = LOWER($${params.length})`);
+  }
+  const whereSql = where.join(" AND ");
+  const [{ total }] = await rows(`SELECT COUNT(*)::int AS total FROM users u WHERE ${whereSql}`, params);
+  const [{ total_registered: totalRegistered }] = await rows("SELECT COUNT(*)::int AS total_registered FROM users WHERE role = 'CITIZEN'");
+  const addressRows = await rows("SELECT DISTINCT address FROM users WHERE role = 'CITIZEN'");
   const items = await rows(
     `SELECT u.id, u.full_name, u.email, u.phone, u.national_id, u.address, u.is_active, u.created_at, u.updated_at
-     FROM users u WHERE ${where} ORDER BY u.created_at DESC, u.id
+     FROM users u WHERE ${whereSql} ORDER BY u.created_at DESC, u.id DESC
+     OFFSET $${params.length + 1} LIMIT $${params.length + 2}`,
+    [...params, offset, limit],
+  );
+  return {
+    total,
+    totalRegistered,
+    addresses: addressRows.map((r) => r.address),
+    items: items.map(fromRow),
+  };
+}
+
+/** Staff (non-citizen) accounts matching search/role/department (ILIKE): {total, items} for one page, newest first. */
+export async function findStaffPage(opts, maybeOffset, maybeLimit) {
+  let search = "";
+  let role = "";
+  let departmentId = "";
+  let offset = 0;
+  let limit = 4;
+
+  if (typeof opts === "object" && opts !== null) {
+    search = opts.search || "";
+    role = opts.role || "";
+    departmentId = opts.departmentId || "";
+    offset = opts.offset ?? 0;
+    limit = opts.limit ?? 4;
+  } else {
+    search = opts || "";
+    offset = maybeOffset ?? 0;
+    limit = maybeLimit ?? 4;
+  }
+
+  const params = [];
+  let where = "u.role <> 'CITIZEN'";
+
+  if (role && role !== "ALL") {
+    if (role === "ADMIN" || role === "Admin" || role === "Central Administrator") {
+      where += " AND u.role = 'ADMIN'";
+    } else if (role === "OFFICER" || role === "Department Officer") {
+      where += " AND u.role = 'OFFICER'";
+    } else {
+      params.push(role);
+      where += ` AND (d.name = $${params.length} OR u.department_id = $${params.length})`;
+    }
+  }
+
+  if (departmentId && departmentId !== "ALL") {
+    params.push(departmentId);
+    where += ` AND u.department_id = $${params.length}`;
+  }
+
+  if (search && search.trim() !== "") {
+    params.push(containsPattern(search.trim()));
+    const pIdx = params.length;
+    where += ` AND (u.full_name ILIKE $${pIdx} OR u.phone ILIKE $${pIdx} OR COALESCE(u.email, '') ILIKE $${pIdx} OR COALESCE(d.name, '') ILIKE $${pIdx})`;
+  }
+
+  const [{ total }] = await rows(
+    `SELECT COUNT(*)::int AS total FROM users u LEFT JOIN departments d ON d.id = u.department_id WHERE ${where}`,
+    params,
+  );
+  const items = await rows(
+    `${SELECT_WITH_DEPARTMENT} WHERE ${where} ORDER BY u.created_at DESC, u.id DESC
      OFFSET $${params.length + 1} LIMIT $${params.length + 2}`,
     [...params, offset, limit],
   );
   return { total, items: items.map(fromRow) };
 }
 
-/** Staff (non-citizen) accounts matching search on name/email (ILIKE): {total, items} for one page, newest first. */
-export async function findStaffPage(search, offset, limit) {
-  const params = [];
-  let where = "u.role <> 'CITIZEN'";
-  if (search !== "") {
-    params.push(`%${search}%`);
-    where += ` AND (u.full_name ILIKE $1 OR u.email ILIKE $1)`;
+/** Updates a staff (non-citizen) account; updates passwordHash only when provided. Returns false when not found. */
+export async function updateStaff(id, f) {
+  const fields = [
+    "full_name = $2",
+    "phone = $3",
+    "email = $4",
+    "role = $5",
+    "department_id = $6",
+    "updated_at = now()",
+  ];
+  const params = [id, f.fullName, f.phone, f.email, f.role, f.departmentId ?? null];
+  if (f.passwordHash) {
+    params.push(f.passwordHash);
+    fields.push(`password_hash = $${params.length}`);
   }
-  const [{ total }] = await rows(`SELECT COUNT(*)::int AS total FROM users u WHERE ${where}`, params);
-  const items = await rows(
-    `${SELECT_WITH_DEPARTMENT} WHERE ${where} ORDER BY u.created_at DESC, u.id
-     OFFSET $${params.length + 1} LIMIT $${params.length + 2}`,
-    [...params, offset, limit],
+  const { rowCount } = await query(
+    `UPDATE users SET ${fields.join(", ")} WHERE id = $1 AND role <> 'CITIZEN'`,
+    params,
   );
-  return { total, items: items.map(fromRow) };
+  return rowCount > 0;
 }
 
 /** Flips is_active of a staff account; returns the new value, or null when not found. */

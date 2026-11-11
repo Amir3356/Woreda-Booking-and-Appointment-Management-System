@@ -6,7 +6,13 @@ export function pagination(total, page, limit) {
 }
 
 export const cursorMeta = (cursor, pageSize, total) => ({
-  current: cursor, pageSize, totalCount: total, hasPrev: cursor > 0, hasNext: cursor + pageSize < total,
+  current: cursor,
+  pageSize,
+  totalCount: total,
+  hasPrev: cursor > 0,
+  hasNext: cursor + pageSize < total,
+  nextCursor: cursor + pageSize < total ? cursor + pageSize : null,
+  prevCursor: cursor > 0 ? Math.max(0, cursor - pageSize) : null,
 });
 
 /** SQL ILIKE pattern for "contains s" with %, _ and \ taken literally. */

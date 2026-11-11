@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { useStore } from "@/context";
 import { DataTable } from "@/components/ui";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -10,8 +11,6 @@ export default function OfficerAppointmentsPage() {
     currentUser,
     appointments,
     updateAppointmentStatus,
-    appointmentError,
-    clearAppointmentError,
   } = useStore();
 
   const [busyId, setBusyId] = useState(null);
@@ -20,8 +19,14 @@ export default function OfficerAppointmentsPage() {
   const handleApprove = async (e, apt) => {
     e.stopPropagation();
     setBusyId(apt.id);
-    await updateAppointmentStatus(apt.id, "APPROVED");
+    const ok = await updateAppointmentStatus(apt.id, "APPROVED");
     setBusyId(null);
+    if (ok) {
+      toast.success(`Appointment ${apt.referenceNumber} approved.`, { duration: 5000 });
+    } else {
+      const err = useStore.getState().appointmentError;
+      toast.error(err?.message || "Failed to approve appointment.", { duration: 5000 });
+    }
   };
   const handleReject = async (e, apt) => {
     e.stopPropagation();
@@ -31,8 +36,14 @@ export default function OfficerAppointmentsPage() {
     );
     if (reason === null) return; // cancelled
     setBusyId(apt.id);
-    await updateAppointmentStatus(apt.id, "REJECTED", "", reason.trim() || "Quota or invalid paperwork");
+    const ok = await updateAppointmentStatus(apt.id, "REJECTED", "", reason.trim() || "Quota or invalid paperwork");
     setBusyId(null);
+    if (ok) {
+      toast.success(`Appointment ${apt.referenceNumber} rejected.`, { duration: 5000 });
+    } else {
+      const err = useStore.getState().appointmentError;
+      toast.error(err?.message || "Failed to reject appointment.", { duration: 5000 });
+    }
   };
 
   const effectiveAppointments = appointments || [];
@@ -218,23 +229,6 @@ export default function OfficerAppointmentsPage() {
           Assigned: {deptAppointments.length}
         </span>
       </div>
-
-      {appointmentError && (
-        <div role="alert" className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold shadow-xs">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-            <span>{appointmentError.message}</span>
-          </div>
-          <button
-            type="button"
-            onClick={clearAppointmentError}
-            className="text-red-700 hover:text-red-900 cursor-pointer p-0.5"
-            aria-label="Dismiss error"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       {/* Appointments Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">

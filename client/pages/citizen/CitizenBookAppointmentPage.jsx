@@ -79,7 +79,10 @@ export default function CitizenBookAppointmentPage() {
     const free = (data?.slots || [])
       .filter((sl) => sl.status === "Available")
       .reduce((sum, sl) => sum + (sl.remainingCapacity || 0), 0);
-    return data?.dailyCapacity ? Math.max(0, Math.min(free, data.dailyCapacity - data.bookedForDay)) : free;
+    let left = data?.dailyCapacity ? Math.max(0, Math.min(free, data.dailyCapacity - data.bookedForDay)) : free;
+    // The department-wide daily capacity (Schedule Management) can be lower still.
+    if (data?.departmentCapacity) left = Math.max(0, Math.min(left, data.departmentCapacity - (data.departmentBooked || 0)));
+    return left;
   };
 
   // Overview table: every active service that has an opening schedule, on its next working day,
@@ -136,7 +139,7 @@ export default function CitizenBookAppointmentPage() {
             // the daily capacity the Admin set in Schedule Management.
             const left = placesLeft(data);
             const full = !data?.closedReason && open === 0 ? "Full" : null;
-            const actionValue = left > 0 ? "Available" : full || (data?.closedReason === "DAILY_CAPACITY_REACHED" ? "Full" : "Unavailable");
+            const actionValue = left > 0 ? "Available" : full || (["DAILY_CAPACITY_REACHED", "DEPARTMENT_CAPACITY_REACHED"].includes(data?.closedReason) ? "Full" : "Unavailable");
             return { ...row, actionValue, availabilityText: left > 0 ? `${left} left` : actionValue };
           })
           .catch(() => ({ ...original, availabilityText: "Unavailable" }))
@@ -203,7 +206,7 @@ export default function CitizenBookAppointmentPage() {
   const [citizenName, setCitizenName] = useState(currentUser?.fullName || "");
   const [citizenPhone, setCitizenPhone] = useState(currentUser?.phone || "");
   const [citizenNotes, setCitizenNotes] = useState("");
-  const showSuccess = (msg) => toast.success(msg);
+  const showSuccess = (msg) => toast.success(msg, { duration: 5000 });
 
   // Modal service dropdown: every active service from Admin > Services Management.
   // The department is taken from the chosen service, so citizens don't pick it separately.
@@ -279,6 +282,30 @@ export default function CitizenBookAppointmentPage() {
     };
   }, [selectedSlot?.serviceId, selectedSlot?.date, availabilityVersion]);
 
+  // Dates the citizen can actually book for the chosen service (next 60 days), as decided by the
+  // server from Schedule Management: operating hours, holidays and other exceptions, disabled
+  // booking dates and daily capacities. Offered as quick choices under the date field.
+  const [bookableDates, setBookableDates] = useState({ serviceId: "", dates: [] });
+  useEffect(() => {
+    const serviceId = selectedSlot?.serviceId;
+    if (!serviceId) {
+      setBookableDates({ serviceId: "", dates: [] });
+      return undefined;
+    }
+    let cancelled = false;
+    const from = localIsoDate();
+    scheduleApi
+      .bookableDates({ serviceId, from, to: addDays(from, 59) })
+      .then(({ data }) => {
+        if (!cancelled) setBookableDates({ serviceId, dates: (data || []).filter((d) => d.available).map((d) => d.date) });
+      })
+      .catch(() => !cancelled && setBookableDates({ serviceId, dates: [] }));
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSlot?.serviceId, availabilityVersion]);
+  const nextAvailable = bookableDates.serviceId === selectedSlot?.serviceId ? bookableDates.dates.slice(0, 6) : [];
+
   // Times offered in the dropdown: the schedule's opening hours (lunch break and closed hours left out).
   const timeOptions = (availability.data?.slots || []).filter((sl) => sl.status !== "Unavailable");
   const chosenSlot = timeOptions.find((sl) => sl.timeSlot === selectedSlot?.time);
@@ -288,7 +315,7 @@ export default function CitizenBookAppointmentPage() {
     : serviceSchedules.length === 0 || !dateRange
       ? "This service has no published opening schedule yet, so it cannot be booked. Please check again later."
       : availability.data?.closedReason
-        ? closedMessage(availability.data.closedReason, { date: selectedSlot?.date, schedule: scheduleForDate })
+        ? closedMessage(availability.data.closedReason, { date: selectedSlot?.date, schedule: scheduleForDate, note: availability.data.closedNote })
         : !availability.loading && availability.data && timeOptions.length > 0 && !timeOptions.some((sl) => sl.status === "Available")
           ? "Every time on that day is fully booked. Choose another date."
           : "";
@@ -415,7 +442,6 @@ export default function CitizenBookAppointmentPage() {
       const apt = await bookAppointment({
         citizenName: (citizenName || currentUser?.fullName || "").trim(),
         citizenPhone: normalizeEthiopianPhone(citizenPhone || currentUser?.phone || ""),
-        citizenEmail: currentUser?.email || "",
         departmentId: selectedSlot.departmentId,
         serviceId: selectedSlot.serviceId,
         date: selectedSlot.date,
@@ -426,21 +452,22 @@ export default function CitizenBookAppointmentPage() {
       setAvailabilityVersion((v) => v + 1); // the slot just taken
       showSuccess(`Appointment booked successfully! Reference number: ${apt.referenceNumber}`);
     } catch (err) {
+      let msg = "Could not book the appointment: the server is unreachable. Please try again.";
       if (err?.status === 401 || err?.status === 403) {
-        setBookingError("Please sign out and sign in again with your citizen account to book.");
-      } else if (err?.status === 409 && err.code === "DAILY_CAPACITY_REACHED") {
-        setBookingError("All appointments for that day are already booked (the daily capacity is reached). Please choose another date.");
+        msg = "Please sign out and sign in again with your citizen account to book.";
+      } else if (err?.status === 409 && (err.code === "DAILY_CAPACITY_REACHED" || err.code === "DEPARTMENT_CAPACITY_REACHED")) {
+        msg = "All appointments for that day are already booked (the daily capacity is reached). Please choose another date.";
         setAvailabilityVersion((v) => v + 1);
       } else if (err?.status === 409) {
-        setBookingError("That time was just taken. Please choose another time.");
+        msg = "That time was just taken. Please choose another time.";
         setAvailabilityVersion((v) => v + 1);
       } else if (err?.status === 422 && err.details?.length) {
-        setBookingError(err.details.map((d) => d.issue).join(" "));
+        msg = err.details.map((d) => d.issue).join(" ");
       } else if (err?.status === 404) {
-        setBookingError("This service is no longer available. Please choose another one.");
-      } else {
-        setBookingError("Could not book the appointment: the server is unreachable. Please try again.");
+        msg = "This service is no longer available. Please choose another one.";
       }
+      setBookingError(msg);
+      toast.error(msg, { duration: 5000 });
     } finally {
       setSubmitting(false);
     }
@@ -835,7 +862,7 @@ export default function CitizenBookAppointmentPage() {
                         required
                         value={chosenSlot ? selectedSlot.time : ""}
                         onChange={(e) => setSelectedSlot((prev) => ({ ...prev, time: e.target.value }))}
-                        disabled={availability.loading || timeOptions.length === 0 || Boolean(availability.data?.closedReason && availability.data.closedReason !== "DAILY_CAPACITY_REACHED")}
+                        disabled={availability.loading || timeOptions.length === 0 || Boolean(availability.data?.closedReason && !["DAILY_CAPACITY_REACHED", "DEPARTMENT_CAPACITY_REACHED"].includes(availability.data.closedReason))}
                         aria-label="Appointment time"
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                       >
@@ -877,6 +904,28 @@ export default function CitizenBookAppointmentPage() {
                       <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
                       <span>{availability.error || dateNotice}</span>
                     </p>
+                  )}
+                  {selectedService && nextAvailable.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-[11px] font-semibold text-slate-600 mb-1">Next available dates</p>
+                      <div className="sm-chips" role="group" aria-label="Next available dates">
+                        {nextAvailable.map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            className="sm-chip"
+                            aria-pressed={selectedSlot?.date === d}
+                            onClick={() => handleDateChange(d)}
+                            style={{ height: "1.75rem", fontSize: "0.75rem" }}
+                          >
+                            {displayDate(d).replace(/, \d{4}$/, "")}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {selectedService && dateRange && bookableDates.serviceId === selectedSlot?.serviceId && bookableDates.dates.length === 0 && (
+                    <p className="text-[11px] text-slate-500 mt-2">No dates are open for booking in the next 60 days.</p>
                   )}
                 </div>
               </div>

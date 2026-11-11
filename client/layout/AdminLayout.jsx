@@ -10,8 +10,8 @@ export default function AdminLayout({ children }) {
   const claims = parseJwtToken(token);
 
   // Enforce valid JWT in browser cookie with ADMIN role
-  const isAdminClaim = claims?.role === "ADMIN" || claims?.role === "Central Administrator";
-  const isAdminUser = currentUser?.role === "ADMIN" || currentUser?.role === "Central Administrator";
+  const isAdminClaim = claims?.role === "ADMIN" || claims?.role === "Admin" || claims?.role === "Central Administrator";
+  const isAdminUser = currentUser?.role === "ADMIN" || currentUser?.role === "Admin" || currentUser?.role === "Central Administrator";
 
   // Allow access if valid admin JWT cookie claim exists or currentUser is an admin
   if (!isAdminClaim && (!currentUser || !isAdminUser)) {

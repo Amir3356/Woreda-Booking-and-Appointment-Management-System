@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import { useStore } from "@/context";
 import { DataTable } from "@/components/ui";
 import { auditApi } from "@/api";
 import { subscribe } from "@/api/realtime";
 import { describeError, displayDate, displayTime } from "@/utils";
-import { AlertCircle, Search, Filter, X, ShieldCheck } from "lucide-react";
+import { Search, Filter, ShieldCheck } from "lucide-react";
 
 // Admin > Audit Trail: every decision on an appointment, saved by appointment-service when it
 // happens — a department officer approving or rejecting, a citizen booking (Pending) or
@@ -47,7 +48,6 @@ export default function AdminAuditPage() {
   const [departmentId, setDepartmentId] = useState("ALL");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -60,9 +60,8 @@ export default function AdminAuditPage() {
       });
       setEntries(Array.isArray(data) ? data : []);
       setTotal(meta?.pagination?.totalItems ?? (Array.isArray(data) ? data.length : 0));
-      setErrorMsg("");
     } catch (err) {
-      setErrorMsg(describeError(err, "load the audit trail"));
+      toast.error(describeError(err, "load the audit trail"), { duration: 5000 });
     } finally {
       setLoading(false);
     }
@@ -215,18 +214,6 @@ export default function AdminAuditPage() {
           officers, bookings and cancellations by citizens.
         </p>
       </div>
-
-      {errorMsg && (
-        <div role="alert" className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold shadow-xs">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-            <span>{errorMsg}</span>
-          </div>
-          <button type="button" onClick={() => setErrorMsg("")} className="text-red-700 hover:text-red-900 cursor-pointer p-0.5" aria-label="Dismiss error">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">

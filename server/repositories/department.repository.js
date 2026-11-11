@@ -8,12 +8,82 @@ const SELECT_WITH_COUNTS = `
     (SELECT COUNT(*)::int FROM services s WHERE s.department_id = d.id) AS service_count
   FROM departments d`;
 
-/** Sorted by name; isActive undefined = all. */
-export async function findAll(isActive) {
-  const list = isActive === undefined
-    ? await rows(`${SELECT_WITH_COUNTS} ORDER BY d.name`)
-    : await rows(`${SELECT_WITH_COUNTS} WHERE d.is_active = $1 ORDER BY d.name`, [isActive]);
+/** Sorted by name; supports optional boolean or { isActive, departmentId, search }. */
+export async function findAll(opts) {
+  let isActive = undefined;
+  let search = "";
+  let departmentId = undefined;
+  if (typeof opts === "boolean") {
+    isActive = opts;
+  } else if (opts && typeof opts === "object") {
+    isActive = opts.isActive;
+    search = opts.search || "";
+    departmentId = opts.departmentId;
+  }
+
+  const params = [];
+  const where = [];
+
+  if (departmentId && departmentId !== "ALL") {
+    params.push(departmentId);
+    where.push(`d.id = $${params.length}`);
+  }
+
+  if (isActive !== undefined) {
+    params.push(isActive);
+    where.push(`d.is_active = $${params.length}`);
+  }
+
+  if (search && search.trim()) {
+    params.push(`%${search.trim()}%`);
+    const pIdx = params.length;
+    where.push(
+      `(d.name ILIKE $${pIdx} OR d.code ILIKE $${pIdx} OR d.building_room ILIKE $${pIdx} OR d.contact_phone ILIKE $${pIdx} OR EXISTS (SELECT 1 FROM services s WHERE s.department_id = d.id AND s.name ILIKE $${pIdx}))`
+    );
+  }
+
+  const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const list = await rows(`${SELECT_WITH_COUNTS} ${whereClause} ORDER BY d.name, d.id`, params);
   return list.map(fromRow);
+}
+
+/** Cursor-paged departments matching search, departmentId & status. */
+export async function findPage({ isActive, departmentId, search = "", offset = 0, limit = 3 }) {
+  const params = [];
+  const where = [];
+
+  if (departmentId && departmentId !== "ALL") {
+    params.push(departmentId);
+    where.push(`d.id = $${params.length}`);
+  }
+
+  if (isActive !== undefined) {
+    params.push(isActive);
+    where.push(`d.is_active = $${params.length}`);
+  }
+
+  if (search && search.trim()) {
+    params.push(`%${search.trim()}%`);
+    const pIdx = params.length;
+    where.push(
+      `(d.name ILIKE $${pIdx} OR d.code ILIKE $${pIdx} OR d.building_room ILIKE $${pIdx} OR d.contact_phone ILIKE $${pIdx} OR EXISTS (SELECT 1 FROM services s WHERE s.department_id = d.id AND s.name ILIKE $${pIdx}))`
+    );
+  }
+
+  const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+  const [{ total }] = await rows(
+    `SELECT COUNT(*)::int AS total FROM departments d ${whereClause}`,
+    params
+  );
+
+  const queryParams = [...params, offset, limit];
+  const items = await rows(
+    `${SELECT_WITH_COUNTS} ${whereClause} ORDER BY d.name, d.id OFFSET $${params.length + 1} LIMIT $${params.length + 2}`,
+    queryParams
+  );
+
+  return { total, items: items.map(fromRow) };
 }
 
 export async function findById(id) {

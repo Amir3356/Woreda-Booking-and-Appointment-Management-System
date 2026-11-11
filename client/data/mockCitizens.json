@@ -5,9 +5,7 @@
     "phone": "+251911234567",
     "locations": "Bole Sub-City, Addis Ababa",
     "woreda": "Woreda 03",
-    "kebele": "Kebele 02",
-    "nationalId": "ET-CIT-5582",
-    "status": "VERIFIED"
+    "kebele": "Kebele 02"
   },
   {
     "id": "cit-002",
@@ -15,9 +13,7 @@
     "phone": "+251912345678",
     "locations": "Yeka Sub-City, Addis Ababa",
     "woreda": "Woreda 05",
-    "kebele": "Kebele 04",
-    "nationalId": "ET-CIT-3419",
-    "status": "VERIFIED"
+    "kebele": "Kebele 04"
   },
   {
     "id": "cit-003",
@@ -25,9 +21,7 @@
     "phone": "+251922345678",
     "locations": "Kirkos Sub-City, Addis Ababa",
     "woreda": "Woreda 02",
-    "kebele": "Kebele 01",
-    "nationalId": "ET-CIT-8821",
-    "status": "VERIFIED"
+    "kebele": "Kebele 01"
   },
   {
     "id": "cit-004",
@@ -35,9 +29,7 @@
     "phone": "+251933456789",
     "locations": "Arada Sub-City, Addis Ababa",
     "woreda": "Woreda 01",
-    "kebele": "Kebele 03",
-    "nationalId": "ET-CIT-7140",
-    "status": "VERIFIED"
+    "kebele": "Kebele 03"
   },
   {
     "id": "cit-005",
@@ -45,9 +37,7 @@
     "phone": "+251944567890",
     "locations": "Nifas Silk-Lafto Sub-City, Addis Ababa",
     "woreda": "Woreda 04",
-    "kebele": "Kebele 06",
-    "nationalId": "ET-CIT-9253",
-    "status": "VERIFIED"
+    "kebele": "Kebele 06"
   },
   {
     "id": "cit-006",
@@ -55,9 +45,7 @@
     "phone": "+251955678901",
     "locations": "Bole Sub-City, Addis Ababa",
     "woreda": "Woreda 03",
-    "kebele": "Kebele 05",
-    "nationalId": "ET-CIT-4192",
-    "status": "VERIFIED"
+    "kebele": "Kebele 05"
   },
   {
     "id": "cit-007",
@@ -65,9 +53,7 @@
     "phone": "+251966789012",
     "locations": "Lideta Sub-City, Addis Ababa",
     "woreda": "Woreda 07",
-    "kebele": "Kebele 08",
-    "nationalId": "ET-CIT-6031",
-    "status": "VERIFIED"
+    "kebele": "Kebele 08"
   },
   {
     "id": "cit-008",
@@ -75,9 +61,7 @@
     "phone": "+251977890123",
     "locations": "Gulele Sub-City, Addis Ababa",
     "woreda": "Woreda 06",
-    "kebele": "Kebele 03",
-    "nationalId": "ET-CIT-2847",
-    "status": "VERIFIED"
+    "kebele": "Kebele 03"
   },
   {
     "id": "cit-009",
@@ -85,9 +69,7 @@
     "phone": "+251988901234",
     "locations": "Kolfe Keranio Sub-City, Addis Ababa",
     "woreda": "Woreda 08",
-    "kebele": "Kebele 07",
-    "nationalId": "ET-CIT-1934",
-    "status": "VERIFIED"
+    "kebele": "Kebele 07"
   },
   {
     "id": "cit-010",
@@ -95,9 +77,7 @@
     "phone": "+251913456789",
     "locations": "Bole Sub-City, Addis Ababa",
     "woreda": "Woreda 03",
-    "kebele": "Kebele 02",
-    "nationalId": "ET-CIT-7301",
-    "status": "VERIFIED"
+    "kebele": "Kebele 02"
   },
   {
     "id": "cit-011",
@@ -105,9 +85,7 @@
     "phone": "+251924567890",
     "locations": "Akaki-Kality Sub-City, Addis Ababa",
     "woreda": "Woreda 09",
-    "kebele": "Kebele 05",
-    "nationalId": "ET-CIT-5118",
-    "status": "VERIFIED"
+    "kebele": "Kebele 05"
   },
   {
     "id": "cit-012",
@@ -115,9 +93,7 @@
     "phone": "+251935678901",
     "locations": "Yeka Sub-City, Addis Ababa",
     "woreda": "Woreda 05",
-    "kebele": "Kebele 01",
-    "nationalId": "ET-CIT-6623",
-    "status": "VERIFIED"
+    "kebele": "Kebele 01"
   },
   {
     "id": "cit-013",
@@ -125,9 +101,7 @@
     "phone": "+251946789012",
     "locations": "Kirkos Sub-City, Addis Ababa",
     "woreda": "Woreda 02",
-    "kebele": "Kebele 04",
-    "nationalId": "ET-CIT-8274",
-    "status": "VERIFIED"
+    "kebele": "Kebele 04"
   },
   {
     "id": "cit-014",
@@ -135,9 +109,7 @@
     "phone": "+251957890123",
     "locations": "Arada Sub-City, Addis Ababa",
     "woreda": "Woreda 01",
-    "kebele": "Kebele 02",
-    "nationalId": "ET-CIT-4938",
-    "status": "VERIFIED"
+    "kebele": "Kebele 02"
   },
   {
     "id": "cit-015",
@@ -145,9 +117,7 @@
     "phone": "+251968901234",
     "locations": "Nifas Silk-Lafto Sub-City, Addis Ababa",
     "woreda": "Woreda 04",
-    "kebele": "Kebele 03",
-    "nationalId": "ET-CIT-3720",
-    "status": "VERIFIED"
+    "kebele": "Kebele 03"
   },
   {
     "id": "cit-016",
@@ -155,9 +125,6 @@
     "phone": "+251979012345",
     "locations": "Lideta Sub-City, Addis Ababa",
     "woreda": "Woreda 07",
-    "kebele": "Kebele 06",
-    "nationalId": "ET-CIT-9012",
-    "status": "VERIFIED"
+    "kebele": "Kebele 06"
   }
 ]
-

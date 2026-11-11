@@ -89,9 +89,9 @@ export function markPast(slots, nowMin) {
   );
 }
 
-/** Once the day's bookings reach the schedule's daily capacity, every open slot is Full. */
+/** Once the day's bookings reach the service's or the department's daily capacity, every open slot is Full. */
 export function applyDailyCapacity(slots, reason) {
-  if (reason !== "DAILY_CAPACITY_REACHED") return slots;
+  if (reason !== "DAILY_CAPACITY_REACHED" && reason !== "DEPARTMENT_CAPACITY_REACHED") return slots;
   return slots.map((s) => (s.status === "Available" ? { ...s, status: "Full", remainingCapacity: 0 } : s));
 }
 

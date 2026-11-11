@@ -3,7 +3,7 @@
 // on req.validatedQuery. Failures become 422 VALIDATION_ERROR with one {field, issue} per problem.
 import { BadRequestError, ValidationError } from "../utils/errors.js";
 
-export function toValidationError(zodError) {
+function toValidationError(zodError) {
   const seen = new Set();
   const details = [];
   for (const issue of zodError.issues) {

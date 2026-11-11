@@ -11,7 +11,7 @@ import { randomBytes } from "node:crypto";
 import { ForbiddenError } from "../utils/errors.js";
 
 export const CSRF_COOKIE_NAME = "woreda_csrf";
-export const CSRF_HEADER_NAME = "x-csrf-token";
+const CSRF_HEADER_NAME = "x-csrf-token";
 
 export function generateCsrfToken() {
   return randomBytes(32).toString("hex");
@@ -23,7 +23,7 @@ export function setCsrfCookie(res, token = generateCsrfToken(), isProduction = f
     secure: isProduction,
     sameSite: "lax",
     path: "/",
-    maxAge: 7 * 24 * 3600 * 1000,
+    maxAge: 365 * 24 * 3600 * 1000,
   });
   res.setHeader("X-CSRF-Token", token);
   return token;

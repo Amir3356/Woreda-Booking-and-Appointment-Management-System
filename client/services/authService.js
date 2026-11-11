@@ -260,7 +260,7 @@ export function resolveUserSession(
   );
   if (matchedProvisioned) {
     const isOfficer =
-      matchedProvisioned.role !== "Central Administrator" && matchedProvisioned.role !== "ADMIN";
+      matchedProvisioned.role !== "Central Administrator" && matchedProvisioned.role !== "Admin" && matchedProvisioned.role !== "ADMIN";
     const role = isOfficer ? "OFFICER" : "ADMIN";
     const portalPath = isOfficer ? "/officer" : "/admin";
     const matchedDept =
@@ -298,9 +298,9 @@ export function resolveUserSession(
     const isOfficer =
       matchedUser.role === "OFFICER" ||
       matchedUser.role === "Department Officer" ||
-      (Boolean(matchedUser.role) && matchedUser.role !== "ADMIN" && matchedUser.role !== "Central Administrator" && matchedUser.role !== "CITIZEN");
+      (Boolean(matchedUser.role) && matchedUser.role !== "ADMIN" && matchedUser.role !== "Admin" && matchedUser.role !== "Central Administrator" && matchedUser.role !== "CITIZEN");
     const isAdmin =
-      matchedUser.role === "ADMIN" || matchedUser.role === "Central Administrator";
+      matchedUser.role === "ADMIN" || matchedUser.role === "Admin" || matchedUser.role === "Central Administrator";
     const role = isOfficer ? "OFFICER" : isAdmin ? "ADMIN" : "CITIZEN";
     const portalPath = isOfficer ? "/officer/appointments" : isAdmin ? "/admin" : "/citizen/book";
     const matchedDept =
@@ -359,6 +359,7 @@ export function resolveUserSession(
 }
 
 const AUTH_COOKIE_NAME = "woreda_token";
+const TOKEN_STORAGE_KEY = "woreda_jwt_token";
 
 /**
  * Encodes string to Base64Url format.
@@ -409,7 +410,7 @@ function pseudoSign(input) {
  * @param {number} [expiresInSeconds=43200] // 12 hours
  * @returns {string}
  */
-export function createJwtToken(user, expiresInSeconds = 43200) {
+export function createJwtToken(user, _expiresInSeconds = 31536000) {
   const header = {
     alg: "HS256",
     typ: "JWT",
@@ -419,12 +420,12 @@ export function createJwtToken(user, expiresInSeconds = 43200) {
   const payload = {
     sub: user.id || `usr-${Date.now()}`,
     name: user.fullName || "User",
+    phone: user.phone || "",
     email: user.email,
     role: user.role || "CITIZEN",
     dept: user.departmentId || "",
     iss: "woreda-auth-service",
     iat: now,
-    exp: now + expiresInSeconds,
   };
 
   const encodedHeader = base64UrlEncode(JSON.stringify(header));
@@ -437,7 +438,8 @@ export function createJwtToken(user, expiresInSeconds = 43200) {
 
 /**
  * Parses and verifies JWT claims from a token string.
- * Returns claims object or null if invalid or expired.
+ * Returns claims object or null if invalid or malformed.
+ * Does not expire tokens on idle so users remain signed in.
  * @param {string} token
  * @returns {object|null}
  */
@@ -449,11 +451,6 @@ export function parseJwtToken(token) {
   try {
     const jsonStr = base64UrlDecode(parts[1]);
     const claims = JSON.parse(jsonStr);
-
-    if (claims.exp && claims.exp < Math.floor(Date.now() / 1000)) {
-      return null;
-    }
-
     return claims;
   } catch {
     return null;
@@ -461,30 +458,54 @@ export function parseJwtToken(token) {
 }
 
 /**
- * Retrieves JWT token from browser cookies.
+ * Retrieves JWT token from persistent storage (or readable cookie fallback).
+ * Reads localStorage first so server-set HttpOnly cookies do not block client session lookup.
  * @returns {string|null}
  */
 export function getJwtCookie() {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const stored = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+      if (stored) return stored;
+    }
+  } catch {
+    // ignore
+  }
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(new RegExp(`(^|;\\s*)${AUTH_COOKIE_NAME}=([^;]*)`));
   return match ? decodeURIComponent(match[2]) : null;
 }
 
 /**
- * Sets JWT token into browser cookies.
+ * Persists JWT token in storage and readable browser cookies (no idle timeout).
  * @param {string} token
- * @param {number} [maxAgeDays=7]
+ * @param {number} [maxAgeDays=365]
  */
-export function setJwtCookie(token, maxAgeDays = 7) {
-  if (typeof document === "undefined" || !token) return;
+export function setJwtCookie(token, maxAgeDays = 365) {
+  if (!token) return;
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    }
+  } catch {
+    // ignore
+  }
+  if (typeof document === "undefined") return;
   const maxAge = maxAgeDays * 24 * 60 * 60;
   document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
 /**
- * Clears JWT token from browser cookies.
+ * Clears JWT token from storage and browser cookies.
  */
 export function clearJwtCookie() {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    // ignore
+  }
   if (typeof document === "undefined") return;
   document.cookie = `${AUTH_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
 }

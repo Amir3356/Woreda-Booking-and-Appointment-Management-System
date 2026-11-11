@@ -25,7 +25,7 @@ export async function upsert(s) {
 }
 
 /** Inserts the default settings row unless it exists; returns true when created. */
-export async function insertDefaultsIfMissing() {
+async function insertDefaultsIfMissing() {
   const { rowCount } = await query("INSERT INTO system_settings (id) VALUES ('primary') ON CONFLICT (id) DO NOTHING");
   return rowCount > 0;
 }

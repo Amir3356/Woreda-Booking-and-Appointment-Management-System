@@ -1,10 +1,12 @@
-// /api/v1/schedules (including the public bookable list and slot availability).
+// /api/v1/schedules: operating hours, Schedule Management (exceptions, availability, capacities,
+// calendar views, impact) and the public bookable list, slot availability and bookable dates.
 import { ok } from "../utils/response.js";
 
-export function createScheduleController({ scheduleService, availabilityService }) {
+export function createScheduleController({ scheduleService, availabilityService, scheduleManagementService: mgmt }) {
   return {
-    async list(_req, res) {
-      ok(res, 200, "Schedules retrieved successfully.", await scheduleService.list());
+    // ---- operating hours ----
+    async list(req, res) {
+      ok(res, 200, "Schedules retrieved successfully.", await scheduleService.list(req.caller));
     },
     async listBookable(_req, res) {
       ok(res, 200, "Schedules retrieved successfully.", await scheduleService.listBookable());
@@ -22,8 +24,46 @@ export function createScheduleController({ scheduleService, availabilityService 
       await scheduleService.remove(req.params.id);
       ok(res, 200, "Schedule deleted successfully.", null);
     },
+
+    // ---- public booking ----
     async availability(req, res) {
       ok(res, 200, "Availability calculated.", await availabilityService.availability(req.validatedQuery));
+    },
+    async bookableDates(req, res) {
+      ok(res, 200, "Bookable dates calculated.", await availabilityService.bookableDates(req.validatedQuery));
+    },
+
+    // ---- calendar exceptions ----
+    async listExceptions(req, res) {
+      ok(res, 200, "Calendar exceptions retrieved successfully.", await mgmt.listExceptions(req.caller, req.validatedQuery));
+    },
+    async createException(req, res) {
+      ok(res, 201, "Calendar exception created successfully.", await mgmt.createException(req.caller, req.body));
+    },
+    async updateException(req, res) {
+      ok(res, 200, "Calendar exception updated successfully.", await mgmt.updateException(req.params.id, req.body));
+    },
+    async removeException(req, res) {
+      await mgmt.removeException(req.params.id);
+      ok(res, 200, "Calendar exception deleted successfully.", null);
+    },
+
+    // ---- appointment availability, capacities, calendar, impact ----
+    async setDateAvailability(req, res) {
+      const result = await mgmt.setDateAvailability(req.caller, req.body);
+      ok(res, 200, result.enabled ? "Booking enabled for the selected dates." : "Booking disabled for the selected dates.", result);
+    },
+    async listCapacities(req, res) {
+      ok(res, 200, "Daily capacities retrieved successfully.", await mgmt.listCapacities(req.caller));
+    },
+    async setCapacity(req, res) {
+      ok(res, 200, "Daily capacity updated successfully.", await mgmt.setCapacity(req.caller, req.params.departmentId, req.body.dailyCapacity));
+    },
+    async calendar(req, res) {
+      ok(res, 200, "Calendar retrieved successfully.", await mgmt.calendar(req.caller, req.validatedQuery));
+    },
+    async impact(req, res) {
+      ok(res, 200, "Impact calculated.", await mgmt.impact(req.validatedQuery));
     },
   };
 }

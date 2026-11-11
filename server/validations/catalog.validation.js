@@ -14,7 +14,14 @@ export const departmentSchema = z.object({
   ).optional().default([]),
 });
 
-export const departmentListQuery = z.object({ isActive: queryBoolean });
+export const departmentListQuery = z.object({
+  departmentId: queryText,
+  isActive: queryBoolean,
+  status: queryText,
+  search: queryText,
+  cursor: z.preprocess((v) => (v === undefined || v === "" || v === null ? undefined : Number(Array.isArray(v) ? v[0] : v)), z.number().int().min(0).optional()),
+  pageSize: z.preprocess((v) => (v === undefined || v === "" || v === null ? undefined : Number(Array.isArray(v) ? v[0] : v)), z.number().int().min(1).max(100).optional()),
+});
 
 export const publicServiceSchema = z.object({
   departmentId: optionalText.nullish().transform((v) => v || null),
@@ -32,4 +39,7 @@ export const publicServiceListQuery = z.object({
   departmentId: queryText,
   search: queryText,
   isActive: queryBoolean,
+  status: queryText,
+  cursor: z.preprocess((v) => (v === undefined || v === "" || v === null ? undefined : Number(Array.isArray(v) ? v[0] : v)), z.number().int().min(0).optional()),
+  pageSize: z.preprocess((v) => (v === undefined || v === "" || v === null ? undefined : Number(Array.isArray(v) ? v[0] : v)), z.number().int().min(1).max(100).optional()),
 });

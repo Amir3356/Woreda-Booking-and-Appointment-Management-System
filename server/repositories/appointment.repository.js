@@ -23,10 +23,10 @@ export async function findByIdForUpdate(id, client) {
 
 export async function create(a, client) {
   await query(
-    `INSERT INTO appointments (id, reference_number, citizen_id, citizen_name, citizen_phone, citizen_email,
+    `INSERT INTO appointments (id, reference_number, citizen_id, citizen_name, citizen_phone,
        department_id, service_id, date, time_slot, status, citizen_notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-    [a.id, a.referenceNumber, a.citizenId, a.citizenName, a.citizenPhone, a.citizenEmail,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    [a.id, a.referenceNumber, a.citizenId, a.citizenName, a.citizenPhone,
       a.departmentId, a.serviceId, a.date, a.timeSlot, a.status, a.citizenNotes],
     client,
   );
@@ -41,6 +41,63 @@ export async function countTaken({ serviceId, date, timeSlot, excludeId = null }
      WHERE service_id = $1 AND date = $2 AND ${HOLDS_PLACE} AND ($4::text IS NULL OR id <> $4)`,
     [serviceId, date, timeSlot, excludeId],
     client,
+  );
+}
+
+/** Places taken in a whole department on date (excluding excludeId): the department daily capacity. */
+export async function countDepartmentDay({ departmentId, date, excludeId = null }, client) {
+  const r = await one(
+    `SELECT COUNT(*)::int AS n FROM appointments
+     WHERE department_id = $1 AND date = $2 AND ${HOLDS_PLACE} AND ($3::text IS NULL OR id <> $3)`,
+    [departmentId, date, excludeId],
+    client,
+  );
+  return r.n;
+}
+
+/** Places taken per department and date in [from, to]: { "<departmentId>|<date>": n }. */
+export async function countByDepartmentDay({ from, to, departmentIds }) {
+  const params = [from, to];
+  let filter = "";
+  if (departmentIds?.length) {
+    params.push(departmentIds);
+    filter = "AND department_id = ANY($3)";
+  }
+  const list = await rows(
+    `SELECT department_id, date, COUNT(*)::int AS n FROM appointments
+     WHERE date BETWEEN $1 AND $2 AND ${HOLDS_PLACE} ${filter} GROUP BY department_id, date`,
+    params,
+  );
+  return Object.fromEntries(list.map((r) => [`${r.department_id}|${r.date}`, r.n]));
+}
+
+/** Places taken per date for one service in [from, to]: { "<date>": n }. */
+export async function countServiceDays({ serviceId, from, to }) {
+  const list = await rows(
+    `SELECT date, COUNT(*)::int AS n FROM appointments
+     WHERE service_id = $1 AND date BETWEEN $2 AND $3 AND ${HOLDS_PLACE} GROUP BY date`,
+    [serviceId, from, to],
+  );
+  return Object.fromEntries(list.map((r) => [r.date, r.n]));
+}
+
+/**
+ * Upcoming appointments that still need to be served on [from, to] (optionally for some
+ * departments): what a schedule change would affect. Never changed by schedule edits.
+ */
+export async function countOutstanding({ from, to, departmentIds }) {
+  const params = [from, to];
+  let filter = "";
+  if (departmentIds?.length) {
+    params.push(departmentIds);
+    filter = "AND a.department_id = ANY($3)";
+  }
+  return rows(
+    `SELECT a.department_id, d.name AS department_name, a.status, COUNT(*)::int AS n
+     FROM appointments a JOIN departments d ON d.id = a.department_id
+     WHERE a.date BETWEEN $1 AND $2 AND a.status IN ('PENDING', 'APPROVED', 'CHECKED_IN', 'IN_PROGRESS') ${filter}
+     GROUP BY a.department_id, d.name, a.status ORDER BY d.name`,
+    params,
   );
 }
 

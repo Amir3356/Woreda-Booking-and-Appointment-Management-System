@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { DataTable, EthiopianFlag } from "@/components/ui";
 import { useStore } from "@/context";
-import { http } from "@/api/httpClient";
+import { staffApi } from "@/api";
 import { subscribe } from "@/api/realtime";
 import mockCitizensData from "@/data/mockCitizens.json";
 import {
@@ -12,14 +12,26 @@ import {
   MapPin,
   Building,
   RotateCcw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+
+const PAGE_SIZE = 5;
 
 function formatCitizenFromEvent(raw) {
   if (!raw) return null;
-  const parts = (raw.address || "").split(",").map((s) => s.trim());
+  const parts = (raw.address || "").split(",").map((s) => s.trim()).filter(Boolean);
   const kebele = parts.find((p) => p.toLowerCase().startsWith("kebele")) || "Kebele 03";
   const woreda = parts.find((p) => p.toLowerCase().startsWith("woreda")) || "Woreda 03";
-  const location = parts.filter((p) => !p.toLowerCase().startsWith("kebele") && !p.toLowerCase().startsWith("woreda") && !p.toLowerCase().startsWith("house")).join(", ") || "Addis Ababa";
+  const location =
+    parts
+      .filter(
+        (p) =>
+          !p.toLowerCase().startsWith("kebele") &&
+          !p.toLowerCase().startsWith("woreda") &&
+          !p.toLowerCase().startsWith("house"),
+      )
+      .join(", ") || "Addis Ababa";
   return {
     id: raw.id,
     fullName: raw.fullName,
@@ -27,7 +39,6 @@ function formatCitizenFromEvent(raw) {
     locations: location,
     woreda,
     kebele,
-    nationalId: raw.nationalId,
     isActive: raw.isActive ?? true,
     createdAt: raw.createdAt || new Date().toISOString(),
   };
@@ -35,46 +46,111 @@ function formatCitizenFromEvent(raw) {
 
 export default function AdminCitizenManagementPage() {
   const { registeredCitizens = [] } = useStore();
-  const [serverCitizens, setServerCitizens] = useState([]);
+
+  // Filters & search state
   const [search, setSearch] = useState("");
   const [selectedWoreda, setSelectedWoreda] = useState("ALL");
   const [selectedKebele, setSelectedKebele] = useState("ALL");
   const [selectedLocation, setSelectedLocation] = useState("ALL");
 
-  useEffect(() => {
-    let active = true;
-    async function loadCitizens() {
-      try {
-        const { data } = await http.get("/admin/users/citizens?pageSize=100");
-        if (active && Array.isArray(data)) {
-          setServerCitizens(data);
+  // Cursor-based server-side pagination state (5 real or mock items per page)
+  const [cursor, setCursor] = useState(0);
+  const [serverCitizens, setServerCitizens] = useState([]);
+  const [hasRealServerData, setHasRealServerData] = useState(false);
+  const [serverTotalRegistered, setServerTotalRegistered] = useState(0);
+  const [serverFilters, setServerFilters] = useState({ woredas: [], kebeles: [], locations: [] });
+  const [serverCursorMeta, setServerCursorMeta] = useState({
+    current: 0,
+    pageSize: PAGE_SIZE,
+    totalCount: 0,
+    hasPrev: false,
+    hasNext: false,
+    nextCursor: null,
+    prevCursor: null,
+  });
+  const [loadingPage, setLoadingPage] = useState(false);
+  const fetchSeqRef = useRef(0);
+
+  const fetchPagedCitizens = useCallback(async () => {
+    const seq = ++fetchSeqRef.current;
+    setLoadingPage(true);
+    try {
+      const res = await staffApi.listCitizens({
+        search,
+        woreda: selectedWoreda,
+        kebele: selectedKebele,
+        location: selectedLocation,
+        cursor,
+        pageSize: PAGE_SIZE,
+      });
+      if (seq !== fetchSeqRef.current) return;
+      if (res && Array.isArray(res.data)) {
+        const totalReg = res.meta?.totalRegistered ?? 0;
+        setHasRealServerData(totalReg > 0);
+        setServerTotalRegistered(totalReg);
+        if (res.meta?.filters) {
+          setServerFilters(res.meta.filters);
         }
-      } catch {
-        // Fall back gracefully to store + mock data if unauthenticated or offline
+        setServerCitizens(res.data);
+        if (res.meta?.cursor) {
+          setServerCursorMeta(res.meta.cursor);
+          if (cursor > 0 && res.meta.cursor.totalCount <= cursor) {
+            setCursor(0);
+          }
+        }
+      }
+    } catch {
+      if (seq !== fetchSeqRef.current) return;
+      // Fall back gracefully to store + mock data if unauthenticated or offline
+      setHasRealServerData(false);
+    } finally {
+      if (seq === fetchSeqRef.current) {
+        setLoadingPage(false);
       }
     }
-    loadCitizens();
+  }, [search, selectedWoreda, selectedKebele, selectedLocation, cursor]);
 
-    // Real-time WebSocket subscription: updates table instantly when a citizen registers without page refresh or polling
+  useEffect(() => {
+    fetchPagedCitizens();
+  }, [fetchPagedCitizens]);
+
+  // Real-time WebSocket subscription: updates table immediately when a citizen registers without refresh or polling
+  useEffect(() => {
+    let active = true;
+
     const unsubCitizens = subscribe("citizens.changed", (msg) => {
       if (!active) return;
-      if (msg?.citizen) {
+      if (msg?.citizen && cursor === 0) {
         const formatted = formatCitizenFromEvent(msg.citizen);
-        if (formatted) {
+        const q = search.trim().toLowerCase();
+        const matchesSearch =
+          !q ||
+          (formatted?.fullName || "").toLowerCase().includes(q) ||
+          (formatted?.phone || "").toLowerCase().includes(q) ||
+          (formatted?.locations || "").toLowerCase().includes(q) ||
+          (formatted?.woreda || "").toLowerCase().includes(q) ||
+          (formatted?.kebele || "").toLowerCase().includes(q);
+        const matchesFilters =
+          (selectedWoreda === "ALL" || formatted?.woreda === selectedWoreda) &&
+          (selectedKebele === "ALL" || formatted?.kebele === selectedKebele) &&
+          (selectedLocation === "ALL" || formatted?.locations === selectedLocation);
+
+        if (formatted && matchesSearch && matchesFilters) {
+          setHasRealServerData(true);
           setServerCitizens((prev) => {
             const exists = prev.some((c) => c.id === formatted.id || (c.phone && c.phone === formatted.phone));
-            if (exists) {
-              return prev.map((c) => (c.id === formatted.id || c.phone === formatted.phone ? { ...c, ...formatted } : c));
-            }
-            return [formatted, ...prev];
+            const next = exists
+              ? prev.map((c) => (c.id === formatted.id || c.phone === formatted.phone ? { ...c, ...formatted } : c))
+              : [formatted, ...prev];
+            return next.slice(0, PAGE_SIZE);
           });
         }
       }
-      loadCitizens();
+      fetchPagedCitizens();
     });
 
     const unsubReconnect = subscribe("reconnected", () => {
-      if (active) loadCitizens();
+      if (active) fetchPagedCitizens();
     });
 
     const handleStorageChange = (e) => {
@@ -94,63 +170,50 @@ export default function AdminCitizenManagementPage() {
       unsubReconnect();
       window.removeEventListener("storage", handleStorageChange);
     };
-  }, []);
+  }, [cursor, search, selectedWoreda, selectedKebele, selectedLocation, fetchPagedCitizens]);
 
-  // Merge server-registered citizens, live sign-up store citizens, and baseline mock data
-  const citizens = useMemo(() => {
+  // Fallback mock + store pool (used when the database has 0 real citizens or server is offline)
+  const mockPool = useMemo(() => {
     const map = new Map();
-
-    // 1. Baseline mock citizens
     mockCitizensData.forEach((c) => {
       if (c.phone) map.set(c.phone, c);
     });
-
-    // 2. Client-registered citizens (from live sign-up flow)
     (registeredCitizens || []).forEach((c) => {
       if (c.phone) map.set(c.phone, { ...map.get(c.phone), ...c });
     });
-
-    // 3. Server-registered citizens (from backend database)
-    (serverCitizens || []).forEach((c) => {
-      if (c.phone) map.set(c.phone, { ...map.get(c.phone), ...c });
-    });
-
     return Array.from(map.values()).sort((a, b) => {
       if (a.createdAt && b.createdAt) return new Date(b.createdAt) - new Date(a.createdAt);
       if (a.createdAt) return -1;
       if (b.createdAt) return 1;
       return 0;
     });
-  }, [registeredCitizens, serverCitizens]);
+  }, [registeredCitizens]);
 
-  // Extract unique filter options from the dataset
-  const woredaOptions = useMemo(() => {
-    return Array.from(new Set(citizens.map((c) => c.woreda).filter(Boolean))).sort();
-  }, [citizens]);
+  const mockWoredaOptions = useMemo(
+    () => Array.from(new Set(mockPool.map((c) => c.woreda).filter(Boolean))).sort(),
+    [mockPool],
+  );
 
-  const kebeleOptions = useMemo(() => {
-    const list = selectedWoreda === "ALL"
-      ? citizens
-      : citizens.filter((c) => c.woreda === selectedWoreda);
+  const mockKebeleOptions = useMemo(() => {
+    const list = selectedWoreda === "ALL" ? mockPool : mockPool.filter((c) => c.woreda === selectedWoreda);
     return Array.from(new Set(list.map((c) => c.kebele).filter(Boolean))).sort();
-  }, [citizens, selectedWoreda]);
+  }, [mockPool, selectedWoreda]);
 
-  const locationOptions = useMemo(() => {
-    return Array.from(new Set(citizens.map((c) => c.locations).filter(Boolean))).sort();
-  }, [citizens]);
+  const mockLocationOptions = useMemo(
+    () => Array.from(new Set(mockPool.map((c) => c.locations).filter(Boolean))).sort(),
+    [mockPool],
+  );
 
-  // Multi-criteria filter: search box + dropdown filters
-  const filteredCitizens = useMemo(() => {
+  const filteredMockCitizens = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return citizens.filter((c) => {
+    return mockPool.filter((c) => {
       const matchesSearch =
         !q ||
         (c.fullName && c.fullName.toLowerCase().includes(q)) ||
         (c.phone && c.phone.toLowerCase().includes(q)) ||
         (c.locations && c.locations.toLowerCase().includes(q)) ||
         (c.woreda && c.woreda.toLowerCase().includes(q)) ||
-        (c.kebele && c.kebele.toLowerCase().includes(q)) ||
-        (c.nationalId && c.nationalId.toLowerCase().includes(q));
+        (c.kebele && c.kebele.toLowerCase().includes(q));
 
       const matchesWoreda = selectedWoreda === "ALL" || c.woreda === selectedWoreda;
       const matchesKebele = selectedKebele === "ALL" || c.kebele === selectedKebele;
@@ -158,7 +221,40 @@ export default function AdminCitizenManagementPage() {
 
       return matchesSearch && matchesWoreda && matchesKebele && matchesLocation;
     });
-  }, [citizens, search, selectedWoreda, selectedKebele, selectedLocation]);
+  }, [mockPool, search, selectedWoreda, selectedKebele, selectedLocation]);
+
+  useEffect(() => {
+    if (!hasRealServerData && cursor > 0 && cursor >= filteredMockCitizens.length) {
+      setCursor(0);
+    }
+  }, [hasRealServerData, cursor, filteredMockCitizens.length]);
+
+  const mockCursorState = useMemo(() => {
+    const totalCount = filteredMockCitizens.length;
+    const safeCursor = cursor >= totalCount && totalCount > 0 ? 0 : cursor;
+    const hasPrev = safeCursor > 0;
+    const hasNext = safeCursor + PAGE_SIZE < totalCount;
+    return {
+      rows: filteredMockCitizens.slice(safeCursor, safeCursor + PAGE_SIZE),
+      meta: {
+        current: safeCursor,
+        pageSize: PAGE_SIZE,
+        totalCount,
+        hasPrev,
+        hasNext,
+        nextCursor: hasNext ? safeCursor + PAGE_SIZE : null,
+        prevCursor: hasPrev ? Math.max(0, safeCursor - PAGE_SIZE) : null,
+      },
+    };
+  }, [filteredMockCitizens, cursor]);
+
+  // Unified active page data (Real server-paginated data OR Mock 5-per-page cursor data)
+  const displayedCitizens = hasRealServerData ? serverCitizens : mockCursorState.rows;
+  const activeCursorMeta = hasRealServerData ? serverCursorMeta : mockCursorState.meta;
+  const totalRegisteredCount = hasRealServerData ? serverTotalRegistered : mockPool.length;
+  const woredaOptions = hasRealServerData ? serverFilters.woredas || [] : mockWoredaOptions;
+  const kebeleOptions = hasRealServerData ? serverFilters.kebeles || [] : mockKebeleOptions;
+  const locationOptions = hasRealServerData ? serverFilters.locations || [] : mockLocationOptions;
 
   const hasActiveFilters = search || selectedWoreda !== "ALL" || selectedKebele !== "ALL" || selectedLocation !== "ALL";
 
@@ -167,7 +263,13 @@ export default function AdminCitizenManagementPage() {
     setSelectedWoreda("ALL");
     setSelectedKebele("ALL");
     setSelectedLocation("ALL");
+    setCursor(0);
   };
+
+  const currentPageNumber = Math.floor((activeCursorMeta.current || 0) / PAGE_SIZE) + 1;
+  const totalPages = Math.max(1, Math.ceil((activeCursorMeta.totalCount || 0) / PAGE_SIZE));
+  const rangeStart = activeCursorMeta.totalCount === 0 ? 0 : (activeCursorMeta.current || 0) + 1;
+  const rangeEnd = Math.min(activeCursorMeta.totalCount || 0, (activeCursorMeta.current || 0) + displayedCitizens.length);
 
   // Table columns definition matching required headers:
   // Fullname, Phone Number, Locations, Woreda, Kebele
@@ -254,7 +356,7 @@ export default function AdminCitizenManagementPage() {
           </div>
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">
             <Users className="w-3.5 h-3.5 text-[#0b2545]" />
-            <span>{citizens.length} Registered</span>
+            <span>{totalRegisteredCount} Registered</span>
           </div>
         </div>
       </div>
@@ -267,13 +369,19 @@ export default function AdminCitizenManagementPage() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCursor(0);
+            }}
             placeholder="Search by name, phone, location..."
             className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50/50"
           />
           {search && (
             <button
-              onClick={() => setSearch("")}
+              onClick={() => {
+                setSearch("");
+                setCursor(0);
+              }}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
               title="Clear search"
             >
@@ -292,6 +400,7 @@ export default function AdminCitizenManagementPage() {
               onChange={(e) => {
                 setSelectedWoreda(e.target.value);
                 setSelectedKebele("ALL");
+                setCursor(0);
               }}
               className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 cursor-pointer focus:ring-2 focus:ring-[#0b2545] focus:outline-none"
               title="Filter by Woreda"
@@ -308,7 +417,10 @@ export default function AdminCitizenManagementPage() {
           {/* Kebele Dropdown Filter */}
           <select
             value={selectedKebele}
-            onChange={(e) => setSelectedKebele(e.target.value)}
+            onChange={(e) => {
+              setSelectedKebele(e.target.value);
+              setCursor(0);
+            }}
             className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 cursor-pointer focus:ring-2 focus:ring-[#0b2545] focus:outline-none"
             title="Filter by Kebele"
           >
@@ -323,7 +435,10 @@ export default function AdminCitizenManagementPage() {
           {/* Location Dropdown Filter */}
           <select
             value={selectedLocation}
-            onChange={(e) => setSelectedLocation(e.target.value)}
+            onChange={(e) => {
+              setSelectedLocation(e.target.value);
+              setCursor(0);
+            }}
             className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 cursor-pointer focus:ring-2 focus:ring-[#0b2545] focus:outline-none"
             title="Filter by Location"
           >
@@ -348,18 +463,19 @@ export default function AdminCitizenManagementPage() {
           )}
 
           <span className="text-xs text-slate-500 font-medium ml-auto md:ml-2">
-            Total: {filteredCitizens.length} citizen{filteredCitizens.length !== 1 ? "s" : ""}
+            Total: {activeCursorMeta.totalCount} citizen{activeCursorMeta.totalCount !== 1 ? "s" : ""}
           </span>
         </div>
       </div>
 
-      {/* Main Content Table */}
+      {/* Main Content Section - Table with 5 real or mock items per page */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <DataTable
-          data={filteredCitizens}
+          data={displayedCitizens}
           columns={citizenColumns}
-          getRowId={(c) => c.id}
-          initialSorting={[{ id: "fullName", desc: false }]}
+          getRowId={(c) => c.id || c.phone}
+          initialSorting={[]}
+          pageSize={null}
           itemLabel="citizens"
           emptyState={
             <div className="flex flex-col items-center gap-3 text-slate-400 py-12">
@@ -368,12 +484,12 @@ export default function AdminCitizenManagementPage() {
               </div>
               <div>
                 <p className="text-sm font-bold text-slate-700">
-                  {citizens.length === 0
+                  {totalRegisteredCount === 0
                     ? "No citizens registered yet"
                     : "No matching citizens found"}
                 </p>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto text-center">
-                  {citizens.length === 0
+                  {totalRegisteredCount === 0
                     ? "Citizen records will appear here as citizens register in the system."
                     : "Try adjusting your search query or dropdown filter to find citizens."}
                 </p>
@@ -381,8 +497,59 @@ export default function AdminCitizenManagementPage() {
             </div>
           }
         />
+
+        {/* Cursor-Based Pagination Navigation Footer */}
+        <div className="bg-slate-50/70 px-5 py-3 border-t border-slate-200 flex items-center justify-between gap-2 text-xs text-slate-600">
+          <p className="text-xs text-slate-500">
+            Showing{" "}
+            <strong className="text-slate-700">
+              {activeCursorMeta.totalCount === 0 ? "0" : `${rangeStart}–${rangeEnd}`}
+            </strong>{" "}
+            of <strong className="text-slate-700">{activeCursorMeta.totalCount}</strong>{" "}
+            {activeCursorMeta.totalCount === 1 ? "citizen" : "citizens"}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (activeCursorMeta.prevCursor !== null && activeCursorMeta.prevCursor !== undefined) {
+                  setCursor(activeCursorMeta.prevCursor);
+                } else {
+                  setCursor((prev) => Math.max(0, prev - PAGE_SIZE));
+                }
+              }}
+              disabled={!activeCursorMeta.hasPrev || loadingPage}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs"
+              aria-label="Previous page"
+              title="Previous"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <span className="text-xs font-semibold text-slate-700 px-2.5 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs">
+              Page {currentPageNumber} of {totalPages}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (activeCursorMeta.nextCursor !== null && activeCursorMeta.nextCursor !== undefined) {
+                  setCursor(activeCursorMeta.nextCursor);
+                } else {
+                  setCursor((prev) => prev + PAGE_SIZE);
+                }
+              }}
+              disabled={!activeCursorMeta.hasNext || loadingPage}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs"
+              aria-label="Next page"
+              title="Next"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-
