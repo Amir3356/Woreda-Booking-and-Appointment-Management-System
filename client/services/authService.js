@@ -3,6 +3,43 @@
  * Pure functions only — no state, no API calls, no DOM.
  */
 
+import { normalizeEthiopianPhone } from "../utils/phone.js";
+
+/**
+ * Matches an input string (phone number, email address, or username) against an account's email and phone.
+ * @param {string} rawInput
+ * @param {string} [itemEmail]
+ * @param {string} [itemPhone]
+ * @returns {boolean}
+ */
+export function matchIdentifier(rawInput, itemEmail, itemPhone) {
+  if (!rawInput) return false;
+  const inputStr = String(rawInput).trim();
+  const digitsOnly = inputStr.replace(/\D/g, "");
+
+  // 1. Phone number match
+  if (digitsOnly.length >= 8 && itemPhone) {
+    const normInput = normalizeEthiopianPhone(inputStr);
+    const normItem = normalizeEthiopianPhone(itemPhone);
+    if (normInput === normItem) return true;
+    const itemDigits = String(itemPhone).replace(/\D/g, "");
+    if (digitsOnly === itemDigits) return true;
+    if (digitsOnly.endsWith(itemDigits.slice(-8)) || itemDigits.endsWith(digitsOnly.slice(-8))) return true;
+  }
+
+  // 2. Email / Username match
+  const cleanInput = inputStr.toLowerCase();
+  const cleanItemEmail = String(itemEmail || "").trim().toLowerCase();
+  if (cleanItemEmail) {
+    if (cleanInput === cleanItemEmail) return true;
+    if (cleanInput.split("@")[0] === cleanItemEmail.split("@")[0]) return true;
+    if (!cleanInput.includes("@") && `${cleanInput}@woreda.gov.et` === cleanItemEmail) return true;
+    if (!cleanItemEmail.includes("@") && `${cleanItemEmail}@woreda.gov.et` === cleanInput) return true;
+  }
+
+  return false;
+}
+
 /**
  * Validates basic email address format.
  * @param {string} email
@@ -102,41 +139,25 @@ const STANDARD_OFFICER_PASSWORDS = [
 
 /**
  * Validates login credentials against known accounts (Admin, provisioned staff, or registered citizens).
- * @param {string} email
+ * @param {string} identifier (phone, email, or username)
  * @param {string} password
  * @param {Array} [usersList=[]]
  * @param {Array} [provisionedAccounts=[]]
  * @returns {boolean}
  */
-export function verifyCredentials(email, password, usersList = [], provisionedAccounts = []) {
-  let cleanEmail = (email || "").trim().toLowerCase();
+export function verifyCredentials(identifier, password, usersList = [], provisionedAccounts = []) {
+  const cleanInput = (identifier || "").trim();
   const cleanPass = (password || "").trim();
-  if (!cleanEmail || !cleanPass) return false;
-
-  // Auto-normalize email if user typed username without domain (e.g. "tigist.kbl")
-  if (!cleanEmail.includes("@")) {
-    cleanEmail = `${cleanEmail}@woreda.gov.et`;
-  }
+  if (!cleanInput || !cleanPass) return false;
 
   // 1. Strict check for central admin credentials
-  if (cleanEmail === ADMIN_CREDENTIALS.email.toLowerCase()) {
+  if (matchIdentifier(cleanInput, ADMIN_CREDENTIALS.email, "+251938617803")) {
     return cleanPass === ADMIN_CREDENTIALS.password.trim();
   }
 
-  // Helper matcher function for email/username/phone
-  const matchesIdentifier = (itemEmail, itemPhone) => {
-    const itemE = (itemEmail || "").trim().toLowerCase();
-    if (itemE === cleanEmail) return true;
-    if (itemE.split("@")[0] === cleanEmail.split("@")[0]) return true;
-    if (itemPhone && (cleanEmail.startsWith("+251") || cleanEmail.startsWith("09") || cleanEmail.startsWith("9"))) {
-      return itemPhone.replace(/\s+/g, "") === cleanEmail.replace(/\s+/g, "");
-    }
-    return false;
-  };
-
   // 2. Check provisioned accounts (Department Officers provisioned by Admin)
   const matchedProvisioned = (provisionedAccounts || []).find((a) =>
-    matchesIdentifier(a.email, a.phone)
+    matchIdentifier(cleanInput, a.email, a.phone)
   );
   if (matchedProvisioned) {
     const provPass = (matchedProvisioned.password || "").trim();
@@ -151,7 +172,6 @@ export function verifyCredentials(email, password, usersList = [], provisionedAc
         return true;
       }
     } else {
-      // If provisioned account has no explicit password stored, accept standard officer passwords
       if (STANDARD_OFFICER_PASSWORDS.includes(cleanPass)) {
         return true;
       }
@@ -160,7 +180,7 @@ export function verifyCredentials(email, password, usersList = [], provisionedAc
 
   // 3. Check registered users in system state
   const matchedUser = (usersList || []).find((u) =>
-    matchesIdentifier(u.email, u.phone)
+    matchIdentifier(cleanInput, u.email, u.phone)
   );
   if (matchedUser) {
     const userPass = (matchedUser.password || "").trim();
@@ -181,7 +201,7 @@ export function verifyCredentials(email, password, usersList = [], provisionedAc
 
   // 4. Fallback check for canonical municipal officers
   const canonical = CANONICAL_OFFICER_CREDENTIALS.find((o) =>
-    matchesIdentifier(o.email)
+    matchIdentifier(cleanInput, o.email)
   );
   if (canonical) {
     if (
@@ -198,45 +218,32 @@ export function verifyCredentials(email, password, usersList = [], provisionedAc
 }
 
 /**
- * Resolves user identity, role, department association, and portal destination path from an email.
+ * Resolves user identity, role, department association, and portal destination path from an identifier (phone, email, or username).
  * Returns null if user is not found in the system.
- * @param {string} email
+ * @param {string} identifier (phone, email, or username)
  * @param {Array} [usersList=[]]
  * @param {Array} [departmentsList=[]]
  * @param {Array} [provisionedAccounts=[]]
  * @returns {{ role: string, portalPath: string, departmentId: string|null, departmentName: string|null, user: object }|null}
  */
 export function resolveUserSession(
-  email,
+  identifier,
   usersList = [],
   departmentsList = [],
   provisionedAccounts = []
 ) {
-  let cleanEmail = (email || "").trim().toLowerCase();
-  if (!cleanEmail) return null;
-
-  if (!cleanEmail.includes("@")) {
-    cleanEmail = `${cleanEmail}@woreda.gov.et`;
-  }
-
-  // Helper matcher function for email/username/phone
-  const matchesIdentifier = (itemEmail, itemPhone) => {
-    const itemE = (itemEmail || "").trim().toLowerCase();
-    if (itemE === cleanEmail) return true;
-    if (itemE.split("@")[0] === cleanEmail.split("@")[0]) return true;
-    if (itemPhone && (cleanEmail.startsWith("+251") || cleanEmail.startsWith("09") || cleanEmail.startsWith("9"))) {
-      return itemPhone.replace(/\s+/g, "") === cleanEmail.replace(/\s+/g, "");
-    }
-    return false;
-  };
+  if (!identifier) return null;
+  const inputStr = String(identifier).trim();
 
   // 1. Central Admin check
-  if (cleanEmail === ADMIN_CREDENTIALS.email.toLowerCase()) {
-    const adminUser = (usersList || []).find((u) => (u.email || "").trim().toLowerCase() === cleanEmail) || {
+  if (matchIdentifier(inputStr, ADMIN_CREDENTIALS.email, "+251938617803")) {
+    const adminUser = (usersList || []).find((u) =>
+      matchIdentifier(inputStr, u.email, u.phone)
+    ) || {
       id: "usr-admin",
       fullName: "Amir Siraj",
       email: "amirsiraj1995@gmail.com",
-      phone: "+251911223344",
+      phone: "+251938617803",
       nationalId: "ET-ADM-9901",
       role: "ADMIN",
       departmentId: null,
@@ -256,21 +263,34 @@ export function resolveUserSession(
 
   // 2. Check provisioned accounts (Department Officers provisioned by Admin)
   const matchedProvisioned = (provisionedAccounts || []).find((a) =>
-    matchesIdentifier(a.email, a.phone)
+    matchIdentifier(inputStr, a.email, a.phone)
   );
   if (matchedProvisioned) {
     const isOfficer =
-      matchedProvisioned.role !== "Central Administrator" && matchedProvisioned.role !== "Admin" && matchedProvisioned.role !== "ADMIN";
+      matchedProvisioned.role !== "Central Administrator" &&
+      matchedProvisioned.role !== "Admin" &&
+      matchedProvisioned.role !== "ADMIN";
     const role = isOfficer ? "OFFICER" : "ADMIN";
-    const portalPath = isOfficer ? "/officer" : "/admin";
+    const portalPath = isOfficer ? "/officer/appointments" : "/admin";
     const matchedDept =
-      departmentsList.find((d) => d.id === matchedProvisioned.departmentId || d.name === matchedProvisioned.role) || departmentsList[0];
+      departmentsList.find(
+        (d) =>
+          d.id === matchedProvisioned.departmentId ||
+          d.name === matchedProvisioned.role ||
+          d.name === matchedProvisioned.departmentName
+      ) || departmentsList[0];
+
+    const cleanEmail =
+      matchedProvisioned.email?.trim() ||
+      (matchedProvisioned.phone
+        ? `${normalizeEthiopianPhone(matchedProvisioned.phone).replace(/\D/g, "")}@woreda.gov.et`
+        : `officer-${Date.now()}@woreda.gov.et`);
 
     const provisionedUserObj = {
-      id: `usr-prov-${cleanEmail.replace(/[^a-z0-9]/g, "")}`,
+      id: matchedProvisioned.id || `usr-prov-${Date.now()}`,
       fullName: matchedProvisioned.fullName?.trim() || "Department Officer",
-      email: matchedProvisioned.email?.trim() || cleanEmail,
-      phone: matchedProvisioned.phone || "+251911000000",
+      email: cleanEmail,
+      phone: matchedProvisioned.phone ? normalizeEthiopianPhone(matchedProvisioned.phone) : "+251911000000",
       nationalId: matchedProvisioned.nationalId || `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
       role,
       departmentId: isOfficer ? (matchedProvisioned.departmentId || matchedDept?.id || null) : null,
@@ -279,6 +299,7 @@ export function resolveUserSession(
         : "Woreda Central Administration",
       address: matchedProvisioned.address || "Kebele 03, Woreda Center",
       isActive: matchedProvisioned.isActive !== false,
+      isProvisioned: true,
     };
 
     return {
@@ -292,19 +313,28 @@ export function resolveUserSession(
 
   // 3. Check known existing user from users state
   const matchedUser = (usersList || []).find((u) =>
-    matchesIdentifier(u.email, u.phone)
+    matchIdentifier(inputStr, u.email, u.phone)
   );
   if (matchedUser) {
     const isOfficer =
       matchedUser.role === "OFFICER" ||
       matchedUser.role === "Department Officer" ||
-      (Boolean(matchedUser.role) && matchedUser.role !== "ADMIN" && matchedUser.role !== "Admin" && matchedUser.role !== "Central Administrator" && matchedUser.role !== "CITIZEN");
+      (Boolean(matchedUser.role) &&
+        matchedUser.role !== "ADMIN" &&
+        matchedUser.role !== "Admin" &&
+        matchedUser.role !== "Central Administrator" &&
+        matchedUser.role !== "CITIZEN");
     const isAdmin =
       matchedUser.role === "ADMIN" || matchedUser.role === "Admin" || matchedUser.role === "Central Administrator";
     const role = isOfficer ? "OFFICER" : isAdmin ? "ADMIN" : "CITIZEN";
     const portalPath = isOfficer ? "/officer/appointments" : isAdmin ? "/admin" : "/citizen/book";
     const matchedDept =
-      departmentsList.find((d) => d.id === matchedUser.departmentId || d.name === matchedUser.role) || departmentsList[0];
+      departmentsList.find(
+        (d) =>
+          d.id === matchedUser.departmentId ||
+          d.name === matchedUser.role ||
+          d.name === matchedUser.departmentName
+      ) || departmentsList[0];
 
     const normalizedUser = {
       ...matchedUser,
@@ -316,6 +346,7 @@ export function resolveUserSession(
         ? "Woreda Central Administration"
         : null,
       isActive: matchedUser.isActive !== false,
+      isProvisioned: true,
     };
 
     return {
@@ -329,14 +360,14 @@ export function resolveUserSession(
 
   // 4. Fallback check for canonical municipal officers
   const canonical = CANONICAL_OFFICER_CREDENTIALS.find((o) =>
-    matchesIdentifier(o.email)
+    matchIdentifier(inputStr, o.email)
   );
   if (canonical) {
     const matchedDept =
       departmentsList.find((d) => d.id === canonical.departmentId) || departmentsList[0];
     return {
       role: "OFFICER",
-      portalPath: "/officer",
+      portalPath: "/officer/appointments",
       departmentId: canonical.departmentId,
       departmentName: matchedDept?.name || canonical.departmentName,
       user: {
@@ -350,6 +381,7 @@ export function resolveUserSession(
         departmentName: matchedDept?.name || canonical.departmentName,
         address: "Kebele 03, Woreda Center",
         isActive: true,
+        isProvisioned: true,
       },
     };
   }
@@ -528,14 +560,18 @@ export function getUserFromJwtCookie(
   const claims = parseJwtToken(token);
   if (!claims || !claims.sub) return null;
 
-  // Browser-issued tokens carry the email; tokens from auth-service (real admin login) do not,
-  // so those are restored from their claims below.
-  if (claims.email) {
-    const session = resolveUserSession(claims.email, usersList, departmentsList, provisionedAccounts);
+  // Check by email or phone in claims
+  const identifier = claims.email || claims.phone;
+  if (identifier) {
+    const session = resolveUserSession(identifier, usersList, departmentsList, provisionedAccounts);
     if (session?.user) {
       return session.user;
     }
   }
+
+  const matchedDept = claims.dept
+    ? (departmentsList || []).find((d) => d.id === claims.dept)
+    : null;
 
   return {
     id: claims.sub,
@@ -544,7 +580,7 @@ export function getUserFromJwtCookie(
     email: claims.email,
     role: claims.role,
     departmentId: claims.dept || null,
-    departmentName: claims.dept ? "Municipal Department" : null,
+    departmentName: claims.dept ? (matchedDept?.name || "Municipal Department") : null,
     isActive: true,
   };
 }

@@ -20,10 +20,11 @@ export function createPublicServiceService({ events }) {
       return publicServices.findAll(filter);
     },
 
-    async listPaged({ isActive, departmentId, search = "", cursor = 0, pageSize = 4 }) {
+    async listPaged({ isActive, departmentId, serviceId, search = "", cursor = 0, pageSize = 4 }) {
       const { total, items } = await publicServices.findPage({
         isActive,
         departmentId,
+        serviceId,
         search,
         offset: cursor,
         limit: pageSize,

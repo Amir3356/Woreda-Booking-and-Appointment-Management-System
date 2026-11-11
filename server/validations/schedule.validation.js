@@ -4,11 +4,19 @@ import { hhmm, parseClock, validDate } from "../utils/date.js";
 import { daySpan } from "../utils/calendar.js";
 import { STATUSES } from "../models/schedule.model.js";
 import { EXCEPTION_TYPES, SCOPES } from "../models/calendar.model.js";
-import { WEEKDAYS, clockTime, dateString, queryRequired, queryText, requiredText } from "./common.js";
+import { WEEKDAYS, clockTime, dateString, optionalCursorFields, queryRequired, queryText } from "./common.js";
+
+/** Optional "HH:MM", normalized; blank -> null. */
+function lunchClock(message) {
+  return z.string().trim().nullish().transform((v) => (v ? v : null))
+    .refine((v) => v === null || parseClock(v) !== null, { error: message })
+    .transform((v) => (v === null ? null : hhmm(parseClock(v))));
+}
 
 export const scheduleSchema = z
   .object({
-    departmentId: requiredText("Department is required."),
+    // Blank = Woreda-wide: the same working hours for every department.
+    departmentId: z.string().trim().nullish().transform((v) => (v ? v : null)),
     // Blank = department-wide schedule.
     serviceId: z.string().trim().nullish().transform((v) => (v ? v : null)),
     // Empty = Monday to Friday.
@@ -18,6 +26,9 @@ export const scheduleSchema = z
       .transform((v) => (v && v.length > 0 ? v : WEEKDAYS.slice(0, 5))),
     openingTime: clockTime("Opening time must be HH:MM."),
     closingTime: clockTime("Closing time must be HH:MM."),
+    // Lunch break: both or neither; no bookings in between.
+    lunchStart: lunchClock("Lunch start must be HH:MM."),
+    lunchEnd: lunchClock("Lunch end must be HH:MM."),
     dailyCapacity: z.number({ error: "Daily capacity must be positive." }).int({ error: "Daily capacity must be a whole number." })
       .positive({ error: "Daily capacity must be positive." }),
     effectiveStartDate: dateString("Start date must be YYYY-MM-DD."),
@@ -28,6 +39,15 @@ export const scheduleSchema = z
       .refine((v) => v === null || STATUSES.includes(v), { error: "Status must be Active or Inactive." }),
   })
   .refine((s) => s.closingTime > s.openingTime, { error: "Closing time must be after opening time.", path: ["closingTime"] })
+  .refine((s) => (s.lunchStart === null) === (s.lunchEnd === null), { error: "Set both the lunch start and end, or neither.", path: ["lunchEnd"] })
+  .refine((s) => s.lunchStart === null || s.lunchEnd === null || s.lunchEnd > s.lunchStart, {
+    error: "Lunch end must be after lunch start.",
+    path: ["lunchEnd"],
+  })
+  .refine((s) => s.lunchStart === null || s.lunchEnd === null || (s.lunchStart > s.openingTime && s.lunchEnd < s.closingTime), {
+    error: "The lunch break must fall within the working hours.",
+    path: ["lunchStart"],
+  })
   .refine((s) => s.effectiveEndDate === null || s.effectiveEndDate >= s.effectiveStartDate, {
     error: "End date cannot precede start date.",
     path: ["effectiveEndDate"],
@@ -55,7 +75,7 @@ const optionalClock = (message) =>
 export const exceptionSchema = z
   .object({
     type: z.enum(EXCEPTION_TYPES, { error: "Choose the kind of exception." }),
-    title: requiredText("Give the exception a name or reason.").pipe(z.string().max(120, { error: "Keep the name under 120 characters." })),
+    title: z.string().trim().max(120, { error: "Keep the name under 120 characters." }).nullish().transform((v) => v || ""),
     description: z.string().trim().max(1000, { error: "Keep the description under 1000 characters." }).nullish().transform((v) => (v ? v : null)),
     startDate: dateString("Start date must be YYYY-MM-DD."),
     endDate: optionalDate("End date must be YYYY-MM-DD."),
@@ -135,12 +155,19 @@ const queryIdList = z.preprocess(
   z.array(z.string()),
 );
 
+export const scheduleListQuery = z.object({
+  search: queryText,
+  status: queryText,
+  ...optionalCursorFields,
+});
+
 export const calendarQuery = rangeQuery(MAX_VIEW_DAYS).and(z.object({ departmentId: queryText }));
 export const exceptionListQuery = z.object({
   from: z.preprocess((v) => (Array.isArray(v) ? v[0] : v), z.string().optional()).transform((v) => (v && validDate(v) ? v : null)),
   to: z.preprocess((v) => (Array.isArray(v) ? v[0] : v), z.string().optional()).transform((v) => (v && validDate(v) ? v : null)),
   departmentId: queryText,
   type: queryText.transform((v) => v.toUpperCase()).refine((v) => v === "" || EXCEPTION_TYPES.includes(v), { error: "Unknown exception type." }),
+  ...optionalCursorFields,
 });
 export const impactQuery = rangeQuery(MAX_RANGE_DAYS).and(z.object({ departmentIds: queryIdList }));
 export const bookableDatesQuery = rangeQuery(MAX_VIEW_DAYS).and(z.object({ serviceId: queryRequired("serviceId is required.") }));

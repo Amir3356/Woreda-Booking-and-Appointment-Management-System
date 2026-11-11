@@ -7,7 +7,7 @@ import { Actions, Subjects } from "../security/abilities.js";
 import { validate } from "../middleware/validate.js";
 import {
   availabilityQuery, bookableDatesQuery, calendarQuery, capacitySchema, dateAvailabilitySchema, exceptionListQuery,
-  exceptionSchema, impactQuery, scheduleSchema,
+  exceptionSchema, impactQuery, scheduleListQuery, scheduleSchema,
 } from "../validations/schedule.validation.js";
 
 export function createScheduleRoutes(c) {
@@ -35,7 +35,7 @@ export function createScheduleRoutes(c) {
 
   // Operating hours.
   const body = validate({ body: scheduleSchema });
-  router.get("/", canRead, c.list);
+  router.get("/", canRead, validate({ query: scheduleListQuery }), c.list);
   router.post("/", canCreate, body, c.create);
   router.put("/:id", canUpdate, body, c.update);
   router.patch("/:id/status", canUpdate, c.toggleStatus);

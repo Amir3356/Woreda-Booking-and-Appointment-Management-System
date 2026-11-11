@@ -51,7 +51,8 @@ function pageWindow(current, count) {
  * @param {number|null} [props.pageSize] Rows per page (default 10); null shows every row (server-paged lists).
  * @param {string} [props.itemLabel]    Plural noun for the footer, e.g. "departments".
  * @param {(row) => string} [props.rowClassName]
- * @param {string} [props.minWidth]     Minimum table width before it scrolls sideways, e.g. "960px".
+ * @param {string} [props.minWidth="1120px"] Minimum table width before it scrolls sideways.
+ * @param {object|null} [props.serverPagination] `{ meta, loading, onCursorChange }` for server-side cursor paging.
  */
 export default function DataTable({
   data,
@@ -62,7 +63,8 @@ export default function DataTable({
   pageSize = 10,
   itemLabel = "rows",
   rowClassName,
-  minWidth,
+  minWidth = "1120px",
+  serverPagination = null,
 }) {
   const paginated = pageSize !== null;
   const table = useTable({
@@ -86,7 +88,7 @@ export default function DataTable({
 
   return (
     <>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto w-full">
         <table className="w-full text-left text-xs data-table" style={minWidth ? { minWidth } : undefined}>
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
             <tr>
@@ -99,7 +101,7 @@ export default function DataTable({
                 return (
                   <th
                     key={header.id}
-                    className={`px-5 py-3.5 whitespace-nowrap ${meta.headerClassName ?? ""}`}
+                    className={`whitespace-nowrap ${meta.headerClassName ?? ""}`}
                     aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : canSort ? "none" : undefined}
                   >
                     {canSort ? (
@@ -122,7 +124,7 @@ export default function DataTable({
           <tbody className="divide-y divide-slate-100">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={headers.length || 1} className="px-5 py-16 text-center">
+                <td colSpan={headers.length || 1} className="data-table-empty">
                   {emptyState}
                 </td>
               </tr>
@@ -130,7 +132,7 @@ export default function DataTable({
               rows.map((row) => (
                 <tr key={row.id} className={`hover:bg-slate-50/80 transition-colors ${rowClassName?.(row.original) ?? ""}`}>
                   {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className={`px-5 py-3.5 ${cell.column.columnDef.meta?.className ?? ""}`}>
+                    <td key={cell.id} className={cell.column.columnDef.meta?.className ?? ""}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -184,6 +186,48 @@ export default function DataTable({
           </div>
         </nav>
       )}
+
+      {serverPagination && (() => {
+        const sm = serverPagination.meta || {};
+        const smLoading = Boolean(serverPagination.loading);
+        const smPageSize = sm.pageSize || 5;
+        const smCurrent = sm.current || 0;
+        const smTotal = sm.totalCount || 0;
+        const smFrom = smTotal === 0 ? 0 : smCurrent + 1;
+        const smTo = Math.min(smTotal, smCurrent + data.length);
+        const smPageNum = Math.floor(smCurrent / smPageSize) + 1;
+        const smTotalPages = Math.max(1, Math.ceil(smTotal / smPageSize));
+        return (
+          <nav className="data-table-footer" aria-label="Table pages">
+            <p className="data-table-range">
+              Showing <strong>{smTotal === 0 ? "0" : `${smFrom}–${smTo}`}</strong> of <strong>{smTotal}</strong> {itemLabel}
+            </p>
+            <div className="data-table-pages">
+              <button
+                type="button"
+                className="data-table-page"
+                onClick={() => serverPagination.onCursorChange(sm.prevCursor ?? Math.max(0, smCurrent - smPageSize))}
+                disabled={!sm.hasPrev || smLoading}
+                aria-label="Previous page"
+              >
+                <ChevronLeft aria-hidden="true" />
+              </button>
+              <span className="text-xs font-semibold text-slate-700 px-2.5 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs">
+                Page {smPageNum} of {smTotalPages}
+              </span>
+              <button
+                type="button"
+                className="data-table-page"
+                onClick={() => serverPagination.onCursorChange(sm.nextCursor ?? smCurrent + smPageSize)}
+                disabled={!sm.hasNext || smLoading}
+                aria-label="Next page"
+              >
+                <ChevronRight aria-hidden="true" />
+              </button>
+            </div>
+          </nav>
+        );
+      })()}
     </>
   );
 }

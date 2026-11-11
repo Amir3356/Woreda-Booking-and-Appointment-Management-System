@@ -45,9 +45,10 @@ test("Catalog Validations - departmentListQuery accepts cursor-based pagination 
   assert.equal(result.data.pageSize, 5);
 });
 
-test("Catalog Validations - publicServiceListQuery accepts cursor-based pagination, status, and search", () => {
+test("Catalog Validations - publicServiceListQuery accepts cursor-based pagination, status, serviceId, and search", () => {
   const result = publicServiceListQuery.safeParse({
     search: "Certificate",
+    serviceId: "srv-123",
     status: "Active",
     cursor: "4",
     pageSize: "4",
@@ -55,6 +56,7 @@ test("Catalog Validations - publicServiceListQuery accepts cursor-based paginati
 
   assert.equal(result.success, true);
   assert.equal(result.data.search, "Certificate");
+  assert.equal(result.data.serviceId, "srv-123");
   assert.equal(result.data.status, "Active");
   assert.equal(result.data.cursor, 4);
   assert.equal(result.data.pageSize, 4);

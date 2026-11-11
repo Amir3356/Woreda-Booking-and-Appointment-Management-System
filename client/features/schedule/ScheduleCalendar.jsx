@@ -22,7 +22,7 @@ export function CalendarLegend({ showMixed = false }) {
     ["is-exceptional", "Exceptional working day"],
     ["is-full", "Fully booked"],
     ["is-holiday", "Holiday, blocked or booking disabled"],
-    ["is-unavailable", "Closed (no operating hours)"],
+    ["is-unavailable", "Closed (no working hours)"],
   ];
   if (showMixed) items.push(["is-mixed", "Differs by department"]);
   return (

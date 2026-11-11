@@ -1,7 +1,7 @@
 // Date ranges for the month / week calendars and how a day's status is labelled and coloured.
 // The statuses themselves come from the server (GET /schedules/calendar), which applies the same
 // rules as booking: disabled booking > blocked > exceptional working day > holiday / non-working
-// day > weekly operating hours.
+// day > weekly working hours.
 import { addDays, localIsoDate, weekdayOfIso } from "@/utils";
 
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -12,7 +12,7 @@ export const REASON_LABELS = {
   PUBLIC_HOLIDAY: "Public holiday",
   NON_WORKING_DAY: "Non-working day",
   NOT_WORKING_DAY: "Closed (weekly hours)",
-  NO_SCHEDULE: "No operating hours",
+  NO_SCHEDULE: "No working hours",
 };
 
 export const EXCEPTION_TYPES = {

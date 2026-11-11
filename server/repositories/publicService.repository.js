@@ -3,8 +3,8 @@ import { one, query, rows } from "../config/database.js";
 import { fromRow } from "../models/publicService.model.js";
 import { containsPattern } from "../utils/pagination.js";
 
-/** Filters: departmentId, search (name or code, case-insensitive), isActive. Sorted by name. */
-export async function findAll({ departmentId, search, isActive } = {}) {
+/** Filters: departmentId, serviceId, search (name or code, case-insensitive), isActive. Sorted by name. */
+export async function findAll({ departmentId, serviceId, search, isActive } = {}) {
   const where = [];
   const params = [];
   if (departmentId && departmentId !== "ALL") {
@@ -14,6 +14,10 @@ export async function findAll({ departmentId, search, isActive } = {}) {
       params.push(departmentId);
       where.push(`department_id = $${params.length}`);
     }
+  }
+  if (serviceId && serviceId !== "ALL") {
+    params.push(serviceId);
+    where.push(`id = $${params.length}`);
   }
   if (search) {
     params.push(containsPattern(search));
@@ -27,8 +31,8 @@ export async function findAll({ departmentId, search, isActive } = {}) {
   return (await rows(sql, params)).map(fromRow);
 }
 
-/** Cursor-paged public services matching search, departmentId & status. */
-export async function findPage({ isActive, departmentId, search = "", offset = 0, limit = 4 } = {}) {
+/** Cursor-paged public services matching search, serviceId, departmentId & status. */
+export async function findPage({ isActive, departmentId, serviceId, search = "", offset = 0, limit = 4 } = {}) {
   const params = [];
   const where = [];
 
@@ -39,6 +43,11 @@ export async function findPage({ isActive, departmentId, search = "", offset = 0
       params.push(departmentId);
       where.push(`s.department_id = $${params.length}`);
     }
+  }
+
+  if (serviceId && serviceId !== "ALL") {
+    params.push(serviceId);
+    where.push(`s.id = $${params.length}`);
   }
 
   if (isActive !== undefined) {

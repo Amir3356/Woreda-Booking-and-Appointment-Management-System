@@ -3,10 +3,11 @@ import { http } from "./httpClient";
 // Module 4: /services (public service catalog)
 export const serviceApi = {
   list: (params) => http.get("/services", params),
-  listPaged: ({ search = "", departmentId = "ALL", status = "ALL", cursor = 0, pageSize = 4 } = {}) =>
+  listPaged: ({ search = "", departmentId = "ALL", serviceId = "ALL", status = "ALL", cursor = 0, pageSize = 4 } = {}) =>
     http.get("/services", {
       search: search?.trim() || undefined,
       departmentId: departmentId && departmentId !== "ALL" ? departmentId : undefined,
+      serviceId: serviceId && serviceId !== "ALL" ? serviceId : undefined,
       status: status !== "ALL" ? status : undefined,
       cursor,
       pageSize,

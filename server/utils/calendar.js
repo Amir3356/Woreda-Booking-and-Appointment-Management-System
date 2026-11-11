@@ -31,7 +31,7 @@ export function exceptionsOn(exceptions, departmentId, date) {
  */
 export function resolveDay({ date, baseSchedule, exceptions = [], closure = null, departmentCapacity = null }) {
   const closed = (reason, exception = null, note = null) => ({
-    open: false, reason, schedule: null, departmentCapacity: null, exception, note: note ?? exception?.title ?? null,
+    open: false, reason, schedule: null, departmentCapacity: null, exception, note: note ?? (exception?.title || null),
   });
   if (closure) return closed("BOOKING_DISABLED", null, closure.reason || "Online booking disabled for this date");
   const blocked = exceptions.find((e) => e.type === "BLOCKED");
@@ -43,7 +43,7 @@ export function resolveDay({ date, baseSchedule, exceptions = [], closure = null
       reason: null,
       // The day is open whatever the weekly working days say, within the exception's hours.
       schedule: {
-        ...(baseSchedule ?? {}),
+        ...baseSchedule,
         workingDays: [...WEEKDAYS],
         openingTime: working.openingTime,
         closingTime: working.closingTime,
@@ -51,7 +51,7 @@ export function resolveDay({ date, baseSchedule, exceptions = [], closure = null
       },
       departmentCapacity: working.dailyCapacity,
       exception: working,
-      note: working.title,
+      note: working.title || null,
     };
   }
   const holiday = exceptions.find((e) => e.type === "PUBLIC_HOLIDAY") ?? exceptions.find((e) => e.type === "NON_WORKING_DAY");
@@ -66,13 +66,14 @@ export const schedulesInForce = (schedules, date) =>
   schedules.filter((s) => s.status === "ACTIVE" && s.effectiveStartDate <= date && (!s.effectiveEndDate || s.effectiveEndDate >= date));
 
 /**
- * Operating hours of a whole department on date: its department-wide schedule, or else the
- * combination of its service schedules (any working day, earliest opening, latest closing).
- * Null when nothing is in force.
+ * Working hours of a whole department on date: its department-wide schedule, else the
+ * combination of its service schedules (any working day, earliest opening, latest closing),
+ * else the Woreda-wide schedule shared by every department. Null when nothing is in force.
  */
 export function departmentHoursOn(schedules, departmentId, date) {
-  const own = schedulesInForce(schedules.filter((s) => s.departmentId === departmentId), date);
-  if (own.length === 0) return null;
+  const inForce = schedulesInForce(schedules, date);
+  const own = inForce.filter((s) => s.departmentId === departmentId);
+  if (own.length === 0) return newest(inForce.filter((s) => !s.departmentId && !s.serviceId));
   const wide = own.find((s) => !s.serviceId);
   if (wide) return wide;
   const byOpening = [...own].sort((a, b) => minutes(a.openingTime) - minutes(b.openingTime));
@@ -88,11 +89,15 @@ export function departmentHoursOn(schedules, departmentId, date) {
   };
 }
 
-/** The schedule for a service on date: its own first, else its department's department-wide one. */
+/** The schedule that started most recently, or null. */
+const newest = (list) => [...list].sort((a, b) => (b.effectiveStartDate > a.effectiveStartDate ? 1 : -1))[0] ?? null;
+
+/** The schedule for a service on date: its own, else its department's department-wide one, else the Woreda-wide one. */
 export function serviceScheduleOn(schedules, serviceId, departmentId, date) {
   const inForce = schedulesInForce(schedules, date).sort((a, b) => (b.effectiveStartDate > a.effectiveStartDate ? 1 : -1));
   return inForce.find((s) => s.serviceId === serviceId)
     ?? (departmentId ? inForce.find((s) => !s.serviceId && s.departmentId === departmentId) : null)
+    ?? inForce.find((s) => !s.serviceId && !s.departmentId)
     ?? null;
 }
 

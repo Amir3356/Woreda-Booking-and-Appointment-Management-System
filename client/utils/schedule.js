@@ -32,14 +32,15 @@ export function addDays(iso, n) {
 
 const isActive = (s) => !s.status || String(s.status).toUpperCase() === "ACTIVE";
 
-/** Active schedules that apply to the service (service-specific first). */
+/** Active schedules that apply to the service: its own, its department's, then the Woreda-wide ones (all departments). */
 export function schedulesForService(service, schedules) {
   if (!service) return [];
   const own = schedules.filter((s) => isActive(s) && s.serviceId === service.id);
   const deptWide = schedules.filter(
-    (s) => isActive(s) && !s.serviceId && s.departmentId === service.departmentId
+    (s) => isActive(s) && !s.serviceId && s.departmentId && s.departmentId === service.departmentId
   );
-  return [...own, ...deptWide];
+  const woredaWide = schedules.filter((s) => isActive(s) && !s.serviceId && !s.departmentId);
+  return [...own, ...deptWide, ...woredaWide];
 }
 
 /** The schedule in force on date (service-specific wins), or null. */

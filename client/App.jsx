@@ -23,7 +23,6 @@ import AdminAppointmentsPage from "@/pages/admin/AdminAppointmentsPage";
 import AdminDepartmentsPage from "@/pages/admin/AdminDepartmentsPage";
 import AdminServicesPage from "@/pages/admin/AdminServicesPage";
 import OperatingHoursPage from "@/pages/admin/schedule/OperatingHoursPage";
-import AvailabilityPage from "@/pages/admin/schedule/AvailabilityPage";
 import ExceptionsPage from "@/pages/admin/schedule/ExceptionsPage";
 import ScheduleSection from "@/pages/admin/schedule/ScheduleSection";
 import AdminAccountProvisionPage from "@/pages/admin/AdminAccountProvisionPage";
@@ -126,7 +125,6 @@ export default function App() {
         <Route path="schedule" element={<ScheduleSection />}>
           <Route index element={<Navigate to="hours" replace />} />
           <Route path="hours" element={<OperatingHoursPage />} />
-          <Route path="availability" element={<AvailabilityPage />} />
           <Route path="exceptions" element={<ExceptionsPage />} />
         </Route>
         <Route path="users" element={<Navigate to="account-provision" replace />} />

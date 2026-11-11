@@ -1,5 +1,5 @@
 // Officer > Department Schedule: a read-only view of the officer's own department as configured
-// by the administrator in Schedule Management (operating hours, daily capacity, availability and
+// by the administrator in Schedule Management (working hours, daily capacity, availability and
 // calendar exceptions). Nothing here can be changed; the server also scopes it to the department.
 import { useEffect, useState } from "react";
 import { Lock } from "lucide-react";
@@ -59,7 +59,7 @@ export default function OfficerSchedulePage() {
             </span>
           </h1>
           <p className="sm-subtitle">
-            Operating hours, daily capacity, availability and calendar exceptions for your department. Only the Woreda
+            Working hours, daily capacity, availability and calendar exceptions for your department. Only the Woreda
             administrator can change them; contact the administrator if something needs updating.
           </p>
         </div>
@@ -101,12 +101,12 @@ export default function OfficerSchedulePage() {
         </section>
 
         <aside className="sm-panel">
-          <section className="sm-card" aria-label="Operating hours">
+          <section className="sm-card" aria-label="Working hours">
             <div className="sm-card-header">
-              <h2 className="sm-card-title">Operating hours</h2>
+              <h2 className="sm-card-title">Working hours</h2>
             </div>
             <div className="sm-card-body sm-detail-list">
-              {info.schedules.length === 0 && <p className="sm-hint">No operating hours are configured for your department.</p>}
+              {info.schedules.length === 0 && <p className="sm-hint">No working hours are configured for your department.</p>}
               {info.schedules.map((s) => (
                 <div key={s.id} className="sm-detail-item">
                   <div>
@@ -132,7 +132,9 @@ export default function OfficerSchedulePage() {
               {info.exceptions.map((e) => (
                 <div key={e.id} className="sm-detail-item">
                   <div>
-                    <b>{e.title}</b>
+                    {(e.title || e.description) && (
+                      <b>{e.title && e.description ? `${e.title} — ${e.description}` : e.description || e.title}</b>
+                    )}
                     {rangeLabel(e.startDate, e.endDate)}
                     {e.type === "WORKING_DAY" && (
                       <div className="sm-hint">

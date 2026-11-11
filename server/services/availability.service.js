@@ -71,7 +71,9 @@ export function createAvailabilityService() {
         departmentId ? appointments.countByDepartmentDay({ from, to, departmentIds: [departmentId] }) : {},
       ]);
       const closed = new Map(closures.map((c) => [c.date, c]));
-      const relevant = list.filter((s) => s.serviceId === serviceId || (departmentId && s.departmentId === departmentId));
+      const relevant = list.filter(
+        (s) => s.serviceId === serviceId || (departmentId && s.departmentId === departmentId) || (!s.departmentId && !s.serviceId),
+      );
       const now = today();
       return eachDate(from, to).map((date) => {
         if (date < now) return { date, available: false, reason: "PAST" };

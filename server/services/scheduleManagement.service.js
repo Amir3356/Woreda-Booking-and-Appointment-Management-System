@@ -6,6 +6,7 @@
 import { ForbiddenError, NotFoundError, ValidationError } from "../utils/errors.js";
 import { newId } from "../utils/id.js";
 import { today, weekdayOf } from "../utils/date.js";
+import { cursorMeta } from "../utils/pagination.js";
 import { departmentHoursOn, eachDate, exceptionsOn, resolveDay } from "../utils/calendar.js";
 import * as calendar from "../repositories/calendar.repository.js";
 import * as schedules from "../repositories/schedule.repository.js";
@@ -50,6 +51,19 @@ export function createScheduleManagementService({ events }) {
     async listExceptions(caller, { from, to, departmentId, type }) {
       const scoped = scopeFor(caller, departmentId);
       return calendar.findExceptions({ from, to, departmentId: scoped, types: type ? [type] : undefined });
+    },
+
+    async listExceptionsPaged(caller, { from, to, departmentId, type, cursor = 0, pageSize = 5 }) {
+      const scoped = scopeFor(caller, departmentId);
+      const { total, items } = await calendar.findExceptionsPage({
+        from,
+        to,
+        departmentId: scoped,
+        types: type ? [type] : undefined,
+        offset: cursor,
+        limit: pageSize,
+      });
+      return { items, cursor: cursorMeta(cursor, pageSize, total) };
     },
 
     async createException(caller, fields) {

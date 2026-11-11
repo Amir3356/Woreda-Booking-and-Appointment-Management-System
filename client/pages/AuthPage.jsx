@@ -62,9 +62,9 @@ export default function AuthPage() {
     setError("");
     setSuccessMsg("");
 
-    const inputEmail = signInIdentifier.trim();
+    const inputIdentifier = signInIdentifier.trim();
     const passwordClean = signInPassword.trim();
-    if (!inputEmail) {
+    if (!inputIdentifier) {
       setError("Please enter your phone number.");
       return;
     }
@@ -73,22 +73,21 @@ export default function AuthPage() {
       return;
     }
 
-    // Citizens sign in with the phone number they registered with (e.g. 0911 234 567).
-    const isPhone =
-      !inputEmail.includes("@") && /^[+\d\s()-]+$/.test(inputEmail) && inputEmail.replace(/\D/g, "").length >= 9;
+    const digitsOnly = inputIdentifier.replace(/\D/g, "");
+    const isPhone = !inputIdentifier.includes("@") && digitsOnly.length >= 8;
+    const normalizedPhone = isPhone ? normalizeEthiopianPhone(inputIdentifier) : null;
 
-    let emailClean = inputEmail.toLowerCase();
+    let emailClean = inputIdentifier.toLowerCase();
     if (!emailClean.includes("@")) {
       emailClean = `${emailClean}@woreda.gov.et`;
     }
 
-    // Administrators sign in against auth-service, so their token is accepted by the API and
-    // they can manage the service catalog. Citizens and officers still use the in-browser
-    // accounts below; their credentials are only checked here and then ignored.
+    // Administrators and staff sign in against auth-service, returning an authenticated session.
+    // In-browser fallback accounts are also supported.
     setLoading(true);
     try {
       const credentials = isPhone
-        ? { phone: normalizeEthiopianPhone(inputEmail), password: passwordClean }
+        ? { phone: normalizedPhone, password: passwordClean }
         : { email: emailClean, password: passwordClean };
       const { data } = await http.post("/auth/login", credentials);
       if (data?.token && data?.user) {
@@ -115,11 +114,12 @@ export default function AuthPage() {
 
         setCurrentUser(authenticatedUser, data.token);
 
-        // Keep Admin > Account Provision in sync with a server officer account (officers only:
-        // citizens and the administrator are not provisioned staff).
+        // Keep Admin > Account Provision in sync with server officer account
         if (isOfficer) {
           useStore.getState().addProvisionedAccount({
+            id: u.id,
             fullName: u.fullName,
+            phone: u.phone,
             email: u.email,
             password: passwordClean,
             role: departmentName || "Department Officer",
@@ -136,18 +136,12 @@ export default function AuthPage() {
         setError("Too many sign-in attempts. Please wait a few minutes and try again.");
         return;
       }
-      // Phone sign-in exists only on the server (citizen accounts), so there is no local fallback.
-      if (isPhone) {
+      if (err?.status === 401 && err.message?.includes("deactivated")) {
         setLoading(false);
-        if (err?.status === 401) setError(err.message?.includes("deactivated")
-          ? "This account is currently deactivated. Please contact administration."
-          : "Invalid phone number or password.");
-        else if (err?.status === 422 && err.details?.length) setError(err.details.map((d) => d.issue).join(" "));
-        else setError("Could not sign in: the server is unreachable. Please try again later.");
+        setError("This account is currently deactivated. Please contact administration.");
         return;
       }
-      // Not an account in the server database (401) or the server is unreachable:
-      // continue with the in-browser accounts.
+      // If 401 or network error, proceed to fallback checking against client/in-browser provisioned accounts
     }
     setLoading(false);
 
@@ -160,6 +154,7 @@ export default function AuthPage() {
       provMap.set(c.email.toLowerCase(), {
         fullName: c.fullName,
         email: c.email,
+        phone: "+251911000000",
         password: c.password,
         role: "OFFICER",
         departmentId: c.departmentId,
@@ -172,7 +167,7 @@ export default function AuthPage() {
     // 2. Overlay in-memory Zustand store
     const storeProv = useStore.getState().provisionedAccounts || [];
     storeProv.forEach((a) => {
-      const k = (a.email || "").trim().toLowerCase();
+      const k = (a.phone || a.email || a.id || "").trim().toLowerCase();
       if (k) {
         const existing = provMap.get(k) || {};
         provMap.set(k, {
@@ -185,7 +180,7 @@ export default function AuthPage() {
       }
     });
 
-    // 4. Overlay browser localStorage ("woreda-booking-storage")
+    // 3. Overlay browser localStorage ("woreda-booking-storage")
     let currentDepts = useStore.getState().departments || [];
     if (typeof window !== "undefined" && window.localStorage) {
       try {
@@ -197,7 +192,7 @@ export default function AuthPage() {
           const localDepts = parsed?.state?.departments || [];
 
           localProv.forEach((a) => {
-            const k = (a.email || "").trim().toLowerCase();
+            const k = (a.phone || a.email || a.id || "").trim().toLowerCase();
             if (k) {
               const existing = provMap.get(k) || {};
               provMap.set(k, {
@@ -211,20 +206,20 @@ export default function AuthPage() {
           });
 
           localUsers.forEach((u) => {
-            const k = (u.email || "").trim().toLowerCase();
+            const k = (u.phone || u.email || u.id || "").trim().toLowerCase();
             if (k) usersMap.set(k, u);
           });
 
           if (localDepts.length > 0) currentDepts = localDepts;
         }
 
-        // 5. Overlay secondary backup storage ("woreda_provisioned_accounts")
+        // 4. Overlay secondary backup storage ("woreda_provisioned_accounts")
         const rawBackup = window.localStorage.getItem("woreda_provisioned_accounts");
         if (rawBackup) {
           const parsedBackup = JSON.parse(rawBackup);
           if (Array.isArray(parsedBackup)) {
             parsedBackup.forEach((a) => {
-              const k = (a.email || "").trim().toLowerCase();
+              const k = (a.phone || a.email || a.id || "").trim().toLowerCase();
               if (k) {
                 const existing = provMap.get(k) || {};
                 provMap.set(k, {
@@ -245,7 +240,7 @@ export default function AuthPage() {
 
     const storeUsers = useStore.getState().users || [];
     storeUsers.forEach((u) => {
-      const k = (u.email || "").trim().toLowerCase();
+      const k = (u.phone || u.email || u.id || "").trim().toLowerCase();
       if (k && !usersMap.has(k)) usersMap.set(k, u);
     });
 
@@ -253,16 +248,16 @@ export default function AuthPage() {
     const currentUsers = Array.from(usersMap.values());
 
     // 1. Strict credential check against Admin, provisioned staff, and registered users
-    const isValid = verifyCredentials(emailClean, passwordClean, currentUsers, currentProvisioned);
+    const isValid = verifyCredentials(inputIdentifier, passwordClean, currentUsers, currentProvisioned);
     if (!isValid) {
-      setError("Invalid email or password.");
+      setError(isPhone ? "Invalid phone number or password." : "Invalid email or password.");
       return;
     }
 
     // 2. Resolve user session
-    const session = resolveUserSession(emailClean, currentUsers, currentDepts, currentProvisioned);
+    const session = resolveUserSession(inputIdentifier, currentUsers, currentDepts, currentProvisioned);
     if (!session || !session.user) {
-      setError("No registered account found for this email.");
+      setError(isPhone ? "No registered account found for this phone number." : "No registered account found for this email.");
       return;
     }
 
@@ -283,8 +278,8 @@ export default function AuthPage() {
 
     setTimeout(() => {
       setLoading(false);
-      router.push(session.portalPath);
-    }, 300);
+      router.push(session.portalPath || (session.role === "OFFICER" ? "/officer/appointments" : session.role === "ADMIN" ? "/admin" : "/citizen/book"));
+    }, 200);
   };
 
   // Handle Sign Up (Public self-registration for Citizens ONLY)

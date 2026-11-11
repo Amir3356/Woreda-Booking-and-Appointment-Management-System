@@ -1,16 +1,15 @@
-// Admin > Schedule Management > Operating Hours: working days and opening / closing times per
-// department (department-wide) or per service, each with its own per-service daily limit and an
-// effective period. A weekly view shows the hours in force for every department.
-import { useState, useEffect } from "react";
+// Admin > Schedule Management > Working Hours: one set of working days, opening / closing times
+// and lunch break shared by every department of the Woreda, with a daily appointment capacity
+// and an effective period.
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { scheduleApi } from "@/api";
 import { useStore } from "@/context";
 import { DataTable } from "@/components/ui";
-import { useEscapeKey } from "@/hooks";
-import { subscribe } from "@/api/realtime";
+import { useCursorList, useEscapeKey } from "@/hooks";
 import { addDays, describeError, formatWorkingDays, localIsoDate, displayDate } from "@/utils";
 import { ConfirmDialog } from "@/features/schedule";
 import {
-  Calendar,
   Clock,
   Plus,
   CheckCircle2,
@@ -18,54 +17,53 @@ import {
   Trash2,
   X,
   Search,
-  Filter,
   Circle,
 } from "lucide-react";
 
 const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const PAGE_SIZE = 5;
 
-// Department-wide schedule: applies to every service of the department that has no schedule of its own.
-const ALL_SERVICES = "";
+
+/** The lunch break line under the working hours in the table. */
+const lunchText = (sch) => (sch.lunchStart && sch.lunchEnd ? `Lunch ${sch.lunchStart} – ${sch.lunchEnd}` : "No lunch break");
 
 /** Booked appointments a change to this schedule could affect: from today to its end (or a year ahead). */
 function impactOf(sch) {
   const today = localIsoDate();
   const start = sch.effectiveStartDate > today ? sch.effectiveStartDate : today;
   const end = sch.effectiveEndDate || addDays(today, 365);
-  return end < start ? null : { from: start, to: end, departmentIds: [sch.departmentId] };
-}
-
-/** Hours of a department on a weekday, from its schedules in force today (department-wide first). */
-function hoursOn(deptSchedules, day) {
-  const wide = deptSchedules.find((s) => !s.serviceId);
-  const list = wide ? [wide] : deptSchedules;
-  const open = list.filter((s) => (s.workingDays || []).includes(day));
-  if (open.length === 0) return null;
-  const opening = open.map((s) => s.openingTime).sort()[0];
-  const closing = open.map((s) => s.closingTime).sort().at(-1);
-  return { opening, closing, services: wide ? null : open.length };
+  // No department = the Woreda-wide schedule: every department is affected.
+  return end < start ? null : { from: start, to: end, departmentIds: sch.departmentId ? [sch.departmentId] : [] };
 }
 
 export default function OperatingHoursPage() {
   const {
-    departments,
-    services,
-    schedules: storeSchedules,
-    loadSchedules,
-    loadServices,
-    loadDepartments,
     addSchedule,
     updateSchedule,
     deleteSchedule,
     toggleScheduleStatus,
   } = useStore();
 
-  const schedules = storeSchedules || [];
-
-  // Filter & Search states
+  // Search state
   const [searchTerm, setSearchTerm] = useState("");
-  const [deptFilter, setDeptFilter] = useState("ALL");
-  const [statusFilter, setStatusFilter] = useState("ALL");
+
+  const fetchSchedulesPage = useCallback(
+    ({ cursor, pageSize }) =>
+      scheduleApi.list({
+        search: searchTerm.trim(),
+        cursor,
+        pageSize,
+      }),
+    [searchTerm],
+  );
+
+  const {
+    items: schedules,
+    loading: loadingPage,
+    setCursor,
+    reload: reloadSchedules,
+    pagination,
+  } = useCursorList(fetchSchedulesPage, { pageSize: PAGE_SIZE, actionLabel: "load schedules" });
 
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
@@ -76,40 +74,16 @@ export default function OperatingHoursPage() {
   useEscapeKey(modalOpen && !pending, () => setModalOpen(false));
   const [saving, setSaving] = useState(false);
 
-  // Schedules live in booking-service. Re-read them (and the departments/services the form
-  // offers) when the page opens and whenever the server announces a catalog change.
-  useEffect(() => {
-    const refresh = () => {
-      loadSchedules().catch((err) => toast.error(describeError(err, "load schedules"), { duration: 5000 }));
-      loadServices().catch(() => {});
-      loadDepartments().catch(() => {});
-    };
-    refresh();
-    const offChange = subscribe("catalog.changed", refresh);
-    const offReconnect = subscribe("reconnected", refresh);
-    return () => {
-      offChange();
-      offReconnect();
-    };
-  }, [loadSchedules, loadServices, loadDepartments]);
-
   const triggerToast = (msg) => {
     toast.success(msg, { duration: 5000 });
   };
 
-  // Department names for the table filter
-  const availableDeptNames = (departments || []).map((d) => d.name);
-
-  // Services of a department (from Admin > Services Management)
-  const getServicesForDept = (departmentId) =>
-    (services || []).filter((s) => s.departmentId === departmentId);
-
   const emptyForm = {
-    departmentId: departments?.[0]?.id || "",
-    serviceId: ALL_SERVICES,
     workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
     openingTime: "08:30",
     closingTime: "17:30",
+    lunchStart: "12:30",
+    lunchEnd: "13:30",
     dailyCapacity: 20,
     effectiveStartDate: localIsoDate(),
     effectiveEndDate: "",
@@ -117,18 +91,6 @@ export default function OperatingHoursPage() {
   };
 
   const [form, setForm] = useState(emptyForm);
-
-  // Available services for the current form department
-  const formServiceOptions = getServicesForDept(form.departmentId);
-
-  // Handle department change in form
-  const handleDeptChange = (departmentId) => {
-    setForm((prev) => ({
-      ...prev,
-      departmentId,
-      serviceId: ALL_SERVICES,
-    }));
-  };
 
   const formatDaysDisplay = formatWorkingDays;
 
@@ -141,11 +103,11 @@ export default function OperatingHoursPage() {
   const handleOpenEdit = (sch) => {
     setEditingSchedule(sch);
     setForm({
-      departmentId: sch.departmentId || "",
-      serviceId: sch.serviceId || ALL_SERVICES,
       workingDays: sch.workingDays || ["Mon", "Tue", "Wed", "Thu", "Fri"],
       openingTime: sch.openingTime || "08:30",
       closingTime: sch.closingTime || "17:30",
+      lunchStart: sch.lunchStart || "",
+      lunchEnd: sch.lunchEnd || "",
       dailyCapacity: sch.dailyCapacity || 20,
       effectiveStartDate: sch.effectiveStartDate || localIsoDate(),
       effectiveEndDate: sch.effectiveEndDate || "",
@@ -171,6 +133,7 @@ export default function OperatingHoursPage() {
     setDeleteTarget(null);
     if (await run(`delete schedule ${target.id}`, () => deleteSchedule(target.id))) {
       triggerToast(`Schedule ${target.id} deleted successfully.`);
+      reloadSchedules();
     }
   };
 
@@ -178,6 +141,7 @@ export default function OperatingHoursPage() {
     const nextStatus = sch.status === "Active" ? "Inactive" : "Active";
     if (await run(`change the status of schedule ${sch.id}`, () => toggleScheduleStatus(sch.id))) {
       triggerToast(`Schedule ${sch.id} marked as ${nextStatus}.`);
+      reloadSchedules();
     }
   };
 
@@ -209,21 +173,38 @@ export default function OperatingHoursPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
-    if (!form.departmentId) {
-      toast.error("Could not save the schedule: choose a department.", { duration: 5000 });
-      return;
-    }
     if (form.workingDays.length === 0) {
       toast.error("Could not save the schedule: choose at least one working day.", { duration: 5000 });
       return;
     }
+    if (form.closingTime <= form.openingTime) {
+      toast.error("Could not save the schedule: closing time must be after opening time.", { duration: 5000 });
+      return;
+    }
+    const hasLunch = Boolean(form.lunchStart || form.lunchEnd);
+    if (hasLunch) {
+      if (!form.lunchStart || !form.lunchEnd) {
+        toast.error("Could not save the schedule: set both the lunch start and end time, or clear both.", { duration: 5000 });
+        return;
+      }
+      if (form.lunchEnd <= form.lunchStart) {
+        toast.error("Could not save the schedule: lunch end must be after lunch start.", { duration: 5000 });
+        return;
+      }
+      if (form.lunchStart <= form.openingTime || form.lunchEnd >= form.closingTime) {
+        toast.error("Could not save the schedule: the lunch break must fall within the working hours.", { duration: 5000 });
+        return;
+      }
+    }
 
     const payload = {
-      departmentId: form.departmentId,
-      serviceId: form.serviceId || null,
+      departmentId: null, // the same working hours for every department of the Woreda
+      serviceId: null,
       workingDays: form.workingDays,
       openingTime: form.openingTime,
       closingTime: form.closingTime,
+      lunchStart: hasLunch ? form.lunchStart : null,
+      lunchEnd: hasLunch ? form.lunchEnd : null,
       dailyCapacity: Number(form.dailyCapacity) || 1,
       effectiveStartDate: form.effectiveStartDate || localIsoDate(),
       effectiveEndDate: form.effectiveEndDate || null,
@@ -255,29 +236,8 @@ export default function OperatingHoursPage() {
         : `Schedule ${saved?.id || ""} created successfully.`
     );
     setModalOpen(false);
+    reloadSchedules();
   };
-
-  // Filtered schedules
-  const filteredSchedules = schedules.filter((sch) => {
-    const term = searchTerm.toLowerCase();
-    const matchesSearch =
-      !term ||
-      (sch.service || "all services").toLowerCase().includes(term) ||
-      (sch.department && sch.department.toLowerCase().includes(term)) ||
-      (sch.id && sch.id.toLowerCase().includes(term));
-
-    const matchesDept =
-      deptFilter === "ALL" || sch.department?.toLowerCase() === deptFilter.toLowerCase();
-
-    const matchesStatus =
-      statusFilter === "ALL" || sch.status?.toLowerCase() === statusFilter.toLowerCase();
-
-    return matchesSearch && matchesDept && matchesStatus;
-  });
-
-  // Dynamic summary card metrics based on actual schedules
-  const totalSchedulesCount = schedules.length;
-  const activeSchedulesCount = schedules.filter((s) => s.status === "Active").length;
 
   // Schedule table columns (TanStack Table via components/ui/DataTable).
   const scheduleColumns = [
@@ -292,22 +252,6 @@ export default function OperatingHoursPage() {
       ),
     },
     {
-      id: "department",
-      accessorFn: (sch) => sch.department || "",
-      header: "Department",
-      sortFn: "text",
-      meta: { className: "font-bold text-slate-900" },
-      cell: ({ row }) => row.original.department,
-    },
-    {
-      id: "service",
-      accessorFn: (sch) => sch.service || "",
-      header: "Service",
-      sortFn: "text",
-      meta: { className: "text-slate-700 font-medium" },
-      cell: ({ row }) => row.original.service || <span className="italic text-slate-500">All services (department-wide)</span>,
-    },
-    {
       id: "workingDays",
       header: "Working Days",
       enableSorting: false,
@@ -320,14 +264,19 @@ export default function OperatingHoursPage() {
     {
       id: "hours",
       accessorKey: "openingTime",
-      header: "Operating Hours",
+      header: "Working Hours",
       meta: { className: "font-mono text-slate-700 font-medium" },
-      cell: ({ row }) => `${row.original.openingTime} – ${row.original.closingTime}`,
+      cell: ({ row }) => (
+        <>
+          <div>{`${row.original.openingTime} – ${row.original.closingTime}`}</div>
+          <div className="text-[11px] text-slate-500">{lunchText(row.original)}</div>
+        </>
+      ),
     },
     {
       id: "capacity",
       accessorKey: "dailyCapacity",
-      header: "Limit / Service",
+      header: "Daily Capacity",
       sortFn: "basic",
       meta: { className: "text-slate-600" },
       cell: ({ row }) => (
@@ -414,150 +363,15 @@ export default function OperatingHoursPage() {
 
   return (
     <div className="sm-page">
-      <header className="sm-header">
-        <div>
-          <p className="sm-eyebrow">Schedule Management</p>
-          <h1 className="sm-title">Operating Hours</h1>
-          <p className="sm-subtitle">
-            Working days and opening hours for each department, or for individual services. A department-wide schedule applies
-            to every service of the department that has no schedule of its own. Holidays and exceptional days are set in
-            Calendar Exceptions.
-          </p>
-        </div>
+      <header className="sm-header sm-header--centered">
+        <p className="sm-subtitle">
+          Set weekly working days, opening hours, lunch breaks, and daily booking capacities.
+        </p>
         <button type="button" onClick={handleOpenCreate} className="sm-btn sm-btn--primary">
           <Plus aria-hidden="true" />
           Create Schedule
         </button>
       </header>
-
-      {/* A. Summary Cards - Displayed Horizontally */}
-      <div
-        className="grid-cols-2"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-          gap: "1rem",
-          width: "100%",
-        }}
-      >
-        {/* Card 1: Total Schedules */}
-        <div
-          className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "1.25rem",
-            backgroundColor: "#ffffff",
-            borderRadius: "1rem",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          <div>
-            <span className="text-xs font-semibold text-slate-500 block">Total Schedules</span>
-            <span className="text-2xl font-extrabold text-slate-900 mt-1 block">
-              {totalSchedulesCount}
-            </span>
-            <span className="text-[11px] text-slate-400 mt-0.5 block">Configured schedules</span>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-800 flex items-center justify-center font-bold shadow-xs">
-            <Calendar className="w-5 h-5" />
-          </div>
-        </div>
-
-        {/* Card 2: Active Schedules */}
-        <div
-          className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "1.25rem",
-            backgroundColor: "#ffffff",
-            borderRadius: "1rem",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          <div>
-            <span className="text-xs font-semibold text-slate-500 block">Active Schedules</span>
-            <span className="text-2xl font-extrabold text-emerald-600 mt-1 block">
-              {activeSchedulesCount}
-            </span>
-            <span className="text-[11px] text-slate-400 mt-0.5 block">Currently available</span>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shadow-xs">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-        </div>
-      </div>
-
-      {/* Weekly view: hours in force today for every department */}
-      <section className="sm-card" aria-label="Weekly operating hours">
-        <div className="sm-card-header">
-          <div>
-            <h2 className="sm-card-title">Weekly view</h2>
-            <p className="sm-card-sub">Operating hours in force today, by department and weekday</p>
-          </div>
-        </div>
-        <div className="sm-table-wrap">
-          <table className="sm-table">
-            <thead>
-              <tr>
-                <th>Department</th>
-                {ALL_DAYS.map((d) => (
-                  <th key={d}>{d}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(departments || [])
-                .filter((d) => deptFilter === "ALL" || d.name === deptFilter)
-                .map((dept) => {
-                  const today = localIsoDate();
-                  const inForce = schedules.filter(
-                    (s) =>
-                      s.departmentId === dept.id &&
-                      s.status === "Active" &&
-                      s.effectiveStartDate <= today &&
-                      (!s.effectiveEndDate || s.effectiveEndDate >= today)
-                  );
-                  return (
-                    <tr key={dept.id}>
-                      <td>
-                        <b style={{ color: "#0f172a" }}>{dept.name}</b>
-                        {inForce.length > 0 && !inForce.some((s) => !s.serviceId) && (
-                          <div className="sm-hint">Service schedules only</div>
-                        )}
-                      </td>
-                      {ALL_DAYS.map((day) => {
-                        const h = hoursOn(inForce, day);
-                        return (
-                          <td key={day} className={`sm-hours-cell${h ? "" : " is-off"}`}>
-                            {h ? (
-                              <>
-                                {h.opening}–{h.closing}
-                                {h.services ? <div className="sm-hint">{h.services} service{h.services > 1 ? "s" : ""}</div> : null}
-                              </>
-                            ) : (
-                              "Closed"
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              {(departments || []).length === 0 && (
-                <tr>
-                  <td colSpan={8}>
-                    <div className="sm-empty">No departments yet: add one in Department Management.</div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -565,64 +379,39 @@ export default function OperatingHoursPage() {
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search by schedule ID, service, or department..."
+            placeholder="Search by schedule ID..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCursor(0);
+            }}
             className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
           />
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          {/* Department Filter */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={deptFilter}
-              onChange={(e) => setDeptFilter(e.target.value)}
-              className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="ALL">All Departments</option>
-              {availableDeptNames.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        {searchTerm && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearchTerm("");
+              setCursor(0);
+            }}
+            className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-1 cursor-pointer"
           >
-            <option value="ALL">All Statuses</option>
-            <option value="Active">Active Only</option>
-            <option value="Inactive">Inactive Only</option>
-          </select>
-
-          {(searchTerm || deptFilter !== "ALL" || statusFilter !== "ALL") && (
-            <button
-              onClick={() => {
-                setSearchTerm("");
-                setDeptFilter("ALL");
-                setStatusFilter("ALL");
-              }}
-              className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-1 cursor-pointer"
-            >
-              Reset
-            </button>
-          )}
-        </div>
+            Reset
+          </button>
+        )}
       </div>
 
       {/* B. Schedule List Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <DataTable
-          data={filteredSchedules}
+          data={schedules}
           columns={scheduleColumns}
           getRowId={(sch) => sch.id}
-          initialSorting={[{ id: "department", desc: false }]}
+          initialSorting={[]}
+          pageSize={null}
+          serverPagination={pagination}
           itemLabel="schedules"
           minWidth="1080px"
           emptyState={
@@ -632,14 +421,18 @@ export default function OperatingHoursPage() {
               </div>
               <div>
                 <p className="text-sm font-bold text-slate-700">
-                  {schedules.length === 0
-                    ? "No schedules configured yet"
-                    : "No schedules match the selected filters"}
+                  {loadingPage
+                    ? "Loading schedules…"
+                    : !searchTerm
+                      ? "No schedules configured yet"
+                      : "No schedules match your search"}
                 </p>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  {schedules.length === 0
-                    ? "Configure municipal service operating hours, slot intervals, and daily quotas by clicking 'Create Schedule'."
-                    : "Try adjusting your search keywords or resetting the department and status filters."}
+                  {loadingPage
+                    ? "Fetching working hours from server..."
+                    : !searchTerm
+                      ? "Configure municipal service working hours, slot intervals, and daily quotas by clicking 'Create Schedule'."
+                      : "Try adjusting your search keywords or clearing the search bar."}
                 </p>
               </div>
             </div>
@@ -658,7 +451,7 @@ export default function OperatingHoursPage() {
                   {editingSchedule ? "Edit Appointment Schedule" : "Create Appointment Schedule"}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Configure department service operating hours and daily limits.
+                  The same working days, hours and lunch break apply to every department.
                 </p>
               </div>
               <button type="button" onClick={() => setModalOpen(false)} className="modal-close" aria-label="Close">
@@ -668,54 +461,6 @@ export default function OperatingHoursPage() {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-              {/* Department * */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Department <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  required
-                  value={form.departmentId}
-                  onChange={(e) => handleDeptChange(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {(departments || []).length === 0 && (
-                    <option value="" disabled>
-                      No departments yet: add one in Department Management
-                    </option>
-                  )}
-                  {(departments || []).map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Service * */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Service <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={form.serviceId}
-                  onChange={(e) => setForm({ ...form, serviceId: e.target.value })}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value={ALL_SERVICES}>All services (department-wide)</option>
-                  {formServiceOptions.map((srv) => (
-                    <option key={srv.id} value={srv.id}>
-                      {srv.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  {form.serviceId
-                    ? "Citizens can book this service only on the working days, hours and dates set here."
-                    : "Applies to every service of the department that has no schedule of its own."}
-                </p>
-              </div>
-
               {/* Working Days */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -787,6 +532,45 @@ export default function OperatingHoursPage() {
                     className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+
+              {/* Lunch Break */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Lunch Break
+                </label>
+                <div
+                  className="grid-cols-2"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gap: "0.75rem",
+                  }}
+                >
+                  <div>
+                    <span className="block text-[11px] text-slate-500 mb-1">Starts</span>
+                    <input
+                      type="time"
+                      aria-label="Lunch break start"
+                      value={form.lunchStart}
+                      onChange={(e) => setForm({ ...form, lunchStart: e.target.value })}
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[11px] text-slate-500 mb-1">Ends</span>
+                    <input
+                      type="time"
+                      aria-label="Lunch break end"
+                      value={form.lunchEnd}
+                      onChange={(e) => setForm({ ...form, lunchEnd: e.target.value })}
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Citizens cannot book appointments during the lunch break. Clear both times for no break.
+                </p>
               </div>
 
               {/* Daily Capacity */}
@@ -910,8 +694,8 @@ export default function OperatingHoursPage() {
           impact={impactOf(deleteTarget)}
           message={
             <>
-              Schedule <strong>{deleteTarget.id}</strong> ({deleteTarget.department} · {deleteTarget.service || "all services"}) will be
-              deleted. Without another schedule in force, citizens can no longer book these services.
+              Schedule <strong>{deleteTarget.id}</strong> will be deleted. Without another schedule in force,
+              citizens can no longer book any department.
             </>
           }
         />
@@ -930,13 +714,11 @@ export default function OperatingHoursPage() {
           message={
             pending.kind === "save" ? (
               <>
-                The new hours apply to bookings made from now on for{" "}
-                <strong>{pending.sch.department} · {pending.sch.service || "all services"}</strong>.
+                The new hours apply to bookings made from now on for <strong>all departments</strong>.
               </>
             ) : pending.sch.status === "Active" ? (
               <>
-                Citizens will no longer be able to book under schedule <strong>{pending.sch.id}</strong> ({pending.sch.department} ·{" "}
-                {pending.sch.service || "all services"}).
+                Citizens will no longer be able to book under schedule <strong>{pending.sch.id}</strong>.
               </>
             ) : (
               <>

@@ -1,11 +1,21 @@
 // /api/v1/schedules: operating hours, Schedule Management (exceptions, availability, capacities,
 // calendar views, impact) and the public bookable list, slot availability and bookable dates.
-import { ok } from "../utils/response.js";
+import { ok, okWithCursor } from "../utils/response.js";
 
 export function createScheduleController({ scheduleService, availabilityService, scheduleManagementService: mgmt }) {
   return {
     // ---- operating hours ----
     async list(req, res) {
+      const { search, status, cursor, pageSize } = req.validatedQuery;
+      if (cursor !== undefined || pageSize !== undefined) {
+        const { items, cursor: metaCursor } = await scheduleService.listPaged(req.caller, {
+          search,
+          status,
+          cursor: cursor ?? 0,
+          pageSize: pageSize ?? 5,
+        });
+        return okWithCursor(res, "Schedules retrieved successfully.", items, metaCursor);
+      }
       ok(res, 200, "Schedules retrieved successfully.", await scheduleService.list(req.caller));
     },
     async listBookable(_req, res) {
@@ -35,7 +45,16 @@ export function createScheduleController({ scheduleService, availabilityService,
 
     // ---- calendar exceptions ----
     async listExceptions(req, res) {
-      ok(res, 200, "Calendar exceptions retrieved successfully.", await mgmt.listExceptions(req.caller, req.validatedQuery));
+      const { cursor, pageSize, ...filters } = req.validatedQuery;
+      if (cursor !== undefined || pageSize !== undefined) {
+        const { items, cursor: metaCursor } = await mgmt.listExceptionsPaged(req.caller, {
+          ...filters,
+          cursor: cursor ?? 0,
+          pageSize: pageSize ?? 5,
+        });
+        return okWithCursor(res, "Calendar exceptions retrieved successfully.", items, metaCursor);
+      }
+      ok(res, 200, "Calendar exceptions retrieved successfully.", await mgmt.listExceptions(req.caller, filters));
     },
     async createException(req, res) {
       ok(res, 201, "Calendar exception created successfully.", await mgmt.createException(req.caller, req.body));

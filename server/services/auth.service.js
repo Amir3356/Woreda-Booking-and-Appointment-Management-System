@@ -58,12 +58,13 @@ export function createAuthService({ jwtSecret, logger, events }) {
       if ((await sessions.loginFailures(identifier)) >= MAX_LOGIN_FAILURES) {
         throw new TooManyAttemptsError(`too many failed sign-in attempts, try again in ${LOGIN_LOCKOUT_WINDOW_SECONDS / 60} minutes`);
       }
-      const user = email !== null ? await users.findByEmail(email) : await users.findByPhone(phone);
+      const hasEmail = email != null && email !== "";
+      const user = hasEmail ? await users.findByEmail(email) : await users.findByPhone(phone);
       const valid = user && (await bcrypt.compare(password, user.passwordHash));
       if (!valid) {
         await sessions.recordLoginFailure(identifier, LOGIN_LOCKOUT_WINDOW_SECONDS)
           .catch((err) => logger.warn({ err: err.message }, "record login failure"));
-        throw new UnauthorizedError(email !== null ? "invalid email or password" : "invalid phone number or password");
+        throw new UnauthorizedError(hasEmail ? "invalid email or password" : "invalid phone number or password");
       }
       if (!user.isActive) throw new UnauthorizedError("account is deactivated");
       await sessions.clearLoginFailures(identifier).catch((err) => logger.warn({ err: err.message }, "clear login failures"));

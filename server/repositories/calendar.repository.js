@@ -12,11 +12,7 @@ const SELECT_EXCEPTIONS = `
 
 // ---- calendar exceptions ----
 
-/**
- * Exceptions overlapping [from, to] (either bound optional), optionally only those covering a
- * department (scope ALL or listing it) and of the given types; ordered by start date.
- */
-export async function findExceptions({ from, to, departmentId, types } = {}, client) {
+function buildExceptionFilter({ from, to, departmentId, types } = {}) {
   const params = [];
   const where = [];
   if (from) {
@@ -36,13 +32,38 @@ export async function findExceptions({ from, to, departmentId, types } = {}, cli
     params.push(types);
     where.push(`e.type = ANY($${params.length})`);
   }
+  return { params, whereClause: where.length ? `WHERE ${where.join(" AND ")}` : "" };
+}
+
+/**
+ * Exceptions overlapping [from, to] (either bound optional), optionally only those covering a
+ * department (scope ALL or listing it) and of the given types; ordered by start date.
+ */
+export async function findExceptions({ from, to, departmentId, types } = {}, client) {
+  const { params, whereClause } = buildExceptionFilter({ from, to, departmentId, types });
   const list = await rows(
-    `${SELECT_EXCEPTIONS} ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-     GROUP BY e.id ORDER BY e.start_date, e.end_date, e.title`,
+    `${SELECT_EXCEPTIONS} ${whereClause}
+     GROUP BY e.id ORDER BY e.start_date, e.end_date, e.title, e.id`,
     params,
     client,
   );
   return list.map(exceptionFromRow);
+}
+
+/** Cursor-paged calendar exceptions matching optional filters. */
+export async function findExceptionsPage({ from, to, departmentId, types, offset = 0, limit = 5 } = {}) {
+  const { params, whereClause } = buildExceptionFilter({ from, to, departmentId, types });
+  const [{ total }] = await rows(
+    `SELECT COUNT(*)::int AS total FROM calendar_exceptions e ${whereClause}`,
+    params,
+  );
+  const list = await rows(
+    `${SELECT_EXCEPTIONS} ${whereClause}
+     GROUP BY e.id ORDER BY e.start_date, e.end_date, e.title, e.id
+     OFFSET $${params.length + 1} LIMIT $${params.length + 2}`,
+    [...params, offset, limit],
+  );
+  return { total, items: list.map(exceptionFromRow) };
 }
 
 export async function findExceptionById(id, client) {

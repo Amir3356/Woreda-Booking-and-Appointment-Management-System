@@ -13,29 +13,25 @@ import {
   Edit2,
   X,
   Trash2,
-  Filter,
   RotateCcw,
-  Building2,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 
 export default function AdminServicesPage() {
   const {
-    departments,
+    services,
     addService,
     updateService,
     toggleServiceStatus,
     deleteService,
     loadServices,
-    loadDepartments,
   } = useStore();
   const [saving, setSaving] = useState(false);
 
-  // Search box and dropdown filters state
+  // Search box and service filter state
   const [search, setSearch] = useState("");
-  const [selectedDeptFilter, setSelectedDeptFilter] = useState("ALL");
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState("ALL");
+  const [selectedServiceFilter, setSelectedServiceFilter] = useState("ALL");
 
   // Server-side cursor-based pagination state (4 real data items per page)
   const PAGE_SIZE = 4;
@@ -58,8 +54,7 @@ export default function AdminServicesPage() {
     try {
       const res = await serviceApi.listPaged({
         search: search.trim() || undefined,
-        departmentId: selectedDeptFilter,
-        status: selectedStatusFilter,
+        serviceId: selectedServiceFilter,
         cursor,
         pageSize: PAGE_SIZE,
       });
@@ -77,20 +72,17 @@ export default function AdminServicesPage() {
     } finally {
       setLoadingPage(false);
     }
-  }, [search, selectedDeptFilter, selectedStatusFilter, cursor]);
+  }, [search, selectedServiceFilter, cursor]);
 
   useEffect(() => {
     fetchPagedServices();
   }, [fetchPagedServices]);
 
-  // Fetch departments and services on mount and whenever catalog updates via real-time WebSocket
+  // Fetch services on mount and whenever catalog updates via real-time WebSocket
   useEffect(() => {
     const refresh = () => {
       fetchPagedServices();
       loadServices().catch((err) => toast.error(describeError(err, "load services"), { duration: 5000 }));
-      if (typeof loadDepartments === "function") {
-        loadDepartments().catch(() => {});
-      }
     };
     refresh();
     const offChange = subscribe("catalog.changed", refresh);
@@ -99,20 +91,17 @@ export default function AdminServicesPage() {
       offChange();
       offReconnect();
     };
-  }, [fetchPagedServices, loadServices, loadDepartments]);
+  }, [fetchPagedServices, loadServices]);
 
   const showSuccess = (msg) => {
     toast.success(msg, { duration: 5000 });
   };
 
-  const hasActiveFilters = Boolean(
-    search.trim() || selectedDeptFilter !== "ALL" || selectedStatusFilter !== "ALL"
-  );
+  const hasActiveFilters = Boolean(search.trim() || selectedServiceFilter !== "ALL");
 
   const handleResetFilters = () => {
     setSearch("");
-    setSelectedDeptFilter("ALL");
-    setSelectedStatusFilter("ALL");
+    setSelectedServiceFilter("ALL");
     setCursor(0);
   };
 
@@ -126,14 +115,12 @@ export default function AdminServicesPage() {
 
   const [form, setForm] = useState({
     name: "",
-    departmentId: "",
   });
 
   const handleOpenAdd = () => {
     setEditingService(null);
     setForm({
       name: "",
-      departmentId: "",
     });
     setModalOpen(true);
   };
@@ -142,7 +129,6 @@ export default function AdminServicesPage() {
     setEditingService(srv);
     setForm({
       name: srv.name,
-      departmentId: srv.departmentId || "",
     });
     setModalOpen(true);
   };
@@ -153,7 +139,7 @@ export default function AdminServicesPage() {
 
     const payload = {
       name: form.name.trim(),
-      departmentId: form.departmentId ? form.departmentId : (editingService?.departmentId || null),
+      departmentId: editingService?.departmentId || null,
       code: editingService?.code || `SRV-${Date.now().toString(36).toUpperCase()}`,
       durationMinutes: editingService?.durationMinutes || 30,
       dailyQuota: editingService?.dailyQuota || 40,
@@ -186,6 +172,10 @@ export default function AdminServicesPage() {
     if (!window.confirm(`Are you sure you want to delete "${service.name}"?`)) return;
     try {
       await deleteService(service.id);
+      if (selectedServiceFilter === service.id) {
+        setSelectedServiceFilter("ALL");
+        setCursor(0);
+      }
       showSuccess(`Service "${service.name}" deleted.`);
       await fetchPagedServices();
     } catch (err) {
@@ -221,27 +211,6 @@ export default function AdminServicesPage() {
           )}
         </div>
       ),
-    },
-    {
-      id: "department",
-      header: "Department",
-      accessorFn: (s) => {
-        const dept = (departments || []).find((d) => d.id === s.departmentId);
-        return dept ? dept.name : "Unassigned";
-      },
-      sortFn: "text",
-      meta: { className: "text-slate-600 text-xs" },
-      cell: ({ row }) => {
-        const dept = (departments || []).find((d) => d.id === row.original.departmentId);
-        return dept ? (
-          <span className="inline-flex items-center gap-1 font-medium text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-            <Building2 className="w-3 h-3 text-slate-400" />
-            {dept.name}
-          </span>
-        ) : (
-          <span className="text-slate-400 italic text-[11px]">Unassigned</span>
-        );
-      },
     },
     {
       id: "status",
@@ -331,7 +300,7 @@ export default function AdminServicesPage() {
               setSearch(e.target.value);
               setCursor(0);
             }}
-            placeholder="Search service by name, code, or department..."
+            placeholder="Search service by name or code..."
             className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50/50"
           />
           {search && (
@@ -351,43 +320,24 @@ export default function AdminServicesPage() {
 
         {/* Dropdown Filters (Dropfilter) */}
         <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-          {/* Department Dropdown Filter */}
+          {/* Services Dropdown Filter */}
           <div className="flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <select
-              value={selectedDeptFilter}
+              value={selectedServiceFilter}
               onChange={(e) => {
-                setSelectedDeptFilter(e.target.value);
+                setSelectedServiceFilter(e.target.value);
                 setCursor(0);
               }}
               className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 cursor-pointer focus:ring-2 focus:ring-[#0b2545] focus:outline-none shadow-2xs max-w-xs"
-              title="Filter by department"
+              title="Filter by service"
             >
-              <option value="ALL">All Departments</option>
-              {(departments || []).map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
+              <option value="ALL">All Services</option>
+              {(services || []).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
                 </option>
               ))}
-              <option value="UNASSIGNED">Unassigned Services</option>
-            </select>
-          </div>
-
-          {/* Status Dropdown Filter */}
-          <div className="flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <select
-              value={selectedStatusFilter}
-              onChange={(e) => {
-                setSelectedStatusFilter(e.target.value);
-                setCursor(0);
-              }}
-              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 cursor-pointer focus:ring-2 focus:ring-[#0b2545] focus:outline-none shadow-2xs"
-              title="Filter by status"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="ACTIVE">Active Only</option>
-              <option value="INACTIVE">Inactive Only</option>
             </select>
           </div>
 
@@ -439,7 +389,7 @@ export default function AdminServicesPage() {
                     ? "Fetching public service catalog from server..."
                     : cursorMetaState.totalCount === 0 && !hasActiveFilters
                       ? "Public services and department counter designations configured by Central Administration will appear here."
-                      : "Try adjusting your search keywords or resetting the dropdown filters."}
+                      : "Try adjusting your search keywords or resetting the service filter."}
                 </p>
               </div>
             </div>
@@ -521,22 +471,6 @@ export default function AdminServicesPage() {
                   placeholder="e.g. Birth Certificate Registration"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50"
                 />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Department (Optional)</label>
-                <select
-                  value={form.departmentId || ""}
-                  onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50"
-                >
-                  <option value="">Unassigned (Assign later in Department Management)</option>
-                  {(departments || []).map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">

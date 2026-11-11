@@ -227,6 +227,7 @@
 .tracking-wider { letter-spacing: 0.05em !important; }
 .tracking-widest { letter-spacing: 0.1em !important; }
 .truncate { overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+.whitespace-nowrap { white-space: nowrap !important; }
 
 /* Colors - Text */
 .text-white { color: #ffffff !important; }

@@ -37,6 +37,7 @@ export const publicServiceSchema = z.object({
 
 export const publicServiceListQuery = z.object({
   departmentId: queryText,
+  serviceId: queryText,
   search: queryText,
   isActive: queryBoolean,
   status: queryText,

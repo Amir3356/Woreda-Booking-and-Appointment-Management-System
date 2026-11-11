@@ -4,7 +4,7 @@ import { ok, okWithCursor } from "../utils/response.js";
 export function createPublicServiceController(publicServiceService) {
   return {
     async list(req, res) {
-      const { isActive, status, departmentId, search, cursor, pageSize } = req.validatedQuery;
+      const { isActive, status, departmentId, serviceId, search, cursor, pageSize } = req.validatedQuery;
       let activeFilter = isActive;
       if (status) {
         const s = status.toLowerCase();
@@ -13,13 +13,17 @@ export function createPublicServiceController(publicServiceService) {
         else if (s === "all") activeFilter = undefined;
       }
 
+      const dept = departmentId && departmentId !== "ALL" ? departmentId : undefined;
+      const srv = serviceId && serviceId !== "ALL" ? serviceId : undefined;
+
       const isPaged = cursor !== undefined || pageSize !== undefined;
       if (isPaged) {
         const pageLimit = pageSize ?? 4;
         const pageCursor = cursor ?? 0;
         const { items, cursor: metaCursor } = await publicServiceService.listPaged({
           isActive: activeFilter,
-          departmentId: departmentId && departmentId !== "ALL" ? departmentId : undefined,
+          departmentId: dept,
+          serviceId: srv,
           search: search || "",
           cursor: pageCursor,
           pageSize: pageLimit,
@@ -33,7 +37,8 @@ export function createPublicServiceController(publicServiceService) {
         "Services retrieved successfully.",
         await publicServiceService.list({
           isActive: activeFilter,
-          departmentId: departmentId && departmentId !== "ALL" ? departmentId : undefined,
+          departmentId: dept,
+          serviceId: srv,
           search: search || "",
         })
       );

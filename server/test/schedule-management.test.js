@@ -102,6 +102,36 @@ test("exceptionSchema - holidays drop hours, working days require them", () => {
   assert.ok(fields.includes("dailyCapacity"));
 });
 
+test("exceptionSchema - title and description are optional and resolveDay maps blank title to null note", () => {
+  const parsed = exceptionSchema.parse({
+    type: "PUBLIC_HOLIDAY",
+    startDate: "2027-01-07",
+    scope: "ALL",
+  });
+  assert.equal(parsed.title, "");
+  assert.equal(parsed.description, null);
+
+  const holidayDay = resolveDay({
+    date: MONDAY,
+    baseSchedule: weekdays,
+    exceptions: [{ id: "e1", type: "PUBLIC_HOLIDAY", title: "", startDate: MONDAY, endDate: MONDAY, scope: "ALL", departmentIds: [] }],
+  });
+  assert.equal(holidayDay.open, false);
+  assert.equal(holidayDay.reason, "PUBLIC_HOLIDAY");
+  assert.equal(holidayDay.note, null);
+
+  const workingDay = resolveDay({
+    date: SATURDAY,
+    baseSchedule: weekdays,
+    exceptions: [{
+      id: "e2", type: "WORKING_DAY", title: "", startDate: SATURDAY, endDate: SATURDAY, scope: "ALL", departmentIds: [],
+      openingTime: "08:30", closingTime: "12:30", dailyCapacity: 10,
+    }],
+  });
+  assert.equal(workingDay.open, true);
+  assert.equal(workingDay.note, null);
+});
+
 test("exceptionSchema - scope needs matching departments and a sane range", () => {
   const one = exceptionSchema.safeParse({ type: "BLOCKED", title: "x", startDate: MONDAY, scope: "DEPARTMENT", departmentIds: ["a", "b"] });
   assert.equal(one.success, false);
@@ -118,4 +148,64 @@ test("dateAvailabilitySchema and capacitySchema", () => {
   assert.equal(dateAvailabilitySchema.safeParse({ departmentIds: [], startDate: MONDAY, enabled: true }).success, false);
   assert.equal(capacitySchema.safeParse({ dailyCapacity: null }).success, true);
   assert.equal(capacitySchema.safeParse({ dailyCapacity: 0 }).success, false);
+});
+
+test("Woreda-wide schedule applies to every department without its own", () => {
+  const woreda = { ...weekdays, departmentId: null, openingTime: "08:00", closingTime: "17:00" };
+  assert.equal(departmentHoursOn([woreda], "d9", MONDAY), woreda);
+  assert.equal(departmentHoursOn([woreda, weekdays], "d1", MONDAY), weekdays);
+  assert.equal(serviceScheduleOn([woreda], "s1", "d9", MONDAY), woreda);
+  assert.equal(serviceScheduleOn([woreda], "s1", null, MONDAY), woreda);
+});
+
+test("buildSlots / scheduleIssue - the configured lunch break is not bookable", async () => {
+  const { buildSlots, scheduleIssue } = await import("../utils/slots.js");
+  const sch = { ...weekdays, lunchStart: "12:00", lunchEnd: "13:30" };
+  const status = Object.fromEntries(buildSlots(sch, MONDAY, {}, 3).map((s) => [s.timeSlot, s.status]));
+  assert.equal(status["11:30 AM"], "Available");
+  assert.equal(status["12:00 PM"], "Unavailable");
+  assert.equal(status["13:00 PM"], "Unavailable");
+  assert.equal(status["13:30 PM"], "Available");
+  assert.match(scheduleIssue(sch, MONDAY, "12:30 PM").issue, /lunch break \(12:00–13:30\)/);
+  assert.equal(scheduleIssue(sch, MONDAY, "13:30 PM"), null);
+  // Without a configured break the old 12:30 slot stays closed.
+  assert.ok(scheduleIssue(weekdays, MONDAY, "12:30 PM"));
+});
+
+test("scheduleSchema - Woreda-wide schedule with a lunch break", async () => {
+  const { scheduleSchema } = await import("../validations/schedule.validation.js");
+  const base = { openingTime: "08:30", closingTime: "17:30", dailyCapacity: 20, effectiveStartDate: "2026-11-01" };
+  const ok = scheduleSchema.parse({ ...base, departmentId: null, lunchStart: "12:30", lunchEnd: "13:30" });
+  assert.equal(ok.departmentId, null);
+  assert.equal(ok.lunchStart, "12:30");
+  assert.equal(scheduleSchema.safeParse({ ...base, lunchStart: "12:30" }).success, false);
+  assert.equal(scheduleSchema.safeParse({ ...base, lunchStart: "13:30", lunchEnd: "12:30" }).success, false);
+  assert.equal(scheduleSchema.safeParse({ ...base, lunchStart: "07:00", lunchEnd: "08:00" }).success, false);
+});
+
+test("scheduleListQuery and exceptionListQuery support optional cursor pagination (5 per page)", async () => {
+  const { scheduleListQuery, exceptionListQuery } = await import("../validations/schedule.validation.js");
+
+  const unpagedSchedules = scheduleListQuery.parse({});
+  assert.equal(unpagedSchedules.cursor, undefined);
+  assert.equal(unpagedSchedules.pageSize, undefined);
+  assert.equal(unpagedSchedules.search, "");
+
+  const pagedSchedules = scheduleListQuery.parse({ cursor: "5", pageSize: "5", search: "SCH-", status: "Active" });
+  assert.equal(pagedSchedules.cursor, 5);
+  assert.equal(pagedSchedules.pageSize, 5);
+  assert.equal(pagedSchedules.search, "SCH-");
+  assert.equal(pagedSchedules.status, "Active");
+
+  assert.equal(scheduleListQuery.safeParse({ cursor: "-1" }).success, false);
+  assert.equal(scheduleListQuery.safeParse({ pageSize: "0" }).success, false);
+
+  const unpagedExceptions = exceptionListQuery.parse({});
+  assert.equal(unpagedExceptions.cursor, undefined);
+  assert.equal(unpagedExceptions.pageSize, undefined);
+
+  const pagedExceptions = exceptionListQuery.parse({ cursor: "10", pageSize: "5", from: "2026-11-01" });
+  assert.equal(pagedExceptions.cursor, 10);
+  assert.equal(pagedExceptions.pageSize, 5);
+  assert.equal(pagedExceptions.from, "2026-11-01");
 });

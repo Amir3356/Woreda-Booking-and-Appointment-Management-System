@@ -12,6 +12,7 @@ import {
 } from "@/services";
 import { serviceApi, departmentApi, scheduleApi, appointmentApi, queueApi } from "@/api";
 import { http, tokenStorage } from "@/api/httpClient";
+import { normalizeEthiopianPhone } from "@/utils";
 
 const DEFAULT_TIME_SLOTS = [
   "08:30 AM",
@@ -226,8 +227,9 @@ export const useStore = create(
 
         const matchesAcc = (a) => {
           const aEmail = (a.email || "").trim().toLowerCase();
-          const aPhone = (a.phone || "").trim();
-          if (cleanPhone && aPhone && aPhone === cleanPhone) return true;
+          const aPhone = a.phone ? normalizeEthiopianPhone(a.phone) : "";
+          const targetPhone = cleanPhone ? normalizeEthiopianPhone(cleanPhone) : "";
+          if (targetPhone && aPhone && aPhone === targetPhone) return true;
           if (cleanEmail && aEmail && aEmail === cleanEmail) return true;
           return false;
         };
@@ -313,8 +315,11 @@ export const useStore = create(
 
         const matchesKey = (a) => {
           const aEmail = (a.email || "").trim().toLowerCase();
-          const aPhone = (a.phone || "").trim().toLowerCase();
-          return aEmail === cleanKey || aPhone === cleanKey;
+          const aPhone = a.phone ? normalizeEthiopianPhone(a.phone) : "";
+          const targetKey = cleanKey ? normalizeEthiopianPhone(cleanKey) : "";
+          if (targetKey && aPhone && aPhone === targetKey) return true;
+          if (cleanKey && aEmail && aEmail === cleanKey) return true;
+          return false;
         };
 
         if (typeof window !== "undefined" && window.localStorage) {
@@ -412,8 +417,11 @@ export const useStore = create(
         const cleanKey = (keyToDelete || "").trim().toLowerCase();
         const matchesKey = (a) => {
           const aEmail = (a.email || "").trim().toLowerCase();
-          const aPhone = (a.phone || "").trim().toLowerCase();
-          return aEmail === cleanKey || aPhone === cleanKey;
+          const aPhone = a.phone ? normalizeEthiopianPhone(a.phone) : "";
+          const targetKey = cleanKey ? normalizeEthiopianPhone(cleanKey) : "";
+          if (targetKey && aPhone && aPhone === targetKey) return true;
+          if (cleanKey && aEmail && aEmail === cleanKey) return true;
+          return false;
         };
 
         if (typeof window !== "undefined" && window.localStorage) {
@@ -837,11 +845,12 @@ export const useStore = create(
         );
         cleanedProvisioned.forEach((prov) => {
           const provEmail = (prov.email || "").trim().toLowerCase();
-          if (!provEmail) return;
+          const provPhone = prov.phone ? normalizeEthiopianPhone(prov.phone) : "";
+          if (!provEmail && !provPhone) return;
           const isOfficer = prov.role !== "Central Administrator" && prov.role !== "Admin" && prov.role !== "ADMIN";
           const role = isOfficer ? "OFFICER" : "ADMIN";
           const dept = currentDepartments.find((d) => d.id === prov.departmentId || d.name === prov.role) || currentDepartments[0];
-          const existing = usersByEmail.get(provEmail);
+          const existing = (provEmail && usersByEmail.get(provEmail)) || (provPhone ? cleanedUsers.find((u) => u.phone && normalizeEthiopianPhone(u.phone) === provPhone) : null);
 
           if (existing) {
             existing.password = prov.password || existing.password || "Password@123";
@@ -853,10 +862,11 @@ export const useStore = create(
             existing.isActive = prov.isActive !== false;
             existing.isProvisioned = true;
           } else {
+            const userIdentifier = provEmail || (provPhone ? `${provPhone.replace(/\D/g, "")}@woreda.gov.et` : `usr-${Date.now()}`);
             const newUser = {
-              id: `usr-prov-${provEmail.replace(/[^a-z0-9]/g, "")}`,
+              id: prov.id || `usr-prov-${userIdentifier.replace(/[^a-z0-9]/g, "")}`,
               fullName: prov.fullName,
-              email: prov.email,
+              email: prov.email || userIdentifier,
               password: prov.password || "Password@123",
               phone: prov.phone || "+251911000000",
               nationalId: prov.nationalId || `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -871,7 +881,7 @@ export const useStore = create(
               createdAt: prov.createdAt || new Date().toISOString(),
             };
             cleanedUsers.push(newUser);
-            usersByEmail.set(provEmail, newUser);
+            if (provEmail) usersByEmail.set(provEmail, newUser);
           }
         });
 

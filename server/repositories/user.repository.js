@@ -44,9 +44,28 @@ export async function findByEmail(email) {
   return fromRow(await one(`${SELECT_WITH_DEPARTMENT} WHERE LOWER(u.email) = LOWER($1)`, [email]));
 }
 
-/** Lookup by normalized phone number (includes passwordHash). */
+/** Lookup by phone number in standard (+2519...) or local (09...) format (includes passwordHash). */
 export async function findByPhone(phone) {
-  return fromRow(await one(`${SELECT_WITH_DEPARTMENT} WHERE u.phone = $1 AND u.phone <> ''`, [phone]));
+  const raw = String(phone || "").trim();
+  const digits = raw.replace(/[^\d+]/g, "");
+  const normalized = digits.startsWith("+251")
+    ? digits
+    : digits.startsWith("251")
+      ? `+${digits}`
+      : digits.startsWith("09")
+        ? `+251${digits.slice(1)}`
+        : digits.startsWith("9")
+          ? `+251${digits}`
+          : digits.length === 8
+            ? `+2519${digits}`
+            : digits;
+  const localFormat = normalized.startsWith("+251") ? `0${normalized.slice(4)}` : normalized;
+  return fromRow(
+    await one(
+      `${SELECT_WITH_DEPARTMENT} WHERE (u.phone = $1 OR u.phone = $2) AND u.phone <> ''`,
+      [normalized, localFormat],
+    ),
+  );
 }
 
 export async function findById(id) {

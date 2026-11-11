@@ -1,8 +1,8 @@
 import { http } from "./httpClient";
 
-// Module 5: /schedules (operating hours) and Admin > Schedule Management.
+// Module 5: /schedules (working hours) and Admin > Schedule Management.
 export const scheduleApi = {
-  // ---- operating hours ----
+  // ---- working hours ----
   list: (params) => http.get("/schedules", params),
   create: (payload) => http.post("/schedules", payload),
   update: (id, payload) => http.put(`/schedules/${id}`, payload),

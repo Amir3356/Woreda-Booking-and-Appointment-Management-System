@@ -33,6 +33,7 @@ function normalizePhone(value) {
   if (digits.startsWith("251")) return `+${digits}`;
   if (digits.startsWith("09")) return `+251${digits.slice(1)}`;
   if (digits.startsWith("9")) return `+251${digits}`;
+  if (/^\d{8}$/.test(digits)) return `+2519${digits}`;
   return digits;
 }
 
@@ -86,4 +87,19 @@ export const queryRequired = (message) => z.preprocess(first, z.string({ error: 
 export const pageQuery = {
   page: queryInt(1, 1, Number.MAX_SAFE_INTEGER),
   limit: queryInt(20, 1, 200),
+};
+
+const optionalIntParam = (min, max) =>
+  z.preprocess(
+    (v) => {
+      const val = first(v);
+      return val === undefined || val === "" || val === null ? undefined : Number(val);
+    },
+    z.number().int().min(min).max(max).optional(),
+  );
+
+/** Optional cursor/pageSize fields: omitted by unpaged callers so backward-compatible endpoints know when to page. */
+export const optionalCursorFields = {
+  cursor: optionalIntParam(0, Number.MAX_SAFE_INTEGER),
+  pageSize: optionalIntParam(1, 100),
 };

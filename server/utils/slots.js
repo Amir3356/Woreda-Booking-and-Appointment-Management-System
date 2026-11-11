@@ -1,4 +1,5 @@
-// The municipal booking grid: 30-minute slots from 08:30 to 16:30, lunch break at 12:30, and the
+// The municipal booking grid: 30-minute slots from 08:30 to 16:30, the schedule's lunch break
+// (12:30 when the schedule has none configured), and the
 // checks of a booking against a schedule (working days, opening hours, capacities). No I/O.
 import { DAY_NAMES, minutes, pad, parseClock, parseDate, weekdayOf } from "./date.js";
 
@@ -24,6 +25,18 @@ export function slotMinutes(label) {
   return h * 60 + Number(m[2]);
 }
 
+/** Whether the slot starting at m (minutes) overlaps the schedule's lunch break. */
+function isLunch(schedule, m) {
+  if (schedule?.lunchStart && schedule?.lunchEnd) {
+    return m < minutes(schedule.lunchEnd) && m + SLOT_MINUTES > minutes(schedule.lunchStart);
+  }
+  return m === LUNCH_SLOT_MIN;
+}
+
+/** "12:30–13:30" for the messages. */
+const lunchLabel = (schedule) =>
+  schedule?.lunchStart && schedule?.lunchEnd ? `${schedule.lunchStart}–${schedule.lunchEnd}` : "12:30 PM";
+
 /** How many booking times a schedule's opening hours hold (lunch break excluded). */
 function openTimesCount(schedule) {
   if (!schedule) return 0;
@@ -31,7 +44,7 @@ function openTimesCount(schedule) {
   const closing = minutes(schedule.closingTime);
   let n = 0;
   for (let m = FIRST_SLOT_MIN; m <= LAST_SLOT_MIN; m += SLOT_MINUTES) {
-    if (m >= open && m + SLOT_MINUTES <= closing && m !== LUNCH_SLOT_MIN) n++;
+    if (m >= open && m + SLOT_MINUTES <= closing && !isLunch(schedule, m)) n++;
   }
   return n;
 }
@@ -58,7 +71,9 @@ export function scheduleIssue(schedule, date, timeSlot) {
   const open = parseClock(schedule.openingTime) ?? 0;
   const close = parseClock(schedule.closingTime) ?? 0;
   const onGrid = start !== null && start >= FIRST_SLOT_MIN && start <= LAST_SLOT_MIN && (start - FIRST_SLOT_MIN) % SLOT_MINUTES === 0;
-  if (start === LUNCH_SLOT_MIN) return { field: "timeSlot", issue: "12:30 PM is the lunch break; choose another time." };
+  if (start !== null && isLunch(schedule, start)) {
+    return { field: "timeSlot", issue: `That time is during the lunch break (${lunchLabel(schedule)}); choose another time.` };
+  }
   if (!onGrid || start < open || start + SLOT_MINUTES > close) {
     return { field: "timeSlot", issue: `That time is outside the service's opening hours (${schedule.openingTime}–${schedule.closingTime}).` };
   }
@@ -108,7 +123,7 @@ export function buildSlots(schedule, day, counts, max) {
   for (let m = FIRST_SLOT_MIN; m <= LAST_SLOT_MIN; m += SLOT_MINUTES) {
     const timeSlot = slotLabel(m);
     const slot = { timeSlot, bookedCount: counts[timeSlot] ?? 0, remainingCapacity: 0, status: "" };
-    if (m < open || m + SLOT_MINUTES > closing || m === LUNCH_SLOT_MIN) {
+    if (m < open || m + SLOT_MINUTES > closing || isLunch(schedule, m)) {
       slot.status = "Unavailable";
     } else if (slot.bookedCount >= max) {
       slot.status = "Full";

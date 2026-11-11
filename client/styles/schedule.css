@@ -27,6 +27,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  width: 100%;
   max-width: 80rem;
   margin: 0 auto;
   color: #0f172a;
@@ -37,10 +38,13 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  width: 100%;
 }
 
 .sm-tabs {
   display: flex;
+  justify-content: center;
+  align-items: center;
   gap: 0.25rem;
   width: 100%;
   max-width: 80rem;
@@ -98,6 +102,36 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.sm-header--centered {
+  display: grid;
+  grid-template-columns: minmax(9.5rem, 1fr) auto minmax(9.5rem, 1fr);
+  align-items: center;
+}
+
+.sm-header--centered .sm-subtitle {
+  grid-column: 2;
+  margin-top: 0;
+  text-align: center;
+}
+
+.sm-header--centered .sm-btn {
+  grid-column: 3;
+  justify-self: end;
+}
+
+@media (max-width: 900px) {
+  .sm-header--centered {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .sm-header--centered .sm-subtitle,
+  .sm-header--centered .sm-btn {
+    grid-column: 1;
+    justify-self: center;
+  }
 }
 
 .sm-eyebrow {
@@ -889,17 +923,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Weekly operating-hours grid */
-.sm-hours-cell {
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.sm-hours-cell.is-off {
-  color: #94a3b8;
-}
-
 /* Chips for multi-select departments */
 .sm-chips {
   display: flex;
@@ -932,48 +955,6 @@
 .sm-chip svg {
   width: 13px;
   height: 13px;
-}
-
-/* Choice cards (exception type, scope) */
-.sm-choices {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
-  gap: 0.5rem;
-}
-
-.sm-choice {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.65rem 0.75rem;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 120ms ease, background-color 120ms ease;
-}
-
-.sm-choice:hover {
-  border-color: #94a3b8;
-}
-
-.sm-choice[aria-pressed="true"] {
-  border-color: var(--tone, #0b2545);
-  background: var(--tone-bg, #f8fafc);
-  box-shadow: inset 0 0 0 1px var(--tone, #0b2545);
-}
-
-.sm-choice b {
-  font-size: 0.8125rem;
-  color: #0f172a;
-}
-
-.sm-choice span {
-  font-size: 0.7rem;
-  line-height: 1.35;
-  color: #64748b;
 }
 
 /* Dialog body built on .modal-panel */
@@ -1032,8 +1013,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sm-day,
-  .sm-btn,
-  .sm-choice {
+  .sm-btn {
     transition: none;
   }
 }

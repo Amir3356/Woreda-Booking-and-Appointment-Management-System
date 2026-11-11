@@ -283,7 +283,7 @@ export default function CitizenBookAppointmentPage() {
   }, [selectedSlot?.serviceId, selectedSlot?.date, availabilityVersion]);
 
   // Dates the citizen can actually book for the chosen service (next 60 days), as decided by the
-  // server from Schedule Management: operating hours, holidays and other exceptions, disabled
+  // server from Schedule Management: working hours, holidays and other exceptions, disabled
   // booking dates and daily capacities. Offered as quick choices under the date field.
   const [bookableDates, setBookableDates] = useState({ serviceId: "", dates: [] });
   useEffect(() => {

@@ -6,9 +6,9 @@
 .data-table-sort {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  margin: -0.25rem -0.4rem;
-  padding: 0.25rem 0.4rem;
+  gap: 0.4rem;
+  margin: -0.25rem 0 -0.25rem -0.45rem;
+  padding: 0.25rem 0.45rem;
   border: none;
   border-radius: 6px;
   background: none;
@@ -118,8 +118,22 @@
   color: #94a3b8;
 }
 
-/* Header labels stay on one line (the table scrolls sideways when columns do not fit). */
+/* Header labels stay on one line with generous spacing between columns. */
 .data-table thead th,
 .data-table-sort {
   white-space: nowrap;
+}
+
+.data-table thead th,
+.data-table tbody td {
+  padding: 0.9rem 2rem;
+}
+
+.data-table tbody td.data-table-empty {
+  padding: 3.5rem 2rem;
+  text-align: center;
+}
+
+.data-table tr.is-past td {
+  opacity: 0.6;
 }
