@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useStore } from "@/context";
 import {
   Download,
@@ -6,13 +5,11 @@ import {
 } from "lucide-react";
 
 export default function AdminReportsPage() {
-  const { appointments, departments, services } = useStore();
-  const [reportPeriod, setReportPeriod] = useState("THIS_MONTH");
+  const { appointments, departments } = useStore();
 
   const total = appointments.length;
   const completed = appointments.filter((a) => a.status === "COMPLETED").length;
   const noShow = appointments.filter((a) => a.status === "NO_SHOW").length;
-  const cancelled = appointments.filter((a) => a.status === "CANCELLED").length;
   const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
   const noShowRate = total > 0 ? Math.round((noShow / total) * 100) : 0;
 

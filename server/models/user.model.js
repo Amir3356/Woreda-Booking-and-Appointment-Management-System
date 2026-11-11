@@ -1,7 +1,6 @@
 // Table "users": citizens, department officers and administrators.
-export const ROLES = Object.freeze(["CITIZEN", "OFFICER", "ADMIN"]);
-export const LABEL_OFFICER = "Department Officer";
-export const LABEL_ADMIN = "Central Administrator";
+const LABEL_OFFICER = "Department Officer";
+const LABEL_ADMIN = "Central Administrator";
 
 /** users row (optionally joined with department_name) -> user object (includes passwordHash). */
 export function fromRow(r) {

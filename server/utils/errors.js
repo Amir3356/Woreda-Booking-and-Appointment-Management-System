@@ -81,6 +81,3 @@ export class SlotFullError extends AppError {
 
 /** PostgreSQL unique-constraint violation. */
 export const isDuplicateKey = (err) => err?.code === "23505";
-
-/** PostgreSQL foreign-key violation. */
-export const isForeignKeyViolation = (err) => err?.code === "23503";

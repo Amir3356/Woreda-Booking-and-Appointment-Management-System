@@ -6,7 +6,7 @@ import Navbar from "@/layout/Navbar";
 import Footer from "@/layout/Footer";
 import { useStore } from "@/context";
 import { isValidEmail } from "@/services";
-import { User, Phone, CheckCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { User, CheckCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();

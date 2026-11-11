@@ -16,7 +16,6 @@ export default function OfficerReportsPage() {
 
   const completed = deptAppointments.filter((a) => a.status === "COMPLETED");
   const noShows = deptAppointments.filter((a) => a.status === "NO_SHOW");
-  const pending = deptAppointments.filter((a) => a.status === "PENDING");
 
   const handlePrint = () => {
     window.print();

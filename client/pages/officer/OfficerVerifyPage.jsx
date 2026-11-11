@@ -10,7 +10,7 @@ import {
 import { formatDate } from "@/utils";
 
 export default function OfficerVerifyPage() {
-  const { appointments, services, updateAppointmentStatus, currentUser } = useStore();
+  const { appointments, services, updateAppointmentStatus } = useStore();
   const [refQuery, setRefQuery] = useState("");
   const [foundApt, setFoundApt] = useState(null);
   const [checkedDocs, setCheckedDocs] = useState({});

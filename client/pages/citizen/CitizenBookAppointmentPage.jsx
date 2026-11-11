@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { useStore } from "@/context";
 import { subscribe, isLive } from "@/api/realtime";
 import { scheduleApi } from "@/api";
@@ -28,7 +29,6 @@ import {
   CheckCircle,
   X,
   User,
-  Phone,
   AlertCircle,
 } from "lucide-react";
 
@@ -201,15 +201,7 @@ export default function CitizenBookAppointmentPage() {
   const [citizenName, setCitizenName] = useState(currentUser?.fullName || "");
   const [citizenPhone, setCitizenPhone] = useState(currentUser?.phone || "");
   const [citizenNotes, setCitizenNotes] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
-  // One timer for the success banner, so an older message's timer cannot hide a newer message.
-  const successTimer = useRef(null);
-  const showSuccess = (msg) => {
-    clearTimeout(successTimer.current);
-    setSuccessMsg(msg);
-    successTimer.current = setTimeout(() => setSuccessMsg(""), 4500);
-  };
-  useEffect(() => () => clearTimeout(successTimer.current), []);
+  const showSuccess = (msg) => toast.success(msg);
 
   // Modal service dropdown: every active service from Admin > Services Management.
   // The department is taken from the chosen service, so citizens don't pick it separately.
@@ -483,24 +475,6 @@ export default function CitizenBookAppointmentPage() {
           <span>Book Appointment</span>
         </button>
       </div>
-
-      {/* Success Notification */}
-      {successMsg && (
-        <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold shadow-xs animate-in fade-in duration-150">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{successMsg}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSuccessMsg("")}
-            className="text-emerald-700 hover:text-emerald-900 cursor-pointer p-0.5"
-            aria-label="Dismiss notification"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       {serverSessionInvalid && (
         <div role="alert" className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold shadow-xs">

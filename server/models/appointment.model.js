@@ -5,9 +5,6 @@ export const STATUSES = Object.freeze([
   "PENDING", "APPROVED", "REJECTED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW",
 ]);
 
-/** Statuses that do not occupy a place in their day / time slot. */
-export const RELEASED_STATUSES = Object.freeze(["CANCELLED", "REJECTED"]);
-
 /** appointments row joined with department_name / service_name -> API shape. */
 export function fromRow(r) {
   if (!r) return null;

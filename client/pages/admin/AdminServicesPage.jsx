@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { useStore } from "@/context";
 import { subscribe } from "@/api/realtime";
 import { describeError } from "@/utils";
@@ -7,7 +8,6 @@ import {
   Plus,
   Search,
   Filter,
-  CheckCircle,
   Edit2,
   X,
   Trash2,
@@ -47,14 +47,12 @@ export default function AdminServicesPage() {
 
   const showSuccess = (msg) => {
     setErrorMsg("");
-    setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(""), 3500);
+    toast.success(msg);
   };
   const [search, setSearch] = useState("");
   const [selectedDeptFilter, setSelectedDeptFilter] = useState("ALL");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
-  const [successMsg, setSuccessMsg] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -169,14 +167,6 @@ export default function AdminServicesPage() {
           <span>Add New Service</span>
         </button>
       </div>
-
-      {/* Toast Notification */}
-      {successMsg && (
-        <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold shadow-xs animate-in fade-in duration-150">
-          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{successMsg}</span>
-        </div>
-      )}
 
       {errorMsg && (
         <div role="alert" className="flex items-start gap-2 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold shadow-xs">

@@ -7,5 +7,3 @@
 export * from "./appointmentService";
 export * from "./queueService";
 export * from "./authService";
-export * from "./departmentService";
-export * from "./reportService";

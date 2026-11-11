@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, Save, CheckCircle2, BellRing } from "lucide-react";
+import { Settings, CheckCircle2, BellRing } from "lucide-react";
 
 export default function AdminSettingsPage() {
   const [woredaName, setWoredaName] = useState("Woreda 03 Public Administration");

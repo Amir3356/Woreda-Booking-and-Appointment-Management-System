@@ -18,8 +18,3 @@ export function formatDate(dateString) {
     day: "numeric",
   });
 }
-
-export function formatTime(timeString) {
-  if (!timeString) return "N/A";
-  return timeString;
-}

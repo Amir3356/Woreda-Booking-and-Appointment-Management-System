@@ -13,7 +13,7 @@ import {
 import { serviceApi, departmentApi, scheduleApi, appointmentApi, queueApi } from "@/api";
 import { http } from "@/api/httpClient";
 
-export const DEFAULT_TIME_SLOTS = [
+const DEFAULT_TIME_SLOTS = [
   "08:30 AM",
   "09:00 AM",
   "09:30 AM",
@@ -31,7 +31,7 @@ export const DEFAULT_TIME_SLOTS = [
   "16:30 PM",
 ];
 
-export const DEFAULT_SCHEDULE_CONFIGS = {
+const DEFAULT_SCHEDULE_CONFIGS = {
   workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
   officeHours: { start: "08:30", end: "17:30" },
   lunchBreak: { start: "12:30", end: "13:30" },
@@ -47,10 +47,6 @@ export const DEFAULT_SCHEDULE_CONFIGS = {
     { date: "2026-05-05", name: "Patriots' Victory Day" },
   ],
 };
-
-export const DEFAULT_DEPARTMENTS = [];
-
-export const DEFAULT_PROVISIONED_ACCOUNTS = [];
 
 // Sequence number of the latest loadAppointments call (see there).
 let appointmentLoadSeq = 0;
@@ -84,8 +80,7 @@ export const useStore = create(
       },
 
       // Departments State: departments live in department-service (/api/v1/departments).
-      // DEFAULT_DEPARTMENTS (same ids as the server seed) is shown until the first fetch returns.
-      departments: DEFAULT_DEPARTMENTS,
+      departments: [],
       loadDepartments: async () => {
         const { data } = await departmentApi.list();
         const departments = Array.isArray(data) ? data : [];
@@ -183,7 +178,7 @@ export const useStore = create(
       },
 
       // Provisioned Accounts Management (Admin Account Provisioning)
-      provisionedAccounts: DEFAULT_PROVISIONED_ACCOUNTS,
+      provisionedAccounts: [],
       addProvisionedAccount: (acc) => {
         const cleanEmail = (acc.email || "").trim().toLowerCase();
         const role = acc.role === "Central Administrator" ? "ADMIN" : "OFFICER";
@@ -206,7 +201,7 @@ export const useStore = create(
             const list = rawBackup ? JSON.parse(rawBackup) : [];
             const filtered = list.filter((a) => (a.email || "").trim().toLowerCase() !== cleanEmail);
             window.localStorage.setItem("woreda_provisioned_accounts", JSON.stringify([newAccount, ...filtered]));
-          } catch (e) {
+          } catch {
             // ignore
           }
         }
@@ -292,7 +287,7 @@ export const useStore = create(
               isProvisioned: true,
             };
             window.localStorage.setItem("woreda_provisioned_accounts", JSON.stringify([savedAcc, ...filtered]));
-          } catch (e) {
+          } catch {
             // ignore
           }
         }
@@ -380,7 +375,7 @@ export const useStore = create(
             const list = rawBackup ? JSON.parse(rawBackup) : [];
             const filtered = list.filter((a) => (a.email || "").trim().toLowerCase() !== cleanEmail);
             window.localStorage.setItem("woreda_provisioned_accounts", JSON.stringify(filtered));
-          } catch (e) {
+          } catch {
             // ignore
           }
         }
@@ -404,18 +399,6 @@ export const useStore = create(
 
       // Schedule Configurations
       scheduleConfigs: DEFAULT_SCHEDULE_CONFIGS,
-      updateScheduleConfigs: (newConfig) => {
-        set((state) => ({
-          scheduleConfigs: { ...state.scheduleConfigs, ...newConfig },
-        }));
-        get().addAuditLog({
-          userName: get().currentUser?.fullName || "Admin",
-          userRole: "ADMIN",
-          action: "UPDATE_SCHEDULE",
-          entity: "Global Schedule",
-          details: "Modified operating hours or daily booking parameters",
-        });
-      },
 
       // Municipal Service Schedules: they live in booking-service (/api/v1/schedules). Admin >
       // Schedule Management reads all of them; the citizen booking page reads the bookable ones
@@ -631,7 +614,7 @@ export const useStore = create(
           get().updateAppointmentStatus(item.appointmentId, "NO_SHOW");
         }
       },
-      callNextCitizen: (departmentId, counterNumber = 1) => {
+      callNextCitizen: (departmentId) => {
         const waitingItem = get().queue.find(
           (q) => q.departmentId === departmentId && q.status === "WAITING"
         );
@@ -695,7 +678,7 @@ export const useStore = create(
         // Departments come from the API; an old browser copy (which may hold departments the
         // server never had) is ignored.
         delete safePersisted.departments;
-        const currentDepartments = currentState.departments || DEFAULT_DEPARTMENTS;
+        const currentDepartments = currentState.departments || [];
 
         // Strip legacy pre-seeded mock officer accounts so Account Provision starts clean
         const LEGACY_MOCK_OFFICER_EMAILS = new Set([
@@ -712,11 +695,6 @@ export const useStore = create(
         const persistedProv = safePersisted.provisionedAccounts || [];
         const provMap = new Map();
 
-        // Seed default municipal accounts (if any)
-        DEFAULT_PROVISIONED_ACCOUNTS.forEach((a) => {
-          provMap.set((a.email || "").trim().toLowerCase(), { ...a });
-        });
-
         // Overlay user-created and persisted provisioned accounts with robust password preservation
         persistedProv.forEach((a) => {
           const emailKey = (a.email || "").trim().toLowerCase();
@@ -725,20 +703,15 @@ export const useStore = create(
           if (LEGACY_MOCK_OFFICER_EMAILS.has(emailKey) && (!a.createdAt || a.createdAt === "2026-11-01T08:00:00Z")) {
             return;
           }
-          const defaultAcc = DEFAULT_PROVISIONED_ACCOUNTS.find(
-            (d) => (d.email || "").trim().toLowerCase() === emailKey
-          );
-          const resolvedPassword =
-            (a.password || "").trim() || defaultAcc?.password || "Password@123";
+          const resolvedPassword = (a.password || "").trim() || "Password@123";
 
           provMap.set(emailKey, {
-            ...defaultAcc,
             ...a,
-            fullName: (a.fullName || defaultAcc?.fullName || "").trim(),
-            email: (a.email || defaultAcc?.email || "").trim(),
+            fullName: (a.fullName || "").trim(),
+            email: (a.email || "").trim(),
             password: resolvedPassword,
-            role: a.role || defaultAcc?.role || "Department Officer",
-            departmentId: a.departmentId || defaultAcc?.departmentId || null,
+            role: a.role || "Department Officer",
+            departmentId: a.departmentId || null,
             isProvisioned: true,
             isActive: a.isActive !== false,
           });
@@ -761,32 +734,27 @@ export const useStore = create(
                 sanitizedBackup.forEach((a) => {
                   const emailKey = (a.email || "").trim().toLowerCase();
                   if (!emailKey) return;
-                  const defaultAcc = DEFAULT_PROVISIONED_ACCOUNTS.find(
-                    (d) => (d.email || "").trim().toLowerCase() === emailKey
-                  );
                   const existing = provMap.get(emailKey) || {};
                   const resolvedPassword =
                     (a.password || "").trim() ||
                     existing.password ||
-                    defaultAcc?.password ||
                     "Password@123";
 
                   provMap.set(emailKey, {
-                    ...defaultAcc,
                     ...existing,
                     ...a,
-                    fullName: (a.fullName || existing.fullName || defaultAcc?.fullName || "").trim(),
-                    email: (a.email || existing.email || defaultAcc?.email || "").trim(),
+                    fullName: (a.fullName || existing.fullName || "").trim(),
+                    email: (a.email || existing.email || "").trim(),
                     password: resolvedPassword,
-                    role: a.role || existing.role || defaultAcc?.role || "Department Officer",
-                    departmentId: a.departmentId || existing.departmentId || defaultAcc?.departmentId || null,
+                    role: a.role || existing.role || "Department Officer",
+                    departmentId: a.departmentId || existing.departmentId || null,
                     isProvisioned: true,
                     isActive: a.isActive !== false,
                   });
                 });
               }
             }
-          } catch (e) {
+          } catch {
             // ignore
           }
         }

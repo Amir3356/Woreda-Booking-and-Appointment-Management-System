@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "@/hooks";
 import { useStore } from "@/context";
-import { DEFAULT_PROVISIONED_ACCOUNTS } from "@/context/store";
 import {
   resolveUserSession,
   verifyCredentials,
@@ -18,7 +17,6 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Phone,
   ArrowRight,
   ShieldCheck,
   AlertCircle,
@@ -143,20 +141,7 @@ export default function AuthPage() {
       });
     });
 
-    // 2. Seed defaults
-    DEFAULT_PROVISIONED_ACCOUNTS.forEach((d) => {
-      const k = (d.email || "").trim().toLowerCase();
-      if (k) {
-        provMap.set(k, {
-          ...d,
-          password: d.password || "Password@123",
-          isProvisioned: true,
-          isActive: true,
-        });
-      }
-    });
-
-    // 3. Overlay in-memory Zustand store
+    // 2. Overlay in-memory Zustand store
     const storeProv = useStore.getState().provisionedAccounts || [];
     storeProv.forEach((a) => {
       const k = (a.email || "").trim().toLowerCase();
@@ -225,7 +210,7 @@ export default function AuthPage() {
             });
           }
         }
-      } catch (err) {
+      } catch {
         // ignore
       }
     }

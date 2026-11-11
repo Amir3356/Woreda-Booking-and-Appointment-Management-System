@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams, useRouter } from "@/hooks";
+import { useSearchParams } from "@/hooks";
 import Navbar from "@/layout/Navbar";
 import Footer from "@/layout/Footer";
 import AppointmentSlip from "@/features/appointments/AppointmentSlip";
@@ -16,13 +16,11 @@ import {
   ArrowLeft,
   AlertCircle,
   FileCheck2,
-  Phone,
   MapPin,
 } from "lucide-react";
 import Link from "@/components/ui/Link";
 
 function BookingContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const initialDeptId = searchParams.get("deptId") || "";
   const initialServiceId = searchParams.get("serviceId") || "";
@@ -33,7 +31,6 @@ function BookingContent() {
     currentUser,
     bookAppointment,
     getAvailableSlots,
-    scheduleConfigs,
   } = useStore();
 
   const [step, setStep] = useState(1);

@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { useStore } from "@/context";
 import {
-  Users,
   Plus,
   Search,
-  Filter,
   X,
 } from "lucide-react";
 

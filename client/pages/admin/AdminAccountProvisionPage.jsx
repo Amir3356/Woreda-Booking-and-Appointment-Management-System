@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { useStore } from "@/context";
 import { http } from "@/api/httpClient";
 import {
@@ -9,7 +10,6 @@ import {
   Eye,
   EyeOff,
   Shield,
-  CheckCircle2,
   AlertCircle,
   Search,
   ChevronLeft,
@@ -83,7 +83,6 @@ export default function AccountProvisionPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmail, setEditingEmail] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
   const [error, setError] = useState("");
 
   const emptyForm = {
@@ -208,7 +207,7 @@ export default function AccountProvisionPage() {
           role: "OFFICER",
           departmentId: departmentId || (departments[0]?.id || "dept-1"),
         });
-      } catch (apiErr) {
+      } catch {
         // Continue to synchronize locally even if backend throws (e.g. offline fallback)
       }
     }
@@ -224,7 +223,7 @@ export default function AccountProvisionPage() {
         password: cleanPassword,
         passwordHash: hashedPassword,
       });
-      setSuccessMsg("Account updated successfully.");
+      toast.success("Account updated successfully.");
     } else {
       // Add new — push to global store (provisionedAccounts + users synchronized)
       addProvisionedAccount({
@@ -236,18 +235,16 @@ export default function AccountProvisionPage() {
         password: cleanPassword,
         passwordHash: hashedPassword,
       });
-      setSuccessMsg("Account provisioned successfully.");
+      toast.success("Account provisioned successfully.");
     }
 
-    setTimeout(() => setSuccessMsg(""), 3000);
     setModalOpen(false);
   };
 
   const handleDelete = (emailToDelete) => {
     if (window.confirm(`Are you sure you want to remove the account for "${emailToDelete}"?`)) {
       deleteProvisionedAccount(emailToDelete);
-      setSuccessMsg("Account removed successfully.");
-      setTimeout(() => setSuccessMsg(""), 3000);
+      toast.success("Account removed successfully.");
     }
   };
 
@@ -271,14 +268,6 @@ export default function AccountProvisionPage() {
           <span>Create User</span>
         </button>
       </div>
-
-      {/* Success Toast */}
-      {successMsg && (
-        <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          {successMsg}
-        </div>
-      )}
 
       {/* Search Box Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">

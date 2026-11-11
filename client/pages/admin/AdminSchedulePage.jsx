@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { useStore } from "@/context";
 import { subscribe } from "@/api/realtime";
 import { describeError, formatWorkingDays, localIsoDate, displayDate } from "@/utils";
@@ -6,7 +7,6 @@ import {
   Calendar,
   Clock,
   Plus,
-  CheckCircle,
   CheckCircle2,
   Edit2,
   Trash2,
@@ -48,7 +48,6 @@ export default function AdminSchedulePage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -71,10 +70,7 @@ export default function AdminSchedulePage() {
 
   const triggerToast = (msg) => {
     setErrorMsg("");
-    setSuccessMsg(msg);
-    setTimeout(() => {
-      setSuccessMsg("");
-    }, 3500);
+    toast.success(msg);
   };
 
   // Department names for the table filter
@@ -265,14 +261,6 @@ export default function AdminSchedulePage() {
           <span>Create Schedule</span>
         </button>
       </div>
-
-      {/* Success Toast Notification */}
-      {successMsg && (
-        <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold shadow-xs animate-in fade-in duration-150">
-          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{successMsg}</span>
-        </div>
-      )}
 
       {errorMsg && !modalOpen && (
         <div role="alert" className="flex items-start gap-2 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold shadow-xs">

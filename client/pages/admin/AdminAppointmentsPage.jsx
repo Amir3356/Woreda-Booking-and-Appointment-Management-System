@@ -6,7 +6,6 @@ import { formatDate } from "@/utils";
 import {
   Calendar,
   Search,
-  Filter,
   UserCheck,
 } from "lucide-react";
 
@@ -71,10 +70,6 @@ export default function AdminAppointmentsPage() {
 
     return matchesSearch && matchesStatus && matchesDept && matchesTime;
   });
-
-  const handleApprove = (id) => {
-    updateAppointmentStatus(id, "APPROVED", "Approved by Woreda Administrator");
-  };
 
   const handleConfirmReject = () => {
     if (!rejectTargetId) return;

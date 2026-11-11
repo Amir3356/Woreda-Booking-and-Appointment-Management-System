@@ -3,31 +3,6 @@
  * Pure functions only — no state, no API calls, no DOM.
  */
 
-const ETHIOPIAN_PHONE_REGEX = /^\+2519\d{8}$/;
-
-/**
- * Validates that a phone string matches the Ethiopian mobile phone standard (+2519XXXXXXXX).
- * @param {string} phone
- * @returns {boolean}
- */
-export function isValidEthiopianPhone(phone) {
-  if (!phone) return false;
-  return ETHIOPIAN_PHONE_REGEX.test(phone.trim().replace(/\s+/g, ""));
-}
-
-/**
- * Normalizes user-typed phone numbers into the standard +2519XXXXXXXX format.
- * @param {string} rawPhone
- * @returns {string}
- */
-export function normalizeEthiopianPhone(rawPhone) {
-  let cleaned = (rawPhone || "").trim().replace(/[\s-]/g, "");
-  if (cleaned.startsWith("+251")) return cleaned;
-  if (cleaned.startsWith("09") && cleaned.length === 10) return `+251${cleaned.slice(1)}`;
-  if (cleaned.startsWith("9") && cleaned.length === 9) return `+251${cleaned}`;
-  return cleaned;
-}
-
 /**
  * Validates basic email address format.
  * @param {string} email
@@ -39,34 +14,9 @@ export function isValidEmail(email) {
 }
 
 /**
- * Validates minimum password strength policy.
- * @param {string} password
- * @returns {boolean}
- */
-export function isStrongPassword(password) {
-  if (!password || password.length < 6) return false;
-  return true;
-}
-
-/**
- * Formats a clean human-readable name from an email username.
- * e.g. "tigist.kbl@woreda.gov.et" -> "Tigist Kbl"
- * @param {string} email
- * @returns {string}
- */
-export function formatDisplayNameFromEmail(email) {
-  if (!email) return "User";
-  const userPart = email.split("@")[0].replace(/[._-]/g, " ");
-  return userPart
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-/**
  * Canonical Admin Credentials.
  */
-export const ADMIN_CREDENTIALS = {
+const ADMIN_CREDENTIALS = {
   email: "amirsiraj1995@gmail.com",
   password: "AEHJSS36",
 };
@@ -408,7 +358,7 @@ export function resolveUserSession(
   return null;
 }
 
-export const AUTH_COOKIE_NAME = "woreda_token";
+const AUTH_COOKIE_NAME = "woreda_token";
 
 /**
  * Encodes string to Base64Url format.
@@ -505,7 +455,7 @@ export function parseJwtToken(token) {
     }
 
     return claims;
-  } catch (err) {
+  } catch {
     return null;
   }
 }

@@ -12,11 +12,9 @@ import { useStore } from "@/context";
 
 export default function DashboardSidebar({ role = "ADMIN" }) {
   const pathname = usePathname();
-  const { currentUser, appointments, queue, notifications } = useStore();
+  const { currentUser, appointments } = useStore();
 
   const pendingAppointmentsCount = appointments.filter((a) => a.status === "PENDING").length;
-  const waitingQueueCount = queue.filter((q) => q.status === "WAITING").length;
-  const unreadNotifsCount = notifications.filter((n) => !n.isRead).length;
 
   const adminNav = [
     { href: "/admin/departments", label: "Department Management", icon: Building2 },
@@ -40,24 +38,20 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   ];
 
   let items = adminNav;
-  let title = "Administrator Portal";
   let subtitle = "System Administration";
   let badgeColor = "bg-purple-100 text-purple-800";
 
   if (role === "OFFICER") {
     items = officerNav;
-    title = "Officer Service Desk";
     subtitle = currentUser?.departmentName || "Kebele Office";
     badgeColor = "bg-emerald-100 text-emerald-800";
   } else if (role === "CITIZEN") {
     items = citizenNav;
-    title = "Citizen Portal";
     subtitle = "Public Self-Service";
     badgeColor = "bg-blue-100 text-blue-800";
   }
 
   const isAdmin = role === "ADMIN" || pathname?.startsWith("/admin");
-  const isOfficer = role === "OFFICER" || pathname?.startsWith("/officer");
   const brandHref = role === "ADMIN" ? "/admin" : role === "OFFICER" ? "/officer/appointments" : "/citizen/book";
 
   return (

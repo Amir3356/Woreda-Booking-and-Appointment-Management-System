@@ -63,9 +63,6 @@ export function clock12(t) {
   return `${pad(h % 12 || 12)}:${pad(m)} ${h >= 12 ? "PM" : "AM"}`;
 }
 
-// Client slot format, e.g. "09:00 AM", "13:30 PM" (24h hour + AM/PM suffix as in the UI).
-export const isTimeSlot = (s) => /^\d{2}:\d{2} (AM|PM)$/.test(s);
-
 function addDays(dateStr, n) {
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);

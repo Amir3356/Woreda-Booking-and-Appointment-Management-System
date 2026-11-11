@@ -2,9 +2,9 @@
 import { z } from "zod";
 import { WEEKDAYS, hhmm, parseClock, today, validDate } from "../utils/date.js";
 
-export const ETHIOPIAN_PHONE = /^\+2519\d{8}$/;
-export const PHONE_MESSAGE = "Phone number must match valid Ethiopian format (+2519XXXXXXXX).";
-export const TIME_SLOT_MESSAGE = 'Time slot must look like "09:00 AM".';
+const ETHIOPIAN_PHONE = /^\+2519\d{8}$/;
+const PHONE_MESSAGE = "Phone number must match valid Ethiopian format (+2519XXXXXXXX).";
+const TIME_SLOT_MESSAGE = 'Time slot must look like "09:00 AM".';
 export { WEEKDAYS };
 
 /** Required, trimmed text of at least min characters; one message for missing or too short. */
