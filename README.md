@@ -57,6 +57,7 @@ WoredaCare is a **monolithic application** whose code is organized in **layers**
 | Migrations and seeds | node-pg-migrate |
 | Validation | Zod (request bodies and query strings) |
 | Security headers | Helmet |
+| Configuration | dotenv (`server/.env`); Vite's built-in env loading (`client/.env`) |
 | Live updates | WebSocket (`ws`), pushed from in-process domain events |
 | Logging | pino (structured JSON) |
 
@@ -84,22 +85,22 @@ can re-fetch what it shows.
 ```
 server/
 ├── package.json
-├── .env.example         Settings template (copy to .env)
-├── migrations/          node-pg-migrate migrations: one file per table (schema, keys, indexes)
-├── seeds/               node-pg-migrate seeds: administrator account and default settings
-├── scripts/migrate.js   Runs migrations and seeds (migrate, rollback, fresh, seed)
-└── src/
-    ├── server.js        Starts the process: database setup, HTTP + WebSocket server, graceful shutdown
-    ├── app.js           Builds the Express app and wires the layers together
-    ├── routes/          Layer 1 – maps URLs and HTTP methods to controllers, attaches role checks
-    ├── middleware/      Cross-cutting – Helmet, authentication/roles, Zod validation, CORS, rate limiting, logging, errors
-    ├── validations/     Zod schemas for every request body and query string
-    ├── controllers/     Layer 2 – reads the HTTP request, calls a service, sends the HTTP response
-    ├── services/        Layer 3 – business logic and rules (validation, capacity, status changes, events)
-    ├── repositories/    Layer 4 – data access: all SQL queries
-    ├── models/          Layer 5 – table row ↔ API object mapping, statuses and pure domain rules
-    ├── config/          Environment settings, database.js (PostgreSQL pool and transactions), logger
-    └── utils/           Small shared helpers: IDs, errors, response format, dates, time slots, CSV
+├── .env.example       Settings template (copy to .env)
+├── nodemon.json       `npm run dev`: what nodemon watches (the server folder and .env)
+├── server.js          Starts the process: database check, HTTP + WebSocket server, graceful shutdown
+├── app.js             Builds the Express app and wires the layers together
+├── routes/            Layer 1 – maps URLs and HTTP methods to controllers, attaches role checks
+├── middleware/        Cross-cutting – Helmet, authentication/roles, Zod validation, CORS, rate limiting, logging, errors
+├── validations/       Zod schemas for every request body and query string
+├── controllers/       Layer 2 – reads the HTTP request, calls a service, sends the HTTP response
+├── services/          Layer 3 – business logic and rules (capacity, status changes, events)
+├── repositories/      Layer 4 – data access: all SQL queries
+├── models/            Layer 5 – table row ↔ API object mapping, statuses and pure domain rules
+├── config/            Environment settings, database.js (PostgreSQL pool and transactions), logger
+├── utils/             Small shared helpers: IDs, errors, response format, dates, time slots, CSV
+├── migrations/        node-pg-migrate migrations: one file per table (schema, keys, indexes)
+├── seeds/             node-pg-migrate seeds: administrator account and default settings
+└── scripts/migrate.js Runs migrations and seeds (migrate, rollback, fresh, seed)
 ```
 
 A request flows down through the layers and the result flows back up:
@@ -139,7 +140,7 @@ PostgreSQL
 3. Only repositories contain SQL, so storage details can change without touching business logic.
 4. Errors are thrown as typed errors (`utils/errors.js`) and turned into HTTP responses in one place
    (`middleware/errorHandler.js`).
-5. Configuration comes only from `config/`, which reads environment variables and `server/.env`.
+5. Configuration comes only from `config/`, which reads environment variables and loads `server/.env` with dotenv.
 
 ---
 
@@ -348,7 +349,8 @@ cp .env.example .env   # then set DB_PASSWORD (and DB_HOST/DB_USER if not local 
 npm install
 npm run migrate        # creates the woreda database if needed and applies all migrations
 npm run seed           # administrator account and default settings
-npm start              # or: npm run dev  (restarts on file changes)
+npm run dev            # development: nodemon restarts the server when files in server/ or .env change
+                       # (npm start runs it once, without watching)
 ```
 
 The API is then at http://localhost:8080/api/v1. The administrator signs in with
@@ -405,10 +407,10 @@ The app opens at http://localhost:3000.
 │   ├── components/ features/  Shared UI and the appointment slip
 │   └── context/ hooks/ services/ utils/ styles/
 └── server/                    Monolithic backend (Express + PostgreSQL), layered
+    ├── server.js app.js       Entry point and app wiring
+    ├── routes/ middleware/ controllers/ services/ repositories/ models/
+    ├── validations/           Zod request schemas
+    ├── config/ utils/
     ├── migrations/ seeds/     node-pg-migrate schema migrations and seed data
-    ├── scripts/migrate.js     Migration / seed runner
-    └── src/
-        ├── routes/ middleware/ controllers/ services/ repositories/ models/
-        ├── validations/       Zod request schemas
-        └── config/ utils/
+    └── scripts/migrate.js     Migration / seed runner
 ```

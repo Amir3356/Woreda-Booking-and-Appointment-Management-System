@@ -1,4 +1,4 @@
-// Paging helpers (no I/O). Page/limit/cursor values are validated in src/validations.
+// Paging helpers (no I/O). Page/limit/cursor values are validated in validations/.
 
 export function pagination(total, page, limit) {
   const totalPages = limit > 0 ? Math.ceil(total / limit) : 0;

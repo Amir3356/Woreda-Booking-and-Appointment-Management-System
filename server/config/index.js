@@ -1,10 +1,9 @@
-// Runtime configuration from environment variables (and server/.env when present),
-// with local-development defaults.
-try {
-  process.loadEnvFile(new URL("../../.env", import.meta.url));
-} catch {
-  // no .env file: environment variables and defaults only
-}
+// Runtime configuration from environment variables, with local-development defaults.
+// dotenv loads server/.env (when present) into process.env first; variables already set in the
+// environment win over the file.
+import dotenv from "dotenv";
+
+dotenv.config({ path: new URL("../.env", import.meta.url), quiet: true });
 
 const env = (key, fallback = "") => (process.env[key] === undefined || process.env[key] === "" ? fallback : process.env[key]);
 

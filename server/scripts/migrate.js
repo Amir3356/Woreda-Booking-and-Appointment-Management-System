@@ -1,4 +1,4 @@
-// Database migrations and seeds with node-pg-migrate, using the connection settings of src/config.
+// Database migrations and seeds with node-pg-migrate, using the connection settings of config/.
 //
 //   node scripts/migrate.js up              apply pending migrations          (npm run migrate)
 //   node scripts/migrate.js down [n|all]    roll back n migrations (default 1) (npm run migrate:down)
@@ -12,7 +12,7 @@
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { runner } from "node-pg-migrate";
-import { config } from "../src/config/index.js";
+import { config } from "../config/index.js";
 
 const MIGRATIONS = { dir: fileURLToPath(new URL("../migrations", import.meta.url)), migrationsTable: "pgmigrations" };
 const SEEDS = { dir: fileURLToPath(new URL("../seeds", import.meta.url)), migrationsTable: "pgmigrations_seeds" };

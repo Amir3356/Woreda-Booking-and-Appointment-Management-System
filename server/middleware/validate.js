@@ -1,5 +1,5 @@
 // Request validation with Zod. Routes attach validate({ body, query }) with schemas from
-// src/validations; the parsed (trimmed, defaulted, converted) values replace req.body and are put
+// validations/; the parsed (trimmed, defaulted, converted) values replace req.body and are put
 // on req.validatedQuery. Failures become 422 VALIDATION_ERROR with one {field, issue} per problem.
 import { BadRequestError, ValidationError } from "../utils/errors.js";
 

@@ -1,7 +1,7 @@
 // Seed data: the central administrator (credentials from SEED_ADMIN_* in server/.env) and the
 // default system settings. Applied by `npm run seed`; existing rows are left untouched.
 import bcrypt from "bcryptjs";
-import { config } from "../src/config/index.js";
+import { config } from "../config/index.js";
 
 const ADMIN_ID = "usr-admin";
 
