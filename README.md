@@ -29,85 +29,77 @@ departments, services, schedules, staff accounts and system settings.
 
 ## Architecture
 
-WoredaCare is built with a **microservices architecture**, and the code inside every service
-follows a **layered architecture**.
+WoredaCare is a **monolithic application** whose code is organized in **layers**.
 
-- **Microservices (system level):** the backend is split into five independent business services
-  plus an API gateway. Each service has its own codebase, `package.json`, Dockerfile and container,
-  owns its own MongoDB collections, and can be built, deployed, scaled and restarted on its own.
-- **Layered code organization (service level):** inside each service the code is divided into
-  layers (routes, middleware, controllers, services, repositories, models, config, utils). Each
-  layer has one job and only calls the layer below it.
-
-### Microservices architecture
+- **Monolith (system level):** the whole backend is one Node.js/Express application in `server/`,
+  started as one process, with one `package.json` and one PostgreSQL database. Modules (auth,
+  users, catalog, schedules, appointments, queue, reports, audit) call each other directly as
+  function calls, inside the same process, and share database transactions.
+- **Layered code organization (code level):** the code is divided into layers (routes, middleware,
+  controllers, services, repositories, models). Each layer has one job and only calls the layer below it.
 
 ```
- Browser (React + Vite)
-        │  HTTP / WebSocket
+ Browser (React + Vite, :3000)
+        │  HTTP (REST /api/v1)  ·  WebSocket (/api/v1/ws)
         ▼
- nginx (rate limiting, :8080)
-        ▼
- API Gateway (JWT check, Redis response cache, WebSocket notifications)
+ WoredaCare server (Node.js + Express, :8080)
+   routes → middleware → controllers → services → repositories
         │
-        ├── auth-service         :8081  register, sign in, sign out, current user
-        ├── user-service         :8082  citizen profiles, staff accounts, system settings
-        ├── department-service   :8083  departments and public services (+ gRPC catalog :9083)
-        ├── appointment-service  :8084  bookings, review, reschedule, cancel, slips, reports, audit log
-        └── booking-service      :8085  schedules, slot availability, desk queue
-
- MongoDB (replica set) · Redis (cache, revoked tokens, login lockout) · Kafka (domain events)
- Prometheus + Grafana (monitoring and alerting)
+        ▼
+ PostgreSQL (database "woreda")
 ```
 
 | Layer | Technology |
 |-------|------------|
 | Frontend | React 19, React Router 7, Zustand, Vite 6 |
-| Backend services | Node.js, Express, Mongoose |
-| Database | MongoDB 7 (single-node replica set, for transactions) |
-| Cache | Redis 7 |
-| Messaging | Apache Kafka 3.8 (KRaft); topics `woreda.appointments` and `woreda.catalog` |
-| Service-to-service | REST through the gateway; gRPC for catalog lookups |
-| Edge | nginx 1.27 |
-| Monitoring | Prometheus, Grafana, exporters for MongoDB, Redis, Kafka, nginx and the host |
-| Deployment | Docker Compose |
+| Backend | Node.js 22+, Express 5 (one application) |
+| Database | PostgreSQL 14+ via `pg` (node-postgres), plain SQL |
+| Migrations and seeds | node-pg-migrate |
+| Validation | Zod (request bodies and query strings) |
+| Security headers | Helmet |
+| Live updates | WebSocket (`ws`), pushed from in-process domain events |
+| Logging | pino (structured JSON) |
 
-#### Services and data ownership
+### Modules
 
-| Microservice | Port | Responsibility | Owns (MongoDB collections) |
-|--------------|------|----------------|----------------------------|
-| **api-gateway** | 8080 | Single entry point: routes requests to services, checks JWTs, caches responses in Redis, pushes live updates over WebSocket | — (Redis cache only) |
-| **auth-service** | 8081 | Registration, sign-in, sign-out, token issue and revocation, login lockout | reads/inserts `users` |
-| **user-service** | 8082 | Citizen profiles, staff accounts, system settings | `users`, `system_settings` |
-| **department-service** | 8083 / gRPC 9083 | Departments and public services (the catalog) | `departments`, `services` |
-| **appointment-service** | 8084 | Booking, review, reschedule, cancel, slips, reports, audit log | `appointments`, `slot_reservations`, `audit_logs` |
-| **booking-service** | 8085 | Schedules, slot availability, check-in and desk queue | `schedules`, `queue_tokens` |
+| Module | Endpoints | Tables |
+|--------|-----------|--------|
+| Auth | `/api/v1/auth` – register, sign in, sign out, current user | `users`, `revoked_tokens`, `login_failures` |
+| Citizen profile | `/api/v1/citizen/profile` | `users` |
+| Staff and settings | `/api/v1/admin/users`, `/api/v1/admin/settings` | `users`, `system_settings` |
+| Catalog | `/api/v1/departments`, `/api/v1/services` | `departments`, `services` |
+| Schedules | `/api/v1/schedules` (incl. public `active` and `availability`) | `schedules` |
+| Appointments | `/api/v1/appointments` – book, track, history, review, reschedule, cancel, slip | `appointments` |
+| Desk queue | `/api/v1/queue` – check-in, board, call next, finalize | `queue_tokens` |
+| Reports and audit | `/api/v1/reports`, `/api/v1/audit-logs` | `appointments`, `audit_logs` |
+| Live notices | `GET /api/v1/ws` (WebSocket) | — |
 
-#### How the services communicate
-
-| Style | Used for |
-|-------|----------|
-| **REST over HTTP** (synchronous) | Browser → nginx → API gateway → service |
-| **gRPC** (synchronous, internal) | appointment-service asks department-service for catalog data while booking |
-| **Kafka events** (asynchronous) | Services publish `woreda.appointments` and `woreda.catalog` events; the gateway consumes them to clear caches and notify browsers |
-| **WebSocket** | API gateway → open browser pages (live updates) |
+When something changes (an appointment, a department, a service or a schedule), the service that
+made the change publishes an in-process event (`services/event.service.js`), and every open browser
+page receives a small notice over the WebSocket (`appointments.changed` or `catalog.changed`) so it
+can re-fetch what it shows.
 
 ### Layered code organization
 
-Every microservice uses the same folder layout, so a developer who knows one service can find their
-way around all of them:
-
 ```
-<service>/
-├── server.js          Starts the process: connects to DB/Kafka/gRPC, starts HTTP server, graceful shutdown
-├── app.js             Builds the Express app and wires the layers together
-├── routes/            Layer 1 – maps URLs and HTTP methods to controllers, attaches middleware
-├── middleware/        Cross-cutting – authentication/roles, request logging, metrics, error handling
-├── controllers/       Layer 2 – reads the HTTP request, calls a service, sends the HTTP response
-├── services/          Layer 3 – business logic and rules (validation, capacity, status changes, events)
-├── repositories/      Layer 4 – data access: all MongoDB / Redis / gRPC queries
-├── models/            Layer 5 – Mongoose schemas, indexes and validation for the owned collections
-├── config/            Settings and connections: env vars, database, Redis, Kafka, logger, metrics
-└── utils/             Small shared helpers: IDs, errors, response format, dates, time slots
+server/
+├── package.json
+├── .env.example         Settings template (copy to .env)
+├── migrations/          node-pg-migrate migrations: one file per table (schema, keys, indexes)
+├── seeds/               node-pg-migrate seeds: administrator account and default settings
+├── scripts/migrate.js   Runs migrations and seeds (migrate, rollback, fresh, seed)
+└── src/
+    ├── server.js        Starts the process: database setup, HTTP + WebSocket server, graceful shutdown
+    ├── app.js           Builds the Express app and wires the layers together
+    ├── routes/          Layer 1 – maps URLs and HTTP methods to controllers, attaches role checks
+    ├── middleware/      Cross-cutting – Helmet, authentication/roles, Zod validation, CORS, rate limiting, logging, errors
+    ├── validations/     Zod schemas for every request body and query string
+    ├── controllers/     Layer 2 – reads the HTTP request, calls a service, sends the HTTP response
+    ├── services/        Layer 3 – business logic and rules (validation, capacity, status changes, events)
+    ├── repositories/    Layer 4 – data access: all SQL queries
+    ├── models/          Layer 5 – table row ↔ API object mapping, statuses and pure domain rules
+    ├── config/          Environment settings, database.js (PostgreSQL pool and transactions), logger
+    └── utils/           Small shared helpers: IDs, errors, response format, dates, time slots, CSV
 ```
 
 A request flows down through the layers and the result flows back up:
@@ -116,34 +108,38 @@ A request flows down through the layers and the result flows back up:
 HTTP request
    │
    ▼
-routes ──► middleware (auth, role, logging, metrics)
+middleware    ── Helmet headers, request id, logging, CORS, rate limit, JSON body, JWT → req.caller
+   │
+   ▼
+routes        ── URL → controller, role checks (requireRole), Zod validation (validate)
    │
    ▼
 controllers   ── HTTP only: parse input, choose status code
    │
    ▼
-services      ── business rules, no HTTP or database code
+services      ── business rules, no HTTP or SQL
    │
    ▼
-repositories  ── database / cache / gRPC access
+repositories  ── SQL queries, transactions
    │
    ▼
-models        ── MongoDB schema
+models        ── row → API object mapping
+   │
+   ▼
+PostgreSQL
 ```
 
 **Layer rules**
 
-1. A layer calls only the layer directly below it (controllers never query the database; repositories
+1. A layer calls only the layers below it (controllers never query the database; repositories
    never contain business rules).
 2. Controllers know about HTTP; services do not, so business logic can be tested without a web server.
-3. Only repositories talk to MongoDB, Redis or other services over gRPC, so storage can change without
-   touching business logic.
+   Request shape and format rules live in Zod schemas (`validations/`); services receive validated
+   data and keep only the rules that need the database (e.g. "department exists", slot capacity).
+3. Only repositories contain SQL, so storage details can change without touching business logic.
 4. Errors are thrown as typed errors (`utils/errors.js`) and turned into HTTP responses in one place
    (`middleware/errorHandler.js`).
-5. Configuration comes only from `config/`, which reads environment variables.
-
-The API gateway has no database, so it has no `models/` folder; its `repositories/` hold Redis access
-for the response cache and revoked tokens.
+5. Configuration comes only from `config/`, which reads environment variables and `server/.env`.
 
 ---
 
@@ -271,21 +267,22 @@ Appointment statuses: `PENDING → APPROVED / REJECTED → CHECKED_IN → IN_PRO
 | ID | Requirement |
 |----|-------------|
 | NFR-1.1 | Passwords are stored only as bcrypt hashes (cost 10) and are never returned by the API. |
-| NFR-1.2 | API access uses signed JWTs that expire after 12 hours; signed-out tokens are revoked in Redis. |
+| NFR-1.2 | API access uses signed JWTs that expire after 12 hours; signed-out tokens are revoked (stored in the `revoked_tokens` table until they expire). |
 | NFR-1.3 | Role-based access control is enforced on the server for every protected endpoint, not only in the UI. |
-| NFR-1.4 | nginx limits each IP to 5 requests/second (burst 50) on the API, and 20 requests/minute (burst 10) on sign-in and registration; excess requests get HTTP 429. |
+| NFR-1.4 | The server limits each IP to 5 requests/second (burst 50) on the API, and 20 requests/minute (burst 10) on sign-in and registration; excess requests get HTTP 429. |
 | NFR-1.5 | Repeated failed sign-ins lock the account temporarily (see FR-1.6). |
 | NFR-1.6 | CORS only allows the configured frontend origins; WebSocket connections check the Origin header. |
-| NFR-1.7 | Internal services, the database, Redis, Kafka and metrics are not reachable from outside; only nginx is published. MongoDB, Prometheus and Grafana bind to `127.0.0.1` only. |
-| NFR-1.8 | Secrets (such as `JWT_SECRET`) are supplied through environment variables, not hard-coded for production. |
-| NFR-1.9 | All input is validated on the server; invalid requests return clear field-level error messages. |
+| NFR-1.7 | Only the application server is published; PostgreSQL should accept connections from the server host only. |
+| NFR-1.8 | Secrets (such as `JWT_SECRET` and `DB_PASSWORD`) are supplied through environment variables or `server/.env` (not committed), not hard-coded for production. |
+| NFR-1.9 | All input is validated on the server with Zod schemas; invalid requests return HTTP 422 with field-level error messages. |
+| NFR-1.10 | Helmet sets security headers on every response (HSTS, `X-Content-Type-Options`, `X-Frame-Options`, referrer and cross-origin policies) and hides `X-Powered-By`. |
 
 ### NFR-2 Performance
 
 | ID | Requirement |
 |----|-------------|
 | NFR-2.1 | Normal API requests should respond within 1 second (95th percentile); an alert fires when responses are slower. |
-| NFR-2.2 | Frequently read data is cached in Redis at the gateway: departments and services for 10 minutes, slot availability for 30 seconds. Caches are invalidated when the data changes. |
+| NFR-2.2 | Database connections are pooled; open pages re-fetch data only when a change notice arrives over the WebSocket instead of polling. |
 | NFR-2.3 | Database queries use indexes on the most common lookups (by service/date/slot, citizen, department/date, queue date and status). |
 | NFR-2.4 | Long lists (appointments, users, audit log) are paginated. |
 
@@ -293,22 +290,20 @@ Appointment statuses: `PENDING → APPROVED / REJECTED → CHECKED_IN → IN_PRO
 
 | ID | Requirement |
 |----|-------------|
-| NFR-3.1 | Slot capacity is reserved with atomic database operations, so two citizens cannot over-book the same slot at the same time. |
+| NFR-3.1 | Bookings and reschedules check daily and per-slot capacity inside a PostgreSQL transaction holding an advisory lock per service and day, so two citizens cannot over-book the same slot at the same time. |
 | NFR-3.2 | Status changes are conditional (e.g. only a `PENDING` appointment can be approved), so concurrent edits do not overwrite each other. |
-| NFR-3.3 | MongoDB runs as a replica set so multi-document transactions are available. |
-| NFR-3.4 | A failure in Redis (cache, lockout) or in audit logging must not block sign-in or booking; the system logs the error and continues. |
-| NFR-3.5 | Containers restart automatically on failure, and services wait for their dependencies to be healthy before starting. |
-| NFR-3.6 | Data is kept in persistent Docker volumes; Kafka keeps events for 7 days. |
+| NFR-3.3 | PostgreSQL foreign keys, unique and check constraints protect relationships (e.g. a service with appointments or a department with services cannot be deleted); multi-step changes such as check-in run in one transaction. |
+| NFR-3.4 | A failure in audit logging or in sending live notices must not block sign-in or booking; the system logs the error and continues. |
+| NFR-3.5 | The schema is versioned with node-pg-migrate migrations (each with a rollback); the server refuses to start on an unmigrated database, and `GET /healthz` reports whether the database answers. |
+| NFR-3.6 | All data is kept in PostgreSQL and survives restarts; back it up with `pg_dump`. |
 
 ### NFR-4 Availability and monitoring
 
 | ID | Requirement |
 |----|-------------|
-| NFR-4.1 | Every service exposes Prometheus metrics (request rate, errors, latency, Kafka events, gRPC calls, sign-ins). |
-| NFR-4.2 | Grafana provides dashboards for system overview, service health, booking activity and infrastructure. |
-| NFR-4.3 | Alerts fire when a service, MongoDB, Redis, Kafka or nginx is down, when more than 5% of requests fail with a server error, when responses are slow, or when Kafka events or catalog lookups fail. |
-| NFR-4.4 | Every service writes structured logs, and each request carries a request ID for tracing across services. |
-| NFR-4.5 | Metrics are retained for 15 days. |
+| NFR-4.1 | `GET /healthz` returns 200 while the server and database are up, 503 otherwise, for uptime checks. |
+| NFR-4.2 | The server writes structured JSON logs (one line per request with method, path, status and duration). |
+| NFR-4.3 | Each request carries a request ID (`X-Request-ID`), returned in responses and error envelopes for tracing. |
 
 ### NFR-5 Usability and accessibility
 
@@ -324,18 +319,17 @@ Appointment statuses: `PENDING → APPROVED / REJECTED → CHECKED_IN → IN_PRO
 
 | ID | Requirement |
 |----|-------------|
-| NFR-6.1 | The backend is split into independent microservices that can be deployed and scaled separately. |
-| NFR-6.2 | Each service owns its own data collections; services communicate through REST, gRPC and Kafka events. |
-| NFR-6.3 | All services use the same layered structure (routes, middleware, controllers, services, repositories, models, config). |
-| NFR-6.4 | The API is versioned (`/api/v1`). |
-| NFR-6.5 | The whole backend can be started with a single command (`docker compose up --build`). |
+| NFR-6.1 | The backend is one deployable application with clearly separated modules, so it is simple to run, debug and deploy. |
+| NFR-6.2 | The code follows a layered structure (routes, middleware, controllers, services, repositories, models, config). |
+| NFR-6.3 | The API is versioned (`/api/v1`). |
+| NFR-6.4 | The whole backend starts with a single command (`npm start` in `server/`). |
 
 ### NFR-7 Compatibility
 
 | ID | Requirement |
 |----|-------------|
 | NFR-7.1 | The frontend supports current versions of Chrome, Firefox, Edge and Safari. |
-| NFR-7.2 | The system runs on any host with Docker and Docker Compose. |
+| NFR-7.2 | The system runs on any host with Node.js 22+ and PostgreSQL 14+. |
 
 ---
 
@@ -343,24 +337,34 @@ Appointment statuses: `PENDING → APPROVED / REJECTED → CHECKED_IN → IN_PRO
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- Node.js 20+ and npm (for the frontend)
+- Node.js 22+ and npm
+- PostgreSQL 14+ running locally (or reachable over the network)
 
 ### 1. Start the backend
 
 ```bash
-docker compose up --build
+cd server
+cp .env.example .env   # then set DB_PASSWORD (and DB_HOST/DB_USER if not local "postgres")
+npm install
+npm run migrate        # creates the woreda database if needed and applies all migrations
+npm run seed           # administrator account and default settings
+npm start              # or: npm run dev  (restarts on file changes)
 ```
 
-On first start, department-service creates the default departments, and user-service creates the
-administrator account and default settings.
+The API is then at http://localhost:8080/api/v1. The administrator signs in with
+`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` from `server/.env`; change the password after the first sign-in.
 
-| What | URL |
-|------|-----|
-| API (through nginx) | http://localhost:8080/api/v1 |
-| Grafana | http://localhost:3001 |
-| Prometheus | http://localhost:9090 |
-| MongoDB (mongosh / Compass) | `mongodb://localhost:27017/woreda?directConnection=true` |
+#### Migration and seed commands
+
+| Command | What it does |
+|---------|--------------|
+| `npm run migrate` | Applies pending migrations from `migrations/` |
+| `npm run migrate:down` | Rolls back the last migration (`npm run migrate:down -- 3`, or `-- all`) |
+| `npm run migrate:fresh` | Drops **every table and all data**, then runs all migrations again |
+| `npm run migrate:fresh:seed` | Same as `migrate:fresh`, then runs the seeds |
+| `npm run seed` | Runs every seed in `seeds/` (seeds are idempotent, so this is safe to repeat) |
+| `npm run migrate:create -- <name>` | Creates a new migration file in `migrations/` |
+| `npm run seed:create -- <name>` | Creates a new seed file in `seeds/` |
 
 ### 2. Start the frontend
 
@@ -373,14 +377,20 @@ npm run dev
 
 The app opens at http://localhost:3000.
 
-### Configuration
+### Configuration (`server/.env`)
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
+| `PORT` | `8080` | HTTP port of the API |
+| `DB_HOST` / `DB_PORT` | `localhost` / `5432` | PostgreSQL server |
+| `DB_USER` / `DB_PASSWORD` | `postgres` / — | PostgreSQL credentials |
+| `DB_NAME` | `woreda` | Database (created on first start) |
 | `JWT_SECRET` | `dev-secret-change-me` | Signing key for access tokens. **Change it outside development.** |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Frontend origins allowed to call the API |
-
-> Grafana runs without sign-in and is published on `127.0.0.1` only. Add a login before exposing it on a network.
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Frontend origins allowed to call the API |
+| `TZ` | `Africa/Addis_Ababa` | Time zone that defines "today" for bookings and the queue |
+| `RATE_LIMIT_ENABLED` | `true` | Per-IP request limits (NFR-1.4); `false` turns them off |
+| `SEED_ADMIN_NAME` / `SEED_ADMIN_EMAIL` | `Amir Siraj` / `amirsiraj1995@gmail.com` | Administrator created by `npm run seed` |
+| `SEED_ADMIN_PASSWORD` / `SEED_ADMIN_PHONE` | — / `+251911223344` | Administrator password (hashed with bcrypt) and phone |
 
 ---
 
@@ -394,14 +404,11 @@ The app opens at http://localhost:3000.
 │   ├── layout/                Role layouts, navbar, sidebar
 │   ├── components/ features/  Shared UI and the appointment slip
 │   └── context/ hooks/ services/ utils/ styles/
-├── server/                    One folder per microservice, each with the same layered layout
-│   ├── api-gateway/           Routing, auth check, cache, WebSocket
-│   ├── auth-service/          Microservice: authentication
-│   ├── user-service/          Microservice: profiles, staff, settings
-│   ├── department-service/    Microservice: departments and services catalog
-│   ├── appointment-service/   Microservice: appointments, reports, audit
-│   ├── booking-service/       Microservice: schedules, availability, queue
-│   ├── nginx/                 nginx.conf (rate limits, proxy)
-│   └── monitoring/            Prometheus config and alerts, Grafana dashboards
-└── docker-compose.yml
+└── server/                    Monolithic backend (Express + PostgreSQL), layered
+    ├── migrations/ seeds/     node-pg-migrate schema migrations and seed data
+    ├── scripts/migrate.js     Migration / seed runner
+    └── src/
+        ├── routes/ middleware/ controllers/ services/ repositories/ models/
+        ├── validations/       Zod request schemas
+        └── config/ utils/
 ```

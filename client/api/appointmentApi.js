@@ -3,6 +3,7 @@ import { http } from "./httpClient";
 // Module 6: /appointments
 export const appointmentApi = {
   book: (payload) => http.post("/appointments", payload),
+  Show less
   track: (params) => http.get("/appointments/track", params),
   myHistory: (params) => http.get("/appointments/my", params),
   list: (params) => http.get("/appointments", params),
