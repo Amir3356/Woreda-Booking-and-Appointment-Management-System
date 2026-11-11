@@ -1,130 +1,155 @@
 import Link from "@/components/ui/Link";
-import { usePathname } from "@/hooks";
+import { usePathname, useRouter } from "@/hooks";
 import {
+  Landmark,
   Building2,
   FileText,
   Calendar,
   Clock,
   UserCog,
+  Users,
   ShieldCheck,
+  User,
+  LogOut,
 } from "lucide-react";
 import { useStore } from "@/context";
+import { EthiopianFlag } from "@/components/ui";
+
+const ROLE_LABELS = { ADMIN: "Admin", OFFICER: "Officer", CITIZEN: "Citizen" };
 
 export default function DashboardSidebar({ role = "ADMIN" }) {
   const pathname = usePathname();
-  const { currentUser, appointments } = useStore();
+  const router = useRouter();
+  const { currentUser, appointments, setCurrentUser } = useStore();
 
   const pendingAppointmentsCount = appointments.filter((a) => a.status === "PENDING").length;
 
-  const adminNav = [
-    { href: "/admin/departments", label: "Department Management", icon: Building2 },
-    { href: "/admin/services", label: "Service Management", icon: FileText },
-    { href: "/admin/schedule", label: "Schedule Management", icon: Clock },
-    { href: "/admin/account-provision", label: "Account Provision", icon: UserCog },
-    { href: "/admin/audit", label: "Audit Trail", icon: ShieldCheck },
-  ];
+  // Navigation, grouped into labelled sections per role.
+  const sectionsByRole = {
+    ADMIN: [
+      {
+        label: "Accounts",
+        items: [
+          { href: "/admin/account-provision", label: "Account Provision", icon: UserCog },
+          { href: "/admin/citizens", label: "Citizen Management", icon: Users },
+        ],
+      },
+      {
+        label: "Service Setup",
+        items: [
+          { href: "/admin/departments", label: "Department Management", icon: Building2 },
+          { href: "/admin/services", label: "Service Management", icon: FileText },
+          { href: "/admin/schedule", label: "Schedule Management", icon: Clock },
+        ],
+      },
+      {
+        label: "Audit",
+        items: [{ href: "/admin/audit", label: "Audit Trail", icon: ShieldCheck }],
+      },
+    ],
+    OFFICER: [
+      {
+        label: "Main Menu",
+        items: [
+          {
+            href: "/officer/appointments",
+            label: "Appointment Management",
+            icon: Calendar,
+            badge: pendingAppointmentsCount > 0 ? pendingAppointmentsCount : null,
+          },
+        ],
+      },
+    ],
+    CITIZEN: [
+      {
+        label: "Main Menu",
+        items: [{ href: "/citizen/book", label: "Book Appointment", icon: Calendar }],
+      },
+    ],
+  };
 
-  const officerNav = [
-    {
-      href: "/officer/appointments",
-      label: "Appointment Management",
-      icon: Calendar,
-      badge: pendingAppointmentsCount > 0 ? pendingAppointmentsCount : null,
-    },
-  ];
-
-  const citizenNav = [
-    { href: "/citizen/book", label: "Book Appointment", icon: Calendar },
-  ];
-
-  let items = adminNav;
-  let subtitle = "System Administration";
-  let badgeColor = "bg-purple-100 text-purple-800";
-
-  if (role === "OFFICER") {
-    items = officerNav;
-    subtitle = currentUser?.departmentName || "Kebele Office";
-    badgeColor = "bg-emerald-100 text-emerald-800";
-  } else if (role === "CITIZEN") {
-    items = citizenNav;
-    subtitle = "Public Self-Service";
-    badgeColor = "bg-blue-100 text-blue-800";
-  }
-
-  const isAdmin = role === "ADMIN" || pathname?.startsWith("/admin");
+  const sections = sectionsByRole[role] || sectionsByRole.ADMIN;
+  const subtitle =
+    role === "OFFICER"
+      ? currentUser?.departmentName || "Kebele Office"
+      : role === "CITIZEN"
+        ? "Public Self-Service"
+        : "Woreda Public Administration";
   const brandHref = role === "ADMIN" ? "/admin" : role === "OFFICER" ? "/officer/appointments" : "/citizen/book";
 
-  return (
-    <aside
-      className="dashboard-sidebar w-64 bg-[#0b2545] text-slate-300 flex flex-col shrink-0 min-h-screen border-r border-slate-800"
-      style={{
-        backgroundColor: "#0b2545",
-        color: "#cbd5e1",
-        width: "260px",
-        minWidth: "260px",
-        borderRight: "1px solid #16365c",
-      }}
-    >
-      {/* Brand & Portal Header */}
-      <div className="p-4 border-b border-white/10 overflow-hidden">
-        <Link href={brandHref} className="flex items-start gap-2.5 group w-full min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-900 flex items-center justify-center font-bold text-sm shadow shrink-0 mt-0.5">
-            W
-          </div>
-          <div className="flex-1 min-w-0 overflow-hidden">
-            <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5 flex-wrap">
-              <span>WoredaCare</span>
-              {role !== "ADMIN" && !isAdmin && (
-                <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-semibold ${badgeColor} shrink-0`}>
-                  {role}
-                </span>
-              )}
-            </h2>
-            <p
-              className="text-[11px] text-slate-300 font-medium leading-snug mt-1 break-words"
-              title={subtitle}
-              style={{
-                wordBreak: "break-word",
-                overflowWrap: "break-word",
-                lineHeight: "1.35",
-                color: "#94a3b8",
-              }}
-            >
-              {subtitle}
-            </p>
-          </div>
-        </Link>
-      </div>
+  const handleSignOut = () => {
+    setCurrentUser(null);
+    router.push("/login");
+  };
 
-      {/* Navigation Items */}
-      <div className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                isActive
-                  ? "bg-white/15 text-white font-semibold shadow-sm"
-                  : "text-slate-300 hover:text-white hover:bg-white/5"
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Icon className={`w-4 h-4 ${isActive ? "text-amber-400" : "text-slate-400"}`} />
-                <span>{item.label}</span>
-              </div>
-              {item.badge && (
-                <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-amber-400 text-slate-950 font-bold">
-                  {item.badge}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+  return (
+    <aside className="sidebar" aria-label="Main navigation">
+      {/* Brand */}
+      <Link href={brandHref} className="sidebar-brand">
+        <span className="sidebar-logo-tile" aria-hidden="true">
+          <Landmark />
+        </span>
+        <span className="sidebar-brand-text">
+          <span className="sidebar-brand-name">WoredaCare</span>
+          <span className="sidebar-brand-sub" title={subtitle}>{subtitle}</span>
+        </span>
+      </Link>
+
+      {/* Navigation */}
+      <nav className="sidebar-nav">
+        {sections.map((section) => (
+          <div key={section.label} className="sidebar-section">
+            <p className="sidebar-section-label">{section.label}</p>
+            <ul className="sidebar-list">
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={`sidebar-link${isActive ? " is-active" : ""}`}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      <Icon className="sidebar-link-icon" aria-hidden="true" />
+                      <span className="sidebar-link-label">{item.label}</span>
+                      {item.badge && (
+                        <span className="sidebar-badge" aria-label={`${item.badge} pending`}>
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      {/* Signed-in user */}
+      <div className="sidebar-footer">
+        <div className="sidebar-user">
+          <span className="sidebar-avatar" aria-hidden="true">
+            <User />
+          </span>
+          <span className="sidebar-user-text">
+            <span className="sidebar-user-name">
+              {currentUser?.fullName || "Signed-in User"} · {ROLE_LABELS[role] || role}
+            </span>
+            <span className="sidebar-user-email" title={currentUser?.phone || (role === "ADMIN" ? "+251911223344" : role === "OFFICER" ? "+251911334455" : subtitle)}>
+              <span className="inline-flex items-center gap-1.5 font-mono">
+                <EthiopianFlag className="w-3.5 h-2.5 shrink-0 shadow-2xs" />
+                <span>{currentUser?.phone || (role === "ADMIN" ? "+251911223344" : role === "OFFICER" ? "+251911334455" : subtitle)}</span>
+              </span>
+            </span>
+          </span>
+        </div>
+        <button type="button" onClick={handleSignOut} className="sidebar-signout">
+          <LogOut aria-hidden="true" />
+          Sign Out
+        </button>
       </div>
     </aside>
   );
 }
-

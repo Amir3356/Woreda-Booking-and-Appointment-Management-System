@@ -54,8 +54,8 @@ export class UnauthorizedError extends AppError {
 }
 
 export class ForbiddenError extends AppError {
-  constructor() {
-    super(403, "FORBIDDEN", "Insufficient role permissions.");
+  constructor(message = "Insufficient role permissions.") {
+    super(403, "FORBIDDEN", message);
   }
 }
 

@@ -88,96 +88,13 @@
 }
 
 /* ==========================================================================
-   Dashboard Shell & Navigation Sidebar (Dark Navy Institutional Style)
+   Dashboard Shell (the navigation sidebar is styled in sidebar.css)
    ========================================================================== */
 .dashboard-shell,
 div.min-h-screen.flex.bg-slate-100 {
   min-height: 100vh;
   display: flex;
   background-color: #f1f5f9;
-}
-
-.dashboard-sidebar,
-aside.w-64 {
-  width: 260px !important;
-  min-width: 260px !important;
-  max-width: 260px !important;
-  background-color: #0b2545 !important;
-  color: #cbd5e1 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  position: sticky !important;
-  top: 0 !important;
-  height: 100vh !important;
-  min-height: 100vh !important;
-  z-index: 40 !important;
-  flex-shrink: 0 !important;
-  border-right: 1px solid #16365c !important;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15) !important;
-  overflow-x: hidden !important;
-}
-
-.sidebar-header,
-aside.w-64 > div:first-child {
-  padding: 1rem 1.25rem !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-  background-color: rgba(0, 0, 0, 0.15) !important;
-  overflow: hidden !important;
-  word-break: break-word !important;
-}
-
-.sidebar-nav-container,
-aside.w-64 > div:nth-child(2) {
-  flex: 1 !important;
-  padding: 1rem 0.75rem !important;
-  overflow-y: auto !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 0.25rem !important;
-}
-
-.sidebar-menu-heading,
-aside.w-64 .text-\[10px\].uppercase {
-  font-size: 0.65rem !important;
-  font-weight: 700 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-  color: #94a3b8 !important;
-  padding: 0.25rem 0.75rem 0.5rem 0.75rem !important;
-}
-
-/* Sidebar Links */
-aside.w-64 a {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  padding: 0.5rem 0.75rem !important;
-  border-radius: 8px !important;
-  font-size: 0.8125rem !important;
-  font-weight: 500 !important;
-  color: #cbd5e1 !important;
-  transition: all 0.15s ease !important;
-  text-decoration: none !important;
-}
-
-aside.w-64 a:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
-  color: #ffffff !important;
-}
-
-aside.w-64 a.bg-white\/15,
-aside.w-64 a[class*="bg-white/15"] {
-  background-color: rgba(255, 255, 255, 0.16) !important;
-  color: #ffffff !important;
-  font-weight: 700 !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
-}
-
-/* Sidebar Footer Profile & Return */
-aside.w-64 > div:last-child {
-  padding: 0.875rem !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-  background-color: rgba(0, 0, 0, 0.15) !important;
 }
 
 /* ==========================================================================
@@ -242,11 +159,4 @@ main.flex-1.p-6 {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.5rem;
-}
-
-@media (max-width: 1024px) {
-  aside.w-64,
-  .dashboard-sidebar {
-    display: none !important;
-  }
 }

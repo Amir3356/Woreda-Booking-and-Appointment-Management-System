@@ -27,7 +27,7 @@ export function createPublicServiceService({ events }) {
 
     /** fields: validated body (validations/catalog.validation.js). */
     async create(fields) {
-      await requireDepartment(fields.departmentId);
+      if (fields.departmentId) await requireDepartment(fields.departmentId);
       const id = newId("srv");
       await publicServices.create({ id, ...fields }).catch(duplicateCode(fields.code));
       const s = await service.get(id);
@@ -36,7 +36,7 @@ export function createPublicServiceService({ events }) {
     },
 
     async update(id, fields) {
-      await requireDepartment(fields.departmentId);
+      if (fields.departmentId) await requireDepartment(fields.departmentId);
       const found = await publicServices.update(id, fields).catch(duplicateCode(fields.code));
       if (!found) throw new NotFoundError();
       const s = await service.get(id);

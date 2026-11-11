@@ -1,14 +1,17 @@
 // Builds the Express application. Layers, from the outside in:
 //   middleware (helmet, request id, log, CORS, rate limit, JSON body, auth, zod validation) → routes → controllers → services → repositories → PostgreSQL
 import express from "express";
+import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { config } from "./config/index.js";
 import { logger } from "./config/logger.js";
 import { requestId } from "./middleware/requestId.js";
 import { requestLogger } from "./middleware/requestLogger.js";
-import { cors } from "./middleware/cors.js";
+import cors from "cors";
+import { allowedOrigins, corsOptions } from "./config/cors.js";
 import { rateLimit } from "./middleware/rateLimit.js";
-import { authenticate } from "./middleware/auth.js";
+import { authenticate, AUTH_COOKIE_NAME } from "./middleware/jwt.js";
+import { csrfProtection } from "./middleware/csrf.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { createRealtimeService } from "./services/realtime.service.js";
 import { createEventService } from "./services/event.service.js";
@@ -40,9 +43,9 @@ import { createRoutes } from "./routes/index.js";
 
 export function createApp() {
   // Services
-  const realtimeService = createRealtimeService({ allowedOrigins: config.allowedOrigins, logger });
+  const realtimeService = createRealtimeService({ allowedOrigins, logger });
   const events = createEventService({ realtimeService, logger });
-  const authService = createAuthService({ jwtSecret: config.jwtSecret, logger });
+  const authService = createAuthService({ jwtSecret: config.jwtSecret, logger, events });
   const auditService = createAuditService({ logger });
   const appointmentService = createAppointmentService({ events, audit: auditService });
 
@@ -71,13 +74,15 @@ export function createApp() {
   app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
   app.use(requestId);
   app.use(requestLogger(logger));
-  app.use(cors(config.allowedOrigins));
+  app.use(cors(corsOptions));
+  app.use(cookieParser(config.cookieSecret));
   if (config.rateLimitEnabled) {
     app.use("/api/v1", rateLimit({ ratePerSecond: 5, burst: 50 }));
     app.use(["/api/v1/auth/login", "/api/v1/auth/register"], rateLimit({ ratePerSecond: 20 / 60, burst: 10 }));
   }
   app.use(express.json({ limit: "1mb" }));
   app.use(authenticate(config.jwtSecret, (jti) => authService.isRevoked(jti)));
+  app.use(csrfProtection({ allowedOrigins, isProduction: config.isProduction, authCookieName: AUTH_COOKIE_NAME }));
   app.use(createRoutes(controllers));
   app.use(notFound);
   app.use(errorHandler(logger));

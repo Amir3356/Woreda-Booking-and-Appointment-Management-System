@@ -5,7 +5,7 @@
 // for the service's department. On a given date the service-specific one wins, as on the server
 // (booking-service /schedules/availability decides the actual slots).
 
-export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_NAMES = {
   Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday",
   Fri: "Friday", Sat: "Saturday", Sun: "Sunday",

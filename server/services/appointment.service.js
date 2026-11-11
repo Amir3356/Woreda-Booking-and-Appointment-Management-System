@@ -1,5 +1,6 @@
 // Appointment use cases: booking with schedule and capacity checks, tracking, history, registry,
 // review, reschedule, cancel and slip. Every change is audited and announced to open pages.
+import { subject } from "@casl/ability";
 import { lockKey, transaction } from "../config/database.js";
 import {
   ConflictError, DailyCapacityError, ForbiddenError, NotFoundError, SlotFullError, UnauthorizedError, invalid, isDuplicateKey,
@@ -64,8 +65,12 @@ export function createAppointmentService({ events, audit }) {
   async function load(caller, id) {
     const a = await appointments.findById(id);
     if (!a) throw new NotFoundError();
-    if (caller.role === "CITIZEN" && a.citizenId !== caller.userId) throw new ForbiddenError();
-    if (caller.role === "OFFICER" && a.departmentId !== caller.departmentId) throw new ForbiddenError();
+    if (caller?.ability) {
+      if (!caller.ability.can("read", subject("Appointment", a))) throw new ForbiddenError();
+    } else {
+      if (caller.role === "CITIZEN" && a.citizenId !== caller.userId) throw new ForbiddenError();
+      if (caller.role === "OFFICER" && a.departmentId !== caller.departmentId) throw new ForbiddenError();
+    }
     return a;
   }
 
@@ -148,7 +153,10 @@ export function createAppointmentService({ events, audit }) {
 
     /** PATCH /appointments/:id/status: approve or reject a PENDING appointment. */
     async review(caller, id, u) {
-      await load(caller, id);
+      const prev = await load(caller, id);
+      if (caller?.ability && !caller.ability.can("review", subject("Appointment", prev))) {
+        throw new ForbiddenError();
+      }
       const updated = await appointments.review(id, {
         status: u.status, officerNotes: u.officerNotes, rejectionReason: u.rejectionReason, officerId: caller.userId,
       });
@@ -165,6 +173,9 @@ export function createAppointmentService({ events, audit }) {
     /** POST /appointments/:id/reschedule: moves to a new slot (schedule- and capacity-checked) and resets to APPROVED. */
     async reschedule(caller, id, req) {
       const prev = await load(caller, id);
+      if (caller?.ability && !caller.ability.can("reschedule", subject("Appointment", prev))) {
+        throw new ForbiddenError();
+      }
 
       await transaction(async (client) => {
         const current = await appointments.findByIdForUpdate(id, client);
@@ -193,6 +204,9 @@ export function createAppointmentService({ events, audit }) {
      */
     async cancel(caller, id) {
       const prev = await load(caller, id);
+      if (caller?.ability && !caller.ability.can("cancel", subject("Appointment", prev))) {
+        throw new ForbiddenError();
+      }
       const isCitizen = caller.role === "CITIZEN";
       if (!(await appointments.cancel(id, isCitizen ? ["PENDING"] : ["PENDING", "APPROVED"]))) {
         throw new ConflictError(

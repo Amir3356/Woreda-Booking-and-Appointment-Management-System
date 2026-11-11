@@ -4,7 +4,7 @@
  */
 
 /** Statuses that release an appointment slot back to available capacity. */
-export const RELEASED_STATUSES = new Set(["CANCELLED", "REJECTED"]);
+const RELEASED_STATUSES = new Set(["CANCELLED", "REJECTED"]);
 
 /**
  * Computes per-slot availability for a service on a given date.

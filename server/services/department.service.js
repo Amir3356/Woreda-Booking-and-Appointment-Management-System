@@ -22,18 +22,33 @@ export function createDepartmentService({ events }) {
 
     /** fields: validated body (validations/catalog.validation.js). */
     async create(fields) {
+      const { serviceIds, ...deptFields } = fields;
       const id = newId("dept");
-      await departments.create({ id, ...fields }).catch(duplicateCode(fields.code));
+      await departments.create({ id, ...deptFields }).catch(duplicateCode(fields.code));
+      if (serviceIds?.length) {
+        await publicServices.assignToDepartment(id, serviceIds);
+      }
       const d = await service.get(id);
       events.publish("catalog.department.created", id, d);
+      if (serviceIds?.length) {
+        events.publish("catalog.changed", id, null);
+      }
       return d;
     },
 
     async update(id, fields) {
-      const found = await departments.update(id, fields).catch(duplicateCode(fields.code));
+      const { serviceIds, ...deptFields } = fields;
+      const found = await departments.update(id, deptFields).catch(duplicateCode(fields.code));
       if (!found) throw new NotFoundError();
+      if (serviceIds !== undefined) {
+        await publicServices.unassignFromDepartment(id, serviceIds);
+        if (serviceIds.length) {
+          await publicServices.assignToDepartment(id, serviceIds);
+        }
+      }
       const d = await service.get(id);
       events.publish("catalog.department.updated", id, d);
+      events.publish("catalog.changed", id, null);
       return d;
     },
 

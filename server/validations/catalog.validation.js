@@ -8,12 +8,16 @@ export const departmentSchema = z.object({
   description: optionalText,
   buildingRoom: requiredText("Building/room is required."),
   contactPhone: requiredText("Contact phone is required."),
+  serviceIds: z.preprocess(
+    (v) => (typeof v === "string" ? [v] : v == null ? [] : v),
+    z.array(z.string().trim())
+  ).optional().default([]),
 });
 
 export const departmentListQuery = z.object({ isActive: queryBoolean });
 
 export const publicServiceSchema = z.object({
-  departmentId: requiredText("Parent department is required."),
+  departmentId: optionalText.nullish().transform((v) => v || null),
   name: requiredText("Service name is required."),
   code: requiredText("Service code is required.").toUpperCase(),
   description: optionalText,

@@ -13,7 +13,7 @@ export function createProfileService() {
     /** p: validated body (validations/user.validation.js). */
     async update(userId, p) {
       const found = await users.updateCitizen(userId, p).catch((err) => {
-        throw isDuplicateKey(err) ? new ConflictError("email or national ID already registered") : err;
+        throw isDuplicateKey(err) ? new ConflictError("phone number, email or national ID already registered") : err;
       });
       if (!found) throw new NotFoundError();
       return p;

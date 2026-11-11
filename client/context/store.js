@@ -160,11 +160,12 @@ export const useStore = create(
       // Users Management
       users: [],
       addUser: (user) => {
+        const { password: _p, passwordHash: _ph, ...safeUser } = user || {};
         const newUser = {
-          ...user,
-          id: user.id || `usr-${Date.now()}`,
-          isActive: user.isActive !== undefined ? user.isActive : true,
-          createdAt: user.createdAt || new Date().toISOString(),
+          ...safeUser,
+          id: user?.id || `usr-${Date.now()}`,
+          isActive: user?.isActive !== undefined ? user.isActive : true,
+          createdAt: user?.createdAt || new Date().toISOString(),
         };
         set((state) => ({ users: [...state.users, newUser] }));
         return newUser;
@@ -177,14 +178,58 @@ export const useStore = create(
         }));
       },
 
+      // Registered Citizens Management (Populated during citizen sign-up)
+      registeredCitizens: [],
+      addRegisteredCitizen: (citizen) => {
+        const newCitizen = {
+          id: citizen.id || `cit-${Date.now()}`,
+          fullName: citizen.fullName?.trim() || "Citizen",
+          phone: citizen.phone?.trim() || "",
+          locations: citizen.locations || citizen.location || "Addis Ababa",
+          woreda: citizen.woreda || "Woreda 03",
+          kebele: citizen.kebele || "Kebele 03",
+          nationalId: citizen.nationalId || `ET-CIT-${Math.floor(1000 + Math.random() * 9000)}`,
+          status: "VERIFIED",
+          createdAt: new Date().toISOString(),
+        };
+
+        if (typeof window !== "undefined" && window.localStorage) {
+          try {
+            const raw = window.localStorage.getItem("woreda_registered_citizens");
+            const existing = raw ? JSON.parse(raw) : [];
+            const filtered = existing.filter((c) => c.phone !== newCitizen.phone && c.id !== newCitizen.id);
+            window.localStorage.setItem("woreda_registered_citizens", JSON.stringify([newCitizen, ...filtered]));
+          } catch {
+            // ignore
+          }
+        }
+
+        set((state) => {
+          const current = state.registeredCitizens || [];
+          const filtered = current.filter((c) => c.phone !== newCitizen.phone && c.id !== newCitizen.id);
+          return { registeredCitizens: [newCitizen, ...filtered] };
+        });
+
+        get().addAuditLog({
+          userName: newCitizen.fullName,
+          userRole: "CITIZEN",
+          action: "CITIZEN_REGISTRATION",
+          entity: newCitizen.phone,
+          details: `New citizen registered: ${newCitizen.fullName} (${newCitizen.woreda}, ${newCitizen.kebele})`,
+        });
+      },
+
       // Provisioned Accounts Management (Admin Account Provisioning)
       provisionedAccounts: [],
       addProvisionedAccount: (acc) => {
         const cleanEmail = (acc.email || "").trim().toLowerCase();
+        const cleanPhone = (acc.phone || "").trim();
         const role = acc.role === "Central Administrator" ? "ADMIN" : "OFFICER";
         const cleanPassword = (acc.password || "").trim() || "Password@123";
         const newAccount = {
+          id: acc.id || `staff-${Date.now()}`,
           fullName: (acc.fullName || "").trim(),
+          phone: cleanPhone || (acc.phone || ""),
           email: (acc.email || "").trim(),
           password: cleanPassword,
           passwordHash: acc.passwordHash || null,
@@ -195,11 +240,19 @@ export const useStore = create(
           createdAt: new Date().toISOString(),
         };
 
+        const matchesAcc = (a) => {
+          const aEmail = (a.email || "").trim().toLowerCase();
+          const aPhone = (a.phone || "").trim();
+          if (cleanPhone && aPhone && aPhone === cleanPhone) return true;
+          if (cleanEmail && aEmail && aEmail === cleanEmail) return true;
+          return false;
+        };
+
         if (typeof window !== "undefined" && window.localStorage) {
           try {
             const rawBackup = window.localStorage.getItem("woreda_provisioned_accounts");
             const list = rawBackup ? JSON.parse(rawBackup) : [];
-            const filtered = list.filter((a) => (a.email || "").trim().toLowerCase() !== cleanEmail);
+            const filtered = list.filter((a) => !matchesAcc(a));
             window.localStorage.setItem("woreda_provisioned_accounts", JSON.stringify([newAccount, ...filtered]));
           } catch {
             // ignore
@@ -208,23 +261,20 @@ export const useStore = create(
 
         set((state) => {
           const currentList = state.provisionedAccounts || [];
-          const filteredAccs = currentList.filter(
-            (a) => (a.email || "").trim().toLowerCase() !== cleanEmail
-          );
+          const filteredAccs = currentList.filter((a) => !matchesAcc(a));
           const updatedAccounts = [newAccount, ...filteredAccs];
 
           const currentDepts = state.departments || [];
           const matchedDept =
             currentDepts.find((d) => d.id === newAccount.departmentId || d.name === newAccount.role) || currentDepts[0];
-          const userIndex = (state.users || []).findIndex(
-            (u) => (u.email || "").trim().toLowerCase() === cleanEmail
-          );
+          const userIndex = (state.users || []).findIndex((u) => matchesAcc(u));
           let updatedUsers = [...(state.users || [])];
 
           if (userIndex >= 0) {
             updatedUsers[userIndex] = {
               ...updatedUsers[userIndex],
               fullName: newAccount.fullName,
+              phone: newAccount.phone || updatedUsers[userIndex].phone || "+251911000000",
               email: newAccount.email,
               password: cleanPassword,
               role,
@@ -238,11 +288,11 @@ export const useStore = create(
             };
           } else {
             updatedUsers.push({
-              id: `usr-prov-${Date.now()}`,
+              id: newAccount.id || `usr-prov-${Date.now()}`,
               fullName: newAccount.fullName,
+              phone: newAccount.phone || "+251911000000",
               email: newAccount.email,
               password: cleanPassword,
-              phone: "+251911000000",
               nationalId: `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
               role,
               departmentId: role === "OFFICER" ? (newAccount.departmentId || matchedDept?.id || null) : null,
@@ -267,22 +317,30 @@ export const useStore = create(
           userName: get().currentUser?.fullName || "Admin",
           userRole: "ADMIN",
           action: "PROVISION_ACCOUNT",
-          entity: newAccount.email,
+          entity: newAccount.phone || newAccount.email,
           details: `Provisioned account for ${newAccount.fullName} as ${newAccount.role}`,
         });
       },
-      updateProvisionedAccount: (originalEmail, updatedAcc) => {
-        const cleanOriginal = (originalEmail || "").trim().toLowerCase();
+      updateProvisionedAccount: (originalKey, updatedAcc) => {
+        const cleanKey = (originalKey || "").trim().toLowerCase();
+        const cleanPhone = (updatedAcc.phone || "").trim();
         const role = updatedAcc.role === "Central Administrator" ? "ADMIN" : "OFFICER";
         const cleanPassword = (updatedAcc.password || "").trim() || "Password@123";
+
+        const matchesKey = (a) => {
+          const aEmail = (a.email || "").trim().toLowerCase();
+          const aPhone = (a.phone || "").trim().toLowerCase();
+          return aEmail === cleanKey || aPhone === cleanKey;
+        };
 
         if (typeof window !== "undefined" && window.localStorage) {
           try {
             const rawBackup = window.localStorage.getItem("woreda_provisioned_accounts");
             const list = rawBackup ? JSON.parse(rawBackup) : [];
-            const filtered = list.filter((a) => (a.email || "").trim().toLowerCase() !== cleanOriginal);
+            const filtered = list.filter((a) => !matchesKey(a));
             const savedAcc = {
               ...updatedAcc,
+              phone: cleanPhone || updatedAcc.phone || "",
               password: cleanPassword,
               isProvisioned: true,
             };
@@ -295,10 +353,11 @@ export const useStore = create(
         set((state) => {
           const currentList = state.provisionedAccounts || [];
           const updatedAccounts = currentList.map((a) =>
-            (a.email || "").trim().toLowerCase() === cleanOriginal
+            matchesKey(a)
               ? {
                   ...updatedAcc,
                   fullName: (updatedAcc.fullName || "").trim(),
+                  phone: cleanPhone || (updatedAcc.phone || a.phone || "").trim(),
                   email: (updatedAcc.email || "").trim(),
                   password: cleanPassword,
                   passwordHash: updatedAcc.passwordHash || null,
@@ -312,15 +371,14 @@ export const useStore = create(
           const matchedDept =
             currentDepts.find((d) => d.id === updatedAcc.departmentId || d.name === updatedAcc.role) || currentDepts[0];
           
-          const userIdx = (state.users || []).findIndex(
-            (u) => (u.email || "").trim().toLowerCase() === cleanOriginal
-          );
+          const userIdx = (state.users || []).findIndex((u) => matchesKey(u));
           let updatedUsers = [...(state.users || [])];
 
           if (userIdx >= 0) {
             updatedUsers[userIdx] = {
               ...updatedUsers[userIdx],
               fullName: (updatedAcc.fullName || "").trim(),
+              phone: cleanPhone || (updatedAcc.phone || updatedUsers[userIdx].phone || "").trim(),
               email: (updatedAcc.email || "").trim(),
               password: cleanPassword,
               role,
@@ -333,11 +391,11 @@ export const useStore = create(
             };
           } else {
             updatedUsers.push({
-              id: `usr-prov-${Date.now()}`,
+              id: updatedAcc.id || `usr-prov-${Date.now()}`,
               fullName: (updatedAcc.fullName || "").trim(),
+              phone: cleanPhone || "+251911000000",
               email: (updatedAcc.email || "").trim(),
               password: cleanPassword,
-              phone: "+251911000000",
               nationalId: `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
               role,
               departmentId: role === "OFFICER" ? (updatedAcc.departmentId || matchedDept?.id || null) : null,
@@ -362,18 +420,23 @@ export const useStore = create(
           userName: get().currentUser?.fullName || "Admin",
           userRole: "ADMIN",
           action: "UPDATE_PROVISIONED_ACCOUNT",
-          entity: updatedAcc.email,
+          entity: updatedAcc.phone || updatedAcc.email,
           details: `Updated provisioned account for ${updatedAcc.fullName}`,
         });
       },
-      deleteProvisionedAccount: (emailToDelete) => {
-        const cleanEmail = (emailToDelete || "").trim().toLowerCase();
+      deleteProvisionedAccount: (keyToDelete) => {
+        const cleanKey = (keyToDelete || "").trim().toLowerCase();
+        const matchesKey = (a) => {
+          const aEmail = (a.email || "").trim().toLowerCase();
+          const aPhone = (a.phone || "").trim().toLowerCase();
+          return aEmail === cleanKey || aPhone === cleanKey;
+        };
 
         if (typeof window !== "undefined" && window.localStorage) {
           try {
             const rawBackup = window.localStorage.getItem("woreda_provisioned_accounts");
             const list = rawBackup ? JSON.parse(rawBackup) : [];
-            const filtered = list.filter((a) => (a.email || "").trim().toLowerCase() !== cleanEmail);
+            const filtered = list.filter((a) => !matchesKey(a));
             window.localStorage.setItem("woreda_provisioned_accounts", JSON.stringify(filtered));
           } catch {
             // ignore
@@ -381,19 +444,15 @@ export const useStore = create(
         }
 
         set((state) => ({
-          provisionedAccounts: (state.provisionedAccounts || []).filter(
-            (a) => (a.email || "").trim().toLowerCase() !== cleanEmail
-          ),
-          users: (state.users || []).filter(
-            (u) => (u.email || "").trim().toLowerCase() !== cleanEmail
-          ),
+          provisionedAccounts: (state.provisionedAccounts || []).filter((a) => !matchesKey(a)),
+          users: (state.users || []).filter((u) => !matchesKey(u)),
         }));
         get().addAuditLog({
           userName: get().currentUser?.fullName || "Admin",
           userRole: "ADMIN",
           action: "DELETE_PROVISIONED_ACCOUNT",
-          entity: emailToDelete,
-          details: `Deleted provisioned account ${emailToDelete}`,
+          entity: keyToDelete,
+          details: `Deleted provisioned account ${keyToDelete}`,
         });
       },
 
@@ -668,6 +727,7 @@ export const useStore = create(
         // DO NOT persist currentUser to localStorage! Authentication is strictly JWT in browser cookie.
         users: state.users,
         provisionedAccounts: state.provisionedAccounts,
+        registeredCitizens: state.registeredCitizens,
         queue: state.queue,
         notifications: state.notifications,
         scheduleConfigs: state.scheduleConfigs,
@@ -744,6 +804,7 @@ export const useStore = create(
                     ...existing,
                     ...a,
                     fullName: (a.fullName || existing.fullName || "").trim(),
+                    phone: (a.phone || existing.phone || "").trim(),
                     email: (a.email || existing.email || "").trim(),
                     password: resolvedPassword,
                     role: a.role || existing.role || "Department Officer",
@@ -841,6 +902,7 @@ export const useStore = create(
           appointments: currentState.appointments, // loaded from the API, never from storage
           queue: cleanedQueue,
           provisionedAccounts: cleanedProvisioned,
+          registeredCitizens: safePersisted.registeredCitizens || currentState.registeredCitizens || [],
           schedules: currentState.schedules, // loaded from the API, never from storage
           currentUser: cookieUser,
         };

@@ -9,8 +9,11 @@ export default function CitizenLayout({ children }) {
   const token = getJwtCookie();
   const claims = parseJwtToken(token);
 
-  // Enforce valid JWT in browser cookie with CITIZEN role
-  if (!token || !claims || claims.role !== "CITIZEN" || !currentUser || currentUser.role !== "CITIZEN") {
+  // Enforce valid JWT in browser cookie or authenticated user state with CITIZEN role
+  const isCitizenClaim = claims?.role === "CITIZEN";
+  const isCitizenUser = currentUser?.role === "CITIZEN";
+
+  if (!isCitizenClaim && (!currentUser || !isCitizenUser)) {
     return <Navigate to="/login" replace />;
   }
 

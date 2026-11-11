@@ -2,14 +2,14 @@
 // checks of a booking against a schedule (working days, opening hours, capacities). No I/O.
 import { DAY_NAMES, minutes, pad, parseClock, parseDate, weekdayOf } from "./date.js";
 
-export const SLOT_MINUTES = 30;
-export const FIRST_SLOT_MIN = 8 * 60 + 30;
-export const LAST_SLOT_MIN = 16 * 60 + 30;
-export const LUNCH_SLOT_MIN = 12 * 60 + 30;
+const SLOT_MINUTES = 30;
+const FIRST_SLOT_MIN = 8 * 60 + 30;
+const LAST_SLOT_MIN = 16 * 60 + 30;
+const LUNCH_SLOT_MIN = 12 * 60 + 30;
 export const DEFAULT_MAX_PARALLEL_SLOTS = 3;
 
 /** Minutes since midnight in the client format ("09:00 AM", "13:30 PM"). */
-export function slotLabel(m) {
+function slotLabel(m) {
   const suffix = m >= 12 * 60 ? "PM" : "AM";
   return `${pad(Math.trunc(m / 60))}:${pad(m % 60)} ${suffix}`;
 }
@@ -25,7 +25,7 @@ export function slotMinutes(label) {
 }
 
 /** How many booking times a schedule's opening hours hold (lunch break excluded). */
-export function openTimesCount(schedule) {
+function openTimesCount(schedule) {
   if (!schedule) return 0;
   const open = minutes(schedule.openingTime);
   const closing = minutes(schedule.closingTime);
@@ -77,7 +77,7 @@ export function closedReason(schedule, day, bookedForDay) {
 }
 
 /** Start of a slot label in minutes since midnight ("13:30 PM" -> 810; labels use 24h hours). */
-export const labelMinutes = (label) => {
+const labelMinutes = (label) => {
   const [h, m] = String(label).slice(0, 5).split(":").map(Number);
   return h * 60 + m;
 };

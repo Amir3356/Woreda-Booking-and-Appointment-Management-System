@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useStore } from "@/context";
+import { DataTable } from "@/components/ui";
+import { useEscapeKey } from "@/hooks";
 import { subscribe } from "@/api/realtime";
 import { describeError, formatWorkingDays, localIsoDate, displayDate } from "@/utils";
 import {
@@ -48,6 +50,8 @@ export default function AdminSchedulePage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  useEscapeKey(modalOpen, () => setModalOpen(false));
+  useEscapeKey(Boolean(deleteTarget), () => setDeleteTarget(null));
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -232,6 +236,139 @@ export default function AdminSchedulePage() {
   const totalSchedulesCount = schedules.length;
   const activeSchedulesCount = schedules.filter((s) => s.status === "Active").length;
 
+  // Schedule table columns (TanStack Table via components/ui/DataTable).
+  const scheduleColumns = [
+    {
+      id: "id",
+      accessorKey: "id",
+      header: "Schedule ID",
+      cell: ({ row }) => (
+        <span className="font-mono font-bold text-slate-900 bg-slate-100 text-slate-800 px-2 py-0.5 rounded text-xs border border-slate-200">
+          {row.original.id}
+        </span>
+      ),
+    },
+    {
+      id: "department",
+      accessorFn: (sch) => sch.department || "",
+      header: "Department",
+      sortFn: "text",
+      meta: { className: "font-bold text-slate-900" },
+      cell: ({ row }) => row.original.department,
+    },
+    {
+      id: "service",
+      accessorFn: (sch) => sch.service || "",
+      header: "Service",
+      sortFn: "text",
+      meta: { className: "text-slate-700 font-medium" },
+      cell: ({ row }) => row.original.service || <span className="italic text-slate-500">All services (department-wide)</span>,
+    },
+    {
+      id: "workingDays",
+      header: "Working Days",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1 font-semibold text-slate-700 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-md text-[11px]">
+          {formatDaysDisplay(row.original.workingDays)}
+        </span>
+      ),
+    },
+    {
+      id: "hours",
+      accessorKey: "openingTime",
+      header: "Operating Hours",
+      meta: { className: "font-mono text-slate-700 font-medium" },
+      cell: ({ row }) => `${row.original.openingTime} – ${row.original.closingTime}`,
+    },
+    {
+      id: "capacity",
+      accessorKey: "dailyCapacity",
+      header: "Daily Capacity",
+      sortFn: "basic",
+      meta: { className: "text-slate-600" },
+      cell: ({ row }) => (
+        <>
+          <span className="font-semibold text-slate-900">{row.original.dailyCapacity}</span> slots/day
+        </>
+      ),
+    },
+    {
+      id: "period",
+      accessorKey: "effectiveStartDate",
+      header: "Effective Period",
+      meta: { className: "text-slate-600 whitespace-nowrap" },
+      cell: ({ row }) => {
+        const sch = row.original;
+        return (
+          <>
+            <div className="font-medium text-slate-800">From {displayDate(sch.effectiveStartDate)}</div>
+            <div className="text-[11px] text-slate-500">
+              {sch.effectiveEndDate ? `Until ${displayDate(sch.effectiveEndDate)}` : "No end date"}
+            </div>
+          </>
+        );
+      },
+    },
+    {
+      id: "status",
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const sch = row.original;
+        const isActive = sch.status === "Active";
+        return (
+          <button
+            type="button"
+            onClick={() => handleToggleStatus(sch)}
+            className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
+              isActive
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                : "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200"
+            }`}
+            title={`Click to ${isActive ? "deactivate" : "activate"}`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                isActive ? "bg-emerald-500" : "bg-slate-400"
+              }`}
+            />
+            {isActive ? "Active" : "Inactive"}
+          </button>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      meta: { className: "text-center", headerClassName: "text-center" },
+      cell: ({ row }) => {
+        const sch = row.original;
+        return (
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => handleOpenEdit(sch)}
+              className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 transition-all cursor-pointer"
+              title="Edit Schedule"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(sch)}
+              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all cursor-pointer"
+              title="Delete Schedule"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header with Title, Description, and Create Schedule Button at the right edge */}
@@ -392,165 +529,51 @@ export default function AdminSchedulePage() {
 
       {/* B. Schedule List Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
-              <tr>
-                <th className="px-5 py-3.5">Schedule ID</th>
-                <th className="px-5 py-3.5">Department</th>
-                <th className="px-5 py-3.5">Service</th>
-                <th className="px-5 py-3.5">Working Days</th>
-                <th className="px-5 py-3.5">Operating Hours</th>
-                <th className="px-5 py-3.5">Daily Capacity</th>
-                <th className="px-5 py-3.5">Effective Period</th>
-                <th className="px-5 py-3.5">Status</th>
-                <th className="px-5 py-3.5 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredSchedules.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-5 py-16 text-center">
-                    <div className="flex flex-col items-center gap-3 text-slate-400">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
-                        <Clock className="w-6 h-6 text-slate-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-700">
-                          {schedules.length === 0
-                            ? "No schedules configured yet"
-                            : "No schedules match the selected filters"}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                          {schedules.length === 0
-                            ? "Configure municipal service operating hours, slot intervals, and daily quotas by clicking 'Create Schedule'."
-                            : "Try adjusting your search keywords or resetting the department and status filters."}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredSchedules.map((sch) => {
-                  const isActive = sch.status === "Active";
-                  return (
-                    <tr key={sch.id} className="hover:bg-slate-50/80 transition-colors">
-                      {/* Schedule ID */}
-                      <td className="px-5 py-3.5">
-                        <span className="font-mono font-bold text-slate-900 bg-slate-100 text-slate-800 px-2 py-0.5 rounded text-xs border border-slate-200">
-                          {sch.id}
-                        </span>
-                      </td>
-
-                      {/* Department */}
-                      <td className="px-5 py-3.5 font-bold text-slate-900">
-                        {sch.department}
-                      </td>
-
-                      {/* Service */}
-                      <td className="px-5 py-3.5 text-slate-700 font-medium">
-                        {sch.service || <span className="italic text-slate-500">All services (department-wide)</span>}
-                      </td>
-
-                      {/* Working Days */}
-                      <td className="px-5 py-3.5">
-                        <span className="inline-flex items-center gap-1 font-semibold text-slate-700 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-md text-[11px]">
-                          {formatDaysDisplay(sch.workingDays)}
-                        </span>
-                      </td>
-
-                      {/* Operating Hours */}
-                      <td className="px-5 py-3.5 font-mono text-slate-700 font-medium">
-                        {sch.openingTime} – {sch.closingTime}
-                      </td>
-
-                      {/* Daily Capacity */}
-                      <td className="px-5 py-3.5 text-slate-600">
-                        <span className="font-semibold text-slate-900">{sch.dailyCapacity}</span> slots/day
-                      </td>
-
-                      {/* Effective Period */}
-                      <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">
-                        <div className="font-medium text-slate-800">From {displayDate(sch.effectiveStartDate)}</div>
-                        <div className="text-[11px] text-slate-500">
-                          {sch.effectiveEndDate ? `Until ${displayDate(sch.effectiveEndDate)}` : "No end date"}
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-5 py-3.5">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(sch)}
-                          className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
-                            isActive
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                              : "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200"
-                          }`}
-                          title={`Click to ${isActive ? "deactivate" : "activate"}`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              isActive ? "bg-emerald-500" : "bg-slate-400"
-                            }`}
-                          />
-                          {isActive ? "Active" : "Inactive"}
-                        </button>
-                      </td>
-
-                      {/* Actions: Edit, Delete */}
-                      <td className="px-5 py-3.5 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {/* Edit */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(sch)}
-                            className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 transition-all cursor-pointer"
-                            title="Edit Schedule"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Delete */}
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(sch)}
-                            className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all cursor-pointer"
-                            title="Delete Schedule"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          data={filteredSchedules}
+          columns={scheduleColumns}
+          getRowId={(sch) => sch.id}
+          initialSorting={[{ id: "department", desc: false }]}
+          itemLabel="schedules"
+          minWidth="1080px"
+          emptyState={
+            <div className="flex flex-col items-center gap-3 text-slate-400">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                <Clock className="w-6 h-6 text-slate-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-700">
+                  {schedules.length === 0
+                    ? "No schedules configured yet"
+                    : "No schedules match the selected filters"}
+                </p>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  {schedules.length === 0
+                    ? "Configure municipal service operating hours, slot intervals, and daily quotas by clicking 'Create Schedule'."
+                    : "Try adjusting your search keywords or resetting the department and status filters."}
+                </p>
+              </div>
+            </div>
+          }
+        />
       </div>
 
       {/* C. Create / Edit Schedule Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 my-8 animate-in fade-in zoom-in-95 duration-150">
+        <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setModalOpen(false)}>
+          <div className="modal-panel modal-panel--form modal-panel--wide" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-title">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 id="schedule-modal-title" className="text-base font-bold text-slate-900">
                   {editingSchedule ? "Edit Appointment Schedule" : "Create Appointment Schedule"}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Configure department service operating hours and daily limits.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
+              <button type="button" onClick={() => setModalOpen(false)} className="modal-close" aria-label="Close">
+                <X aria-hidden="true" />
               </button>
             </div>
 
@@ -770,14 +793,14 @@ export default function AdminSchedulePage() {
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                  className="modal-btn"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-5 py-2.5 text-xs font-bold disabled:opacity-60 bg-[#0b2545] hover:bg-[#133b5c] text-white rounded-xl shadow transition-colors cursor-pointer"
+                  className="modal-btn modal-btn--primary"
                 >
                   {editingSchedule ? "Save Changes" : "Create Schedule"}
                 </button>
@@ -789,13 +812,13 @@ export default function AdminSchedulePage() {
 
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-sm w-full p-6 text-center space-y-4">
+        <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setDeleteTarget(null)}>
+          <div className="modal-panel modal-panel--form modal-panel--compact text-center space-y-4" role="alertdialog" aria-modal="true" aria-labelledby="delete-schedule-title">
             <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">Delete Schedule</h3>
+              <h3 id="delete-schedule-title" className="text-base font-bold text-slate-900">Delete Schedule</h3>
               <p className="text-xs text-slate-500 mt-1">
                 Are you sure you want to delete schedule{" "}
                 <span className="font-semibold text-slate-800">{deleteTarget.id}</span> ({deleteTarget.service || "all services"})?
@@ -806,14 +829,14 @@ export default function AdminSchedulePage() {
               <button
                 type="button"
                 onClick={() => setDeleteTarget(null)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                className="modal-btn"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDelete}
-                className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
+                className="modal-btn modal-btn--danger"
               >
                 Yes, Delete
               </button>

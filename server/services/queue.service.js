@@ -1,5 +1,6 @@
 // The desk queue: check-in, live board, call-next and finalize. Each step that changes a queue
 // token also moves its appointment in the same transaction, and is announced to open pages.
+import { subject } from "@casl/ability";
 import { lockKey, transaction } from "../config/database.js";
 import { ConflictError, ForbiddenError, NotFoundError, invalid, isDuplicateKey } from "../utils/errors.js";
 import { newId } from "../utils/id.js";
@@ -45,7 +46,13 @@ export function createQueueService({ events }) {
     async checkIn(officer, req) {
       const a = await appointments.findById(req.appointmentId);
       if (!a) throw new NotFoundError();
-      if (officer.departmentId && a.departmentId !== officer.departmentId) throw new ForbiddenError();
+      if (officer.ability) {
+        if (!officer.ability.can("manage", subject("QueueToken", { departmentId: a.departmentId }))) {
+          throw new ForbiddenError();
+        }
+      } else {
+        if (officer.departmentId && a.departmentId !== officer.departmentId) throw new ForbiddenError();
+      }
       if (a.status !== "APPROVED") {
         throw new ConflictError(`only APPROVED appointments can be checked in (current: ${a.status})`);
       }

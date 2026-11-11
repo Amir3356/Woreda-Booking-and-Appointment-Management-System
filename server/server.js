@@ -3,7 +3,6 @@
 import { config } from "./config/index.js";
 import { logger } from "./config/logger.js";
 import { closeDatabase, one } from "./config/database.js";
-import { corsHeaders } from "./middleware/cors.js";
 import { createApp } from "./app.js";
 
 // The schema is managed by node-pg-migrate (`npm run migrate`, `npm run seed`); refuse to start without it.
@@ -29,7 +28,8 @@ server.on("upgrade", (req, socket, head) => {
     socket.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
     return;
   }
-  realtimeService.handleUpgrade(req, socket, head, corsHeaders(config.allowedOrigins, req.headers.origin));
+  // The hub checks the page's Origin against config/cors.js before accepting the connection.
+  realtimeService.handleUpgrade(req, socket, head);
 });
 
 let stopping = false;

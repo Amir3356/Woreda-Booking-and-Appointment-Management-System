@@ -2,6 +2,7 @@ import { useStore } from "@/context";
 import { User, LogOut, ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useRouter, usePathname } from "@/hooks";
+import EthiopianFlag from "./EthiopianFlag";
 
 export default function RoleSwitcher() {
   const router = useRouter();
@@ -18,13 +19,13 @@ export default function RoleSwitcher() {
   if (isAdmin && (!currentUser || currentUser?.role !== "ADMIN")) {
     activeUser = {
       fullName: currentUser?.role === "ADMIN" ? currentUser.fullName : "Amir Siraj",
-      email: currentUser?.role === "ADMIN" ? currentUser.email : "amirsiraj1995@gmail.com",
+      phone: currentUser?.role === "ADMIN" ? (currentUser.phone || "+251911223344") : "+251911223344",
       role: "ADMIN",
     };
   } else if (isOfficer && (!currentUser || currentUser?.role !== "OFFICER")) {
     activeUser = {
       fullName: currentUser?.role === "OFFICER" ? currentUser.fullName : "W/ro Tigist Mulugeta",
-      email: currentUser?.role === "OFFICER" ? currentUser.email : "tigist.kbl@woreda.gov.et",
+      phone: currentUser?.role === "OFFICER" ? (currentUser.phone || "+251911334455") : "+251911334455",
       role: "OFFICER",
     };
   }
@@ -78,9 +79,13 @@ export default function RoleSwitcher() {
                 <p className="text-xs font-bold text-slate-800 truncate">
                   {activeUser?.fullName || "User Account"}
                 </p>
-                <p className="text-[11px] text-slate-500 truncate">
-                  {activeUser?.email ||
-                    `${(activeUser?.role || "user").toLowerCase()}@woreda.gov.et`}
+                <p className="text-[11px] text-slate-500 truncate font-mono flex items-center gap-1.5 mt-0.5">
+                  <EthiopianFlag className="w-3.5 h-2.5 shrink-0 shadow-2xs" />
+                  <span>
+                    {activeUser?.phone ||
+                      currentUser?.phone ||
+                      (activeUser?.role === "ADMIN" ? "+251911223344" : "+251911334455")}
+                  </span>
                 </p>
               </div>
             </div>

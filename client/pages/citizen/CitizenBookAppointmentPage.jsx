@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useStore } from "@/context";
+import { useEscapeKey } from "@/hooks";
 import { subscribe, isLive } from "@/api/realtime";
 import { scheduleApi } from "@/api";
 import {
@@ -18,7 +19,7 @@ import {
   weekdayOfIso,
   normalizeEthiopianPhone,
 } from "@/utils";
-import { EthiopianFlag } from "@/components/ui";
+import { EthiopianFlag, DataTable } from "@/components/ui";
 import {
   Calendar,
   Clock,
@@ -198,6 +199,7 @@ export default function CitizenBookAppointmentPage() {
 
   // Booking Modal State
   const [selectedSlot, setSelectedSlot] = useState(null);
+  useEscapeKey(Boolean(selectedSlot), () => setSelectedSlot(null));
   const [citizenName, setCitizenName] = useState(currentUser?.fullName || "");
   const [citizenPhone, setCitizenPhone] = useState(currentUser?.phone || "");
   const [citizenNotes, setCitizenNotes] = useState("");
@@ -444,6 +446,126 @@ export default function CitizenBookAppointmentPage() {
     }
   };
 
+  // Slot table columns (TanStack Table via components/ui/DataTable).
+  const slotColumns = [
+    {
+      id: "date",
+      accessorFn: (slot) => `${slot.date || ""} ${slot.time || ""}`,
+      header: "Appointment Date&Time",
+      cell: ({ row }) => {
+        const slot = row.original;
+        return (
+          <>
+            <div className="font-bold text-slate-900">{slot.dateDisplay}</div>
+            <div className="text-[11px] text-blue-700 font-semibold flex items-center gap-1 mt-0.5">
+              <Clock className="w-3 h-3 text-blue-600 inline" />
+              {slot.time}
+            </div>
+            {slot.workingDays && (
+              <div className="text-[10px] text-slate-500 mt-0.5">Open {slot.workingDays}</div>
+            )}
+          </>
+        );
+      },
+    },
+    {
+      id: "department",
+      accessorFn: (slot) => slot.department || "",
+      header: "Department",
+      sortFn: "text",
+      cell: ({ row }) => <span className="font-medium text-slate-800">{row.original.department}</span>,
+    },
+    {
+      id: "service",
+      accessorFn: (slot) => slot.service || "",
+      header: "Service",
+      sortFn: "text",
+      cell: ({ row }) => <div className="font-semibold text-slate-900">{row.original.service}</div>,
+    },
+    {
+      id: "availability",
+      accessorKey: "actionValue",
+      header: "Availability",
+      cell: ({ row }) => {
+        const slot = row.original;
+        if (slot.actionValue === "Available") {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              Available
+              {slot.availabilityText?.endsWith(" left") && (
+                <span className="font-normal text-emerald-600">· {slot.availabilityText}</span>
+              )}
+            </span>
+          );
+        }
+        if (slot.actionValue === "Full") {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+              Full
+            </span>
+          );
+        }
+        if (slot.actionValue === "Unavailable") {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+              Unavailable
+            </span>
+          );
+        }
+        return null;
+      },
+    },
+    {
+      id: "status",
+      header: "Status",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const booking = bookingStatusFor(row.original.serviceId);
+        if (!booking) {
+          return <span className="text-[11px] text-slate-400">Not booked</span>;
+        }
+        const cfg = APPOINTMENT_STATUS_CONFIG[booking.status];
+        return (
+          <div>
+            <span
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${cfg.bg}`}
+              title={`${booking.referenceNumber} · ${displayDate(booking.date)} ${displayTime(booking.timeSlot)}`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`}></span>
+              {DECISION_STATUSES[booking.status]}
+            </span>
+            {booking.status === "REJECTED" && booking.rejectionReason && (
+              <span
+                className="text-[10px] text-rose-600 block mt-0.5 truncate max-w-[160px]"
+                title={booking.rejectionReason}
+              >
+                Reason: {booking.rejectionReason}
+              </span>
+            )}
+            {CANCELLABLE.includes(booking.status) && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCancelBooking(booking);
+                }}
+                disabled={cancellingId === booking.id}
+                className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                title={`Cancel appointment ${booking.referenceNumber}`}
+              >
+                <X className="w-3 h-3" />
+                {cancellingId === booking.id ? "Cancelling…" : "Cancel"}
+              </button>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Centered Page Header with Action Button at Right Edge */}
@@ -600,154 +722,31 @@ export default function CitizenBookAppointmentPage() {
 
       {/* Slots Table with Explicit User Column Headers */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
-              <tr>
-                <th className="px-5 py-3.5 whitespace-nowrap">Appointment Date&Time</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Department</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Service</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Availability</th>
-                <th
-                  className="px-5 py-3.5 whitespace-nowrap"
-                  title="Your booking for this service: Pending until a department officer approves or rejects it"
-                >
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredSlots.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-5 py-16 text-center">
-                    <div className="flex flex-col items-center gap-3 text-slate-400">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
-                        <Calendar className="w-6 h-6 text-slate-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-700">No appointment slots available yet</p>
-                        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                          Services appear here once the Woreda administration publishes their opening schedule.
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredSlots.map((slot) => {
-                  const isAvailable = slot.actionValue === "Available";
-                  const isFull = slot.actionValue === "Full";
-                  const isUnavailable = slot.actionValue === "Unavailable";
-
-                  return (
-                    <tr
-                      key={slot.id}
-                      className="hover:bg-slate-50/70 transition-colors"
-                    >
-                      {/* Column 1: Appointment Date&Time */}
-                      <td className="px-5 py-3.5">
-                        <div className="font-bold text-slate-900">{slot.dateDisplay}</div>
-                        <div className="text-[11px] text-blue-700 font-semibold flex items-center gap-1 mt-0.5">
-                          <Clock className="w-3 h-3 text-blue-600 inline" />
-                          {slot.time}
-                        </div>
-                        {slot.workingDays && (
-                          <div className="text-[10px] text-slate-500 mt-0.5">Open {slot.workingDays}</div>
-                        )}
-                      </td>
-
-                      {/* Column 2: Department */}
-                      <td className="px-5 py-3.5">
-                        <span className="font-medium text-slate-800">{slot.department}</span>
-                      </td>
-
-                      {/* Column 3: Service */}
-                      <td className="px-5 py-3.5">
-                        <div className="font-semibold text-slate-900">{slot.service}</div>
-                      </td>
-
-                      {/* Column 4: Availability (Used only Available, Full, or Unavailable) */}
-                      <td className="px-5 py-3.5">
-                        {isAvailable && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            Available
-                            {slot.availabilityText?.endsWith(" left") && (
-                              <span className="font-normal text-emerald-600">· {slot.availabilityText}</span>
-                            )}
-                          </span>
-                        )}
-                        {isFull && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                            Full
-                          </span>
-                        )}
-                        {isUnavailable && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                            Unavailable
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Column 5: Status of the citizen's booking (decided by a department officer) */}
-                      <td className="px-5 py-3.5">
-                        {(() => {
-                          const booking = bookingStatusFor(slot.serviceId);
-                          if (!booking) {
-                            return <span className="text-[11px] text-slate-400">Not booked</span>;
-                          }
-                          const cfg = APPOINTMENT_STATUS_CONFIG[booking.status];
-                          return (
-                            <div>
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${cfg.bg}`}
-                                title={`${booking.referenceNumber} · ${displayDate(booking.date)} ${displayTime(booking.timeSlot)}`}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`}></span>
-                                {DECISION_STATUSES[booking.status]}
-                              </span>
-                              {booking.status === "REJECTED" && booking.rejectionReason && (
-                                <span
-                                  className="text-[10px] text-rose-600 block mt-0.5 truncate max-w-[160px]"
-                                  title={booking.rejectionReason}
-                                >
-                                  Reason: {booking.rejectionReason}
-                                </span>
-                              )}
-                              {CANCELLABLE.includes(booking.status) && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleCancelBooking(booking);
-                                  }}
-                                  disabled={cancellingId === booking.id}
-                                  className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-wait"
-                                  title={`Cancel appointment ${booking.referenceNumber}`}
-                                >
-                                  <X className="w-3 h-3" />
-                                  {cancellingId === booking.id ? "Cancelling…" : "Cancel"}
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          data={filteredSlots}
+          columns={slotColumns}
+          getRowId={(slot) => slot.id}
+          itemLabel="services"
+          emptyState={
+            <div className="flex flex-col items-center gap-3 text-slate-400">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                <Calendar className="w-6 h-6 text-slate-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-700">No appointment slots available yet</p>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  Services appear here once the Woreda administration publishes their opening schedule.
+                </p>
+              </div>
+            </div>
+          }
+        />
       </div>
 
       {/* Booking Confirmation Modal */}
       {selectedSlot && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200/90 max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 my-auto">
+        <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setSelectedSlot(null)}>
+          <div className="modal-panel modal-panel--form modal-panel--wide" role="dialog" aria-modal="true" aria-labelledby="booking-modal-title">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
@@ -756,7 +755,7 @@ export default function CitizenBookAppointmentPage() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-extrabold text-slate-900 text-base">Book Municipal Appointment</h3>
+                    <h3 id="booking-modal-title" className="font-extrabold text-slate-900 text-base">Book Municipal Appointment</h3>
                     <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
                       {selectedSlot.availabilityText || "Slots Available"}
                     </span>
@@ -766,12 +765,8 @@ export default function CitizenBookAppointmentPage() {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedSlot(null)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                title="Close modal"
-              >
-                <X className="w-5 h-5" />
+              <button type="button" onClick={() => setSelectedSlot(null)} className="modal-close" aria-label="Close">
+                <X aria-hidden="true" />
               </button>
             </div>
 
@@ -965,14 +960,14 @@ export default function CitizenBookAppointmentPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedSlot(null)}
-                  className="px-5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                  className="modal-btn"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!canConfirm || submitting}
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
+                  className="modal-btn modal-btn--success"
                 >
                   <CheckCircle className="w-4 h-4" />
                   <span>{submitting ? "Booking…" : "Confirm Booking"}</span>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useStore } from "@/context";
+import { DataTable } from "@/components/ui";
 import { auditApi } from "@/api";
 import { subscribe } from "@/api/realtime";
 import { describeError, displayDate, displayTime } from "@/utils";
@@ -91,6 +92,119 @@ export default function AdminAuditPage() {
     fn(value);
   };
 
+  // Audit table columns (TanStack Table via components/ui/DataTable). Sorting is off: the server
+  // returns one page at a time, newest first, so re-sorting a single page would mislead.
+  const auditColumns = [
+    {
+      id: "at",
+      header: "Date & Time",
+      enableSorting: false,
+      meta: { className: "whitespace-nowrap" },
+      cell: ({ row }) => {
+        const when = formatWhen(row.original.at);
+        return (
+          <>
+            <div className="font-semibold text-slate-900">{when.date}</div>
+            <span className="text-[11px] text-slate-500">{when.time}</span>
+          </>
+        );
+      },
+    },
+    {
+      id: "actor",
+      header: "Performed By",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <>
+          <div className="font-bold text-slate-900">{row.original.actorName || "Unknown"}</div>
+          <span className="text-[10px] text-slate-500">{ROLE_LABEL[row.original.actorRole] || row.original.actorRole}</span>
+        </>
+      ),
+    },
+    {
+      id: "department",
+      header: "Department",
+      enableSorting: false,
+      meta: { className: "text-slate-700" },
+      cell: ({ row }) => row.original.departmentName || "—",
+    },
+    {
+      id: "action",
+      header: "Action",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const e = row.original;
+        const style = ACTION_STYLE[e.action] || { label: e.action, cls: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400" };
+        return (
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap ${style.cls}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
+            {style.label}
+          </span>
+        );
+      },
+    },
+    {
+      id: "statusChange",
+      header: "Status Change",
+      enableSorting: false,
+      meta: { className: "whitespace-nowrap text-slate-600" },
+      cell: ({ row }) => {
+        const e = row.original;
+        return (
+          <>
+            {e.fromStatus ? `${STATUS_LABEL[e.fromStatus] || e.fromStatus} → ` : "New → "}
+            <span className="font-semibold text-slate-900">{STATUS_LABEL[e.toStatus] || e.toStatus}</span>
+          </>
+        );
+      },
+    },
+    {
+      id: "appointment",
+      header: "Appointment",
+      enableSorting: false,
+      meta: { className: "whitespace-nowrap" },
+      cell: ({ row }) => {
+        const e = row.original;
+        return (
+          <>
+            <div className="font-mono font-semibold text-blue-900 text-[11px]">{e.referenceNumber}</div>
+            <span className="text-[10px] text-slate-500">
+              {displayDate(e.appointmentDate)} · {displayTime(e.timeSlot)}
+            </span>
+          </>
+        );
+      },
+    },
+    {
+      id: "citizen",
+      header: "Citizen",
+      enableSorting: false,
+      meta: { className: "text-slate-800" },
+      cell: ({ row }) => row.original.citizenName,
+    },
+    {
+      id: "service",
+      header: "Service",
+      enableSorting: false,
+      meta: { className: "text-slate-700" },
+      cell: ({ row }) => row.original.serviceName,
+    },
+    {
+      id: "reason",
+      header: "Reason / Notes",
+      enableSorting: false,
+      meta: { className: "text-slate-600" },
+      cell: ({ row }) =>
+        row.original.reason ? (
+          <p className="max-w-[220px] break-words line-clamp-3 text-[11px]" title={row.original.reason}>
+            {row.original.reason}
+          </p>
+        ) : (
+          <span className="text-[11px] text-slate-400">—</span>
+        ),
+    },
+  ];
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -159,81 +273,23 @@ export default function AdminAuditPage() {
 
       {/* Audit table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-auto max-h-[70vh]">
-          <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
-              <tr>
-                <th className="px-5 py-3.5 whitespace-nowrap">Date &amp; Time</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Performed By</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Department</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Action</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Status Change</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Appointment</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Citizen</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Service</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Reason / Notes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {entries.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-5 py-12 text-center text-slate-400">
-                    <ShieldCheck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="font-semibold text-slate-700">{loading ? "Loading…" : "No audit entries yet"}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Approvals, rejections, bookings and cancellations will be recorded here as they happen.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                entries.map((e) => {
-                  const when = formatWhen(e.at);
-                  const style = ACTION_STYLE[e.action] || { label: e.action, cls: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400" };
-                  return (
-                    <tr key={e.id} className="hover:bg-slate-50/80 transition-colors align-top">
-                      <td className="px-5 py-3.5 whitespace-nowrap">
-                        <div className="font-semibold text-slate-900">{when.date}</div>
-                        <span className="text-[11px] text-slate-500">{when.time}</span>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <div className="font-bold text-slate-900">{e.actorName || "Unknown"}</div>
-                        <span className="text-[10px] text-slate-500">{ROLE_LABEL[e.actorRole] || e.actorRole}</span>
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-700">{e.departmentName || "—"}</td>
-                      <td className="px-5 py-3.5">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap ${style.cls}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
-                          {style.label}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-slate-600">
-                        {e.fromStatus ? `${STATUS_LABEL[e.fromStatus] || e.fromStatus} → ` : "New → "}
-                        <span className="font-semibold text-slate-900">{STATUS_LABEL[e.toStatus] || e.toStatus}</span>
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap">
-                        <div className="font-mono font-semibold text-blue-900 text-[11px]">{e.referenceNumber}</div>
-                        <span className="text-[10px] text-slate-500">
-                          {displayDate(e.appointmentDate)} · {displayTime(e.timeSlot)}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-800">{e.citizenName}</td>
-                      <td className="px-5 py-3.5 text-slate-700">{e.serviceName}</td>
-                      <td className="px-5 py-3.5 text-slate-600">
-                        {e.reason ? (
-                          <p className="max-w-[220px] break-words line-clamp-3 text-[11px]" title={e.reason}>
-                            {e.reason}
-                          </p>
-                        ) : (
-                          <span className="text-[11px] text-slate-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+        {/* The server pages this list (newest first), so the table shows the current page as-is. */}
+        <DataTable
+          data={entries}
+          columns={auditColumns}
+          getRowId={(e) => e.id}
+          pageSize={null}
+          minWidth="1100px"
+          emptyState={
+            <div className="text-slate-400">
+              <ShieldCheck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="font-semibold text-slate-700">{loading ? "Loading…" : "No audit entries yet"}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Approvals, rejections, bookings and cancellations will be recorded here as they happen.
+              </p>
+            </div>
+          }
+        />
 
         {/* Pagination */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-600">

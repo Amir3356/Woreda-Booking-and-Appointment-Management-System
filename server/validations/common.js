@@ -26,7 +26,21 @@ export const optionalInt = (fallback = 0) => z.number().int().nullish().transfor
 export const positiveInt = (fallback, message) =>
   z.preprocess((v) => (v == null || v === "" ? fallback : v), z.coerce.number({ error: message }).int({ error: message }).positive({ error: message }));
 
-export const phone = z.string({ error: PHONE_MESSAGE }).trim().regex(ETHIOPIAN_PHONE, { error: PHONE_MESSAGE });
+/** "0911 234 567", "251911234567" or "+251 911 234 567" -> "+251911234567". */
+export function normalizePhone(value) {
+  const digits = String(value).replace(/[^\d+]/g, "");
+  if (digits.startsWith("+251")) return digits;
+  if (digits.startsWith("251")) return `+${digits}`;
+  if (digits.startsWith("09")) return `+251${digits.slice(1)}`;
+  if (digits.startsWith("9")) return `+251${digits}`;
+  return digits;
+}
+
+/** Ethiopian mobile number in any common spelling, normalized to +2519XXXXXXXX. */
+export const phone = z
+  .string({ error: PHONE_MESSAGE })
+  .transform(normalizePhone)
+  .pipe(z.string().regex(ETHIOPIAN_PHONE, { error: PHONE_MESSAGE }));
 
 /** "YYYY-MM-DD" with a real calendar day. */
 export const dateString = (message = "Date must be YYYY-MM-DD.") =>

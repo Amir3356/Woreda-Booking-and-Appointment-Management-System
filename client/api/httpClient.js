@@ -4,6 +4,13 @@
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api/v1";
 const COOKIE_NAME = "woreda_token";
+const CSRF_COOKIE_NAME = "woreda_csrf";
+
+function getCsrfToken() {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp("(^|;\\s*)(" + CSRF_COOKIE_NAME + ")=([^;]*)"));
+  return match ? decodeURIComponent(match[3]) : null;
+}
 
 export const tokenStorage = {
   get: () => {
@@ -19,6 +26,7 @@ export const tokenStorage = {
   clear: () => {
     if (typeof document === "undefined") return;
     document.cookie = `${COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
+    document.cookie = `${CSRF_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
   },
 };
 
@@ -51,12 +59,22 @@ export async function request(method, path, { body, params, raw = false } = {}) 
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
+  const csrfToken = getCsrfToken();
+  if (csrfToken && ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase())) {
+    headers["X-CSRF-Token"] = csrfToken;
+  }
+
   const response = await fetch(buildUrl(path, params), {
     method,
     headers,
     credentials: "include",
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+
+  const responseCsrf = response.headers.get("x-csrf-token");
+  if (responseCsrf && typeof document !== "undefined") {
+    document.cookie = `${CSRF_COOKIE_NAME}=${encodeURIComponent(responseCsrf)}; path=/; max-age=604800; SameSite=Lax`;
+  }
 
   if (raw && response.ok) return response;
 

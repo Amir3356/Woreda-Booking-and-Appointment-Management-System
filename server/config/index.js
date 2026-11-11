@@ -11,9 +11,10 @@ const env = (key, fallback = "") => (process.env[key] === undefined || process.e
 process.env.TZ = env("TZ", "Africa/Addis_Ababa");
 
 export const config = {
+  isProduction: env("NODE_ENV", "development") === "production",
   port: Number(env("PORT", "8080")),
   jwtSecret: env("JWT_SECRET", "dev-secret-change-me"),
-  allowedOrigins: env("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",").map((s) => s.trim()),
+  cookieSecret: env("COOKIE_SECRET", env("JWT_SECRET", "dev-secret-change-me")),
   db: {
     host: env("DB_HOST", "localhost"),
     port: Number(env("DB_PORT", "5432")),
@@ -27,7 +28,7 @@ export const config = {
     fullName: env("SEED_ADMIN_NAME", "Amir Siraj"),
     email: env("SEED_ADMIN_EMAIL", "amirsiraj1995@gmail.com"),
     password: env("SEED_ADMIN_PASSWORD", "AEHJSS36"),
-    phone: env("SEED_ADMIN_PHONE", "+251911223344"),
+    phone: env("SEED_ADMIN_PHONE", "+251938617803"),
   },
   // Per-IP request limits (middleware/rateLimit.js); "false" turns them off (e.g. for load tests).
   rateLimitEnabled: env("RATE_LIMIT_ENABLED", "true") !== "false",

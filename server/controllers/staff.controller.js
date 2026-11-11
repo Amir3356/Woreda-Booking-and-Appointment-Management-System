@@ -7,6 +7,10 @@ export function createStaffController(staffService) {
       const { items, cursor } = await staffService.list(req.validatedQuery);
       okWithCursor(res, "Accounts retrieved successfully.", items, cursor);
     },
+    async listCitizens(req, res) {
+      const { items, cursor } = await staffService.listCitizens(req.validatedQuery);
+      okWithCursor(res, "Citizens retrieved successfully.", items, cursor);
+    },
     async provision(req, res) {
       ok(res, 201, "Staff account provisioned successfully.", { id: await staffService.provision(req.body) });
     },

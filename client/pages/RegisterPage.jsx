@@ -5,18 +5,22 @@ import { EthiopianFlag } from "@/components/ui";
 import Navbar from "@/layout/Navbar";
 import Footer from "@/layout/Footer";
 import { useStore } from "@/context";
+import { authApi } from "@/api";
+import { normalizeEthiopianPhone } from "@/utils";
 import { isValidEmail } from "@/services";
 import { User, CheckCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { addUser, setCurrentUser, users, provisionedAccounts } = useStore();
+  const { setCurrentUser } = useStore();
 
   const [form, setForm] = useState({
     fullName: "",
     phone: "+251 9",
     email: "",
     nationalId: "",
+    location: "Addis Ababa",
+    woreda: "Woreda 03",
     kebele: "Kebele 03",
     houseNumber: "",
     password: "",
@@ -24,12 +28,25 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
+    const fullNameClean = form.fullName.trim();
+    const phoneClean = normalizeEthiopianPhone(form.phone);
     const emailClean = (form.email || "").trim().toLowerCase();
+
+    if (fullNameClean.length < 3) {
+      setError("Please enter your full legal name (at least 3 characters).");
+      return;
+    }
+
+    if (!/^\+2519\d{8}$/.test(phoneClean)) {
+      setError("Please enter a valid Ethiopian mobile number (e.g. +251 911 234 567 or 0911 234 567).");
+      return;
+    }
 
     if (emailClean && !isValidEmail(emailClean)) {
       setError("Please enter a valid email address.");
@@ -47,37 +64,57 @@ export default function RegisterPage() {
       return;
     }
 
-    const alreadyExists =
-      emailClean &&
-      ((users || []).some((u) => u.email?.toLowerCase() === emailClean) ||
-        (provisionedAccounts || []).some((a) => a.email?.toLowerCase() === emailClean));
-    if (alreadyExists) {
-      setError("An account with this email address already exists. Please Sign In.");
+    if (!form.password || form.password.length < 8 || !/[\p{Nd}\p{P}\p{S}]/u.test(form.password)) {
+      setError("Password must be at least 8 characters and include a number or symbol.");
       return;
     }
 
-    if (!form.password || form.password.length < 6) {
-      setError("Password must be at least 6 characters long.");
-      return;
+    setLoading(true);
+    try {
+      const res = await authApi.register({
+        fullName: fullNameClean,
+        phone: phoneClean,
+        email: emailClean || null,
+        password: form.password,
+        nationalId: form.nationalId?.trim() || undefined,
+        location: form.location?.trim() || "Addis Ababa",
+        woreda: form.woreda?.trim() || "Woreda 03",
+        kebele: form.kebele?.trim() || "Kebele 03",
+        houseNumber: form.houseNumber?.trim() || undefined,
+      });
+
+      if (res.data?.token && res.data?.user) {
+        setCurrentUser({ ...res.data.user, role: "CITIZEN", departmentName: null }, res.data.token);
+      }
+
+      // Synchronize newly registered citizen into the Citizen Management pool
+      useStore.getState().addRegisteredCitizen?.({
+        id: res.data?.user?.id || `cit-${Date.now()}`,
+        fullName: fullNameClean,
+        phone: phoneClean,
+        locations: form.location?.trim() || "Addis Ababa, Bole Sub-City",
+        woreda: form.woreda?.trim() || "Woreda 03",
+        kebele: form.kebele?.trim() || "Kebele 03",
+        nationalId: form.nationalId?.trim() || res.data?.user?.nationalId || `ET-CIT-${Math.floor(1000 + Math.random() * 9000)}`,
+        status: "VERIFIED",
+      });
+
+      setSuccess(true);
+      setTimeout(() => {
+        router.push("/citizen/book");
+      }, 1200);
+    } catch (err) {
+      setLoading(false);
+      if (err?.status === 409) {
+        setError("An account with this phone number or email already exists. Please Sign In.");
+      } else if (err?.status === 422 && err.details?.length) {
+        setError(err.details.map((d) => d.issue).join(" "));
+      } else if (err?.status === 429) {
+        setError("Too many registration attempts. Please wait a few minutes and try again.");
+      } else {
+        setError(err?.message || "Could not create account: the server is unreachable. Please try again later.");
+      }
     }
-
-    const newUser = addUser({
-      fullName: form.fullName.trim(),
-      phone: form.phone.trim(),
-      email: emailClean,
-      password: form.password,
-      nationalId: form.nationalId || `ET-CIT-${Math.floor(1000 + Math.random() * 9000)}`,
-      role: "CITIZEN",
-      departmentId: null,
-      address: `${form.kebele}, House ${form.houseNumber}`,
-      isActive: true,
-    });
-
-    setCurrentUser(newUser);
-    setSuccess(true);
-    setTimeout(() => {
-      router.push("/citizen/book");
-    }, 1200);
   };
 
   return (
@@ -236,9 +273,10 @@ export default function RegisterPage() {
 
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-colors mt-2"
+                disabled={loading}
+                className="w-full py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] disabled:opacity-50 text-white text-xs font-bold shadow transition-colors mt-2"
               >
-                Sign Up
+                {loading ? "Creating account..." : "Sign Up"}
               </button>
             </form>
           )}

@@ -5,7 +5,9 @@ import { optionalBoolean, optionalInt, optionalText, phone, queryInt, queryText,
 export const profileSchema = z.object({
   fullName: requiredText("Full name is required (min 3 characters).", 3),
   phone,
-  email: requiredText("A valid email address is required.").pipe(z.email({ error: "A valid email address is required." })),
+  // Optional: citizens register with their phone number.
+  email: z.string().trim().nullish().transform((v) => (v ? v : null))
+    .pipe(z.union([z.null(), z.email({ error: "A valid email address is required." })])),
   nationalId: optionalText,
   address: optionalText,
 });
@@ -15,7 +17,10 @@ const ROLE = 'Role must be "Department Officer" or "Central Administrator".';
 export const provisionSchema = z
   .object({
     fullName: requiredText("Full name is required (min 3 characters).", 3),
-    email: requiredText("A valid email address is required.").pipe(z.email({ error: "A valid email address is required." })),
+    phone: phone.optional(),
+    email: z.string().trim().nullish().transform((v) => (v ? v : null))
+      .pipe(z.union([z.null(), z.email({ error: "A valid email address is required." })]))
+      .optional(),
     password: z.string({ error: "Password must be at least 8 characters." }).min(8, { error: "Password must be at least 8 characters." }),
     // The admin form sends the label; the role code is accepted too.
     role: z
@@ -26,6 +31,10 @@ export const provisionSchema = z
   .refine((s) => s.role !== "OFFICER" || s.departmentId !== null, {
     error: "Officers must be assigned to a department.",
     path: ["departmentId"],
+  })
+  .refine((s) => Boolean(s.email || s.phone), {
+    error: "Either phone number or email address is required.",
+    path: ["phone"],
   });
 
 export const staffListQuery = z.object({

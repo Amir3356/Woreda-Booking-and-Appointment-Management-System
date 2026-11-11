@@ -6,6 +6,7 @@
  * publish(type, entityId, data):
  *   "appointment.*" -> {type: "appointments.changed", event}
  *   "catalog.*"     -> {type: "catalog.changed", event, entityId}  (departments, services, schedules)
+ *   "citizen.*"     -> {type: "citizens.changed", event, entityId, citizen: _data}
  */
 export function createEventService({ realtimeService, logger }) {
   return {
@@ -15,6 +16,8 @@ export function createEventService({ realtimeService, logger }) {
           realtimeService.broadcast({ type: "appointments.changed", event: type });
         } else if (type.startsWith("catalog.")) {
           realtimeService.broadcast({ type: "catalog.changed", event: type, entityId });
+        } else if (type.startsWith("citizen.")) {
+          realtimeService.broadcast({ type: "citizens.changed", event: type, entityId, citizen: _data });
         }
         logger.debug({ event: type, entityId, pages: realtimeService.count() }, "change pushed to pages");
       } catch (err) {

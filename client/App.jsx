@@ -25,6 +25,7 @@ import AdminServicesPage from "@/pages/admin/AdminServicesPage";
 import AdminSchedulePage from "@/pages/admin/AdminSchedulePage";
 import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminAccountProvisionPage from "@/pages/admin/AdminAccountProvisionPage";
+import AdminCitizenManagementPage from "@/pages/admin/AdminCitizenManagementPage";
 import AdminReportsPage from "@/pages/admin/AdminReportsPage";
 import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
 import AdminAuditPage from "@/pages/admin/AdminAuditPage";
@@ -121,6 +122,7 @@ export default function App() {
         <Route path="schedule" element={<AdminSchedulePage />} />
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="account-provision" element={<AdminAccountProvisionPage />} />
+        <Route path="citizens" element={<AdminCitizenManagementPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
         <Route path="audit" element={<AdminAuditPage />} />

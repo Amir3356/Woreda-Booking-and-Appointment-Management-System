@@ -152,9 +152,9 @@ Each requirement has an ID so it can be referred to in tests, issues and reviews
 
 | ID | Requirement |
 |----|-------------|
-| FR-1.1 | A guest can register as a citizen with full name, email, phone, national ID and password. |
-| FR-1.2 | Email and national ID must be unique; registering a duplicate is refused. |
-| FR-1.3 | A user can sign in with email and password and receives a signed access token (JWT). |
+| FR-1.1 | A guest can register as a citizen with full name, phone number, location, woreda, kebele and password (entered twice to confirm); email is optional. |
+| FR-1.2 | Phone number, email and national ID must be unique; registering a duplicate is refused. |
+| FR-1.3 | Citizens sign in with their phone number (any common spelling, e.g. `0911 234 567`), staff with their email; a successful sign-in returns a signed access token (JWT). |
 | FR-1.4 | A signed-in user can retrieve their own account details (`/auth/me`). |
 | FR-1.5 | A user can sign out; the token is revoked and can no longer be used. |
 | FR-1.6 | After 5 failed sign-in attempts, the account is locked out for 15 minutes. |
@@ -272,7 +272,7 @@ Appointment statuses: `PENDING → APPROVED / REJECTED → CHECKED_IN → IN_PRO
 | NFR-1.3 | Role-based access control is enforced on the server for every protected endpoint, not only in the UI. |
 | NFR-1.4 | The server limits each IP to 5 requests/second (burst 50) on the API, and 20 requests/minute (burst 10) on sign-in and registration; excess requests get HTTP 429. |
 | NFR-1.5 | Repeated failed sign-ins lock the account temporarily (see FR-1.6). |
-| NFR-1.6 | CORS only allows the configured frontend origins; WebSocket connections check the Origin header. |
+| NFR-1.6 | CORS (the `cors` package, configured in `server/config/cors.js`) only allows the listed frontend origins; WebSocket connections check the Origin header against the same list. |
 | NFR-1.7 | Only the application server is published; PostgreSQL should accept connections from the server host only. |
 | NFR-1.8 | Secrets (such as `JWT_SECRET` and `DB_PASSWORD`) are supplied through environment variables or `server/.env` (not committed), not hard-coded for production. |
 | NFR-1.9 | All input is validated on the server with Zod schemas; invalid requests return HTTP 422 with field-level error messages. |
@@ -388,7 +388,6 @@ The app opens at http://localhost:3000.
 | `DB_USER` / `DB_PASSWORD` | `postgres` / — | PostgreSQL credentials |
 | `DB_NAME` | `woreda` | Database (created on first start) |
 | `JWT_SECRET` | `dev-secret-change-me` | Signing key for access tokens. **Change it outside development.** |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Frontend origins allowed to call the API |
 | `TZ` | `Africa/Addis_Ababa` | Time zone that defines "today" for bookings and the queue |
 | `RATE_LIMIT_ENABLED` | `true` | Per-IP request limits (NFR-1.4); `false` turns them off |
 | `SEED_ADMIN_NAME` / `SEED_ADMIN_EMAIL` | `Amir Siraj` / `amirsiraj1995@gmail.com` | Administrator created by `npm run seed` |

@@ -32,14 +32,14 @@ export async function findWithDepartment(id) {
   const r = await one(
     `SELECT s.id, s.name, s.is_active, s.required_documents, s.department_id,
             d.name AS department_name, d.building_room, d.is_active AS department_active
-     FROM services s JOIN departments d ON d.id = s.department_id WHERE s.id = $1`,
+     FROM services s LEFT JOIN departments d ON d.id = s.department_id WHERE s.id = $1`,
     [id],
   );
   if (!r) return null;
   return {
     id: r.id, name: r.name, active: r.is_active, requiredDocuments: r.required_documents ?? [],
-    departmentId: r.department_id, departmentName: r.department_name, buildingRoom: r.building_room,
-    departmentActive: r.department_active,
+    departmentId: r.department_id, departmentName: r.department_name ?? "", buildingRoom: r.building_room ?? "",
+    departmentActive: r.department_active ?? true,
   };
 }
 
@@ -86,4 +86,28 @@ export async function toggleActive(id) {
 export async function remove(id) {
   const { rowCount } = await query("DELETE FROM services WHERE id = $1", [id]);
   return rowCount > 0;
+}
+
+/** Assigns a list of services to a department. */
+export async function assignToDepartment(departmentId, serviceIds = []) {
+  if (!serviceIds.length) return;
+  await query(
+    "UPDATE services SET department_id = $1, updated_at = now() WHERE id = ANY($2::text[])",
+    [departmentId, serviceIds],
+  );
+}
+
+/** Unassigns services from a department, optionally preserving excluded IDs. */
+export async function unassignFromDepartment(departmentId, excludeServiceIds = []) {
+  if (excludeServiceIds.length) {
+    await query(
+      "UPDATE services SET department_id = NULL, updated_at = now() WHERE department_id = $1 AND NOT (id = ANY($2::text[]))",
+      [departmentId, excludeServiceIds],
+    );
+  } else {
+    await query(
+      "UPDATE services SET department_id = NULL, updated_at = now() WHERE department_id = $1",
+      [departmentId],
+    );
+  }
 }

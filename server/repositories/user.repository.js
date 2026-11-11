@@ -11,6 +11,10 @@ export async function existsByEmail(email) {
   return Boolean(await one("SELECT 1 FROM users WHERE LOWER(email) = LOWER($1)", [email]));
 }
 
+export async function existsByPhone(phone) {
+  return Boolean(await one("SELECT 1 FROM users WHERE phone = $1 AND phone <> ''", [phone]));
+}
+
 export async function existsByNationalId(nationalId) {
   return Boolean(await one("SELECT 1 FROM users WHERE national_id = $1", [nationalId]));
 }
@@ -35,6 +39,11 @@ export async function findByEmail(email) {
   return fromRow(await one(`${SELECT_WITH_DEPARTMENT} WHERE LOWER(u.email) = LOWER($1)`, [email]));
 }
 
+/** Lookup by normalized phone number (includes passwordHash). */
+export async function findByPhone(phone) {
+  return fromRow(await one(`${SELECT_WITH_DEPARTMENT} WHERE u.phone = $1 AND u.phone <> ''`, [phone]));
+}
+
 export async function findById(id) {
   return fromRow(await one(`${SELECT_WITH_DEPARTMENT} WHERE u.id = $1`, [id]));
 }
@@ -51,6 +60,24 @@ export async function updateCitizen(id, f) {
     [id, f.fullName, f.phone, f.email, f.nationalId, f.address],
   );
   return rowCount > 0;
+}
+
+/** Citizen accounts matching search on name/phone/address/national_id (ILIKE): {total, items} for one page, newest first. */
+export async function findCitizenPage(search, offset, limit) {
+  const params = [];
+  let where = "u.role = 'CITIZEN'";
+  if (search !== "") {
+    params.push(`%${search}%`);
+    where += ` AND (u.full_name ILIKE $1 OR u.phone ILIKE $1 OR u.address ILIKE $1 OR u.national_id ILIKE $1)`;
+  }
+  const [{ total }] = await rows(`SELECT COUNT(*)::int AS total FROM users u WHERE ${where}`, params);
+  const items = await rows(
+    `SELECT u.id, u.full_name, u.email, u.phone, u.national_id, u.address, u.is_active, u.created_at, u.updated_at
+     FROM users u WHERE ${where} ORDER BY u.created_at DESC, u.id
+     OFFSET $${params.length + 1} LIMIT $${params.length + 2}`,
+    [...params, offset, limit],
+  );
+  return { total, items: items.map(fromRow) };
 }
 
 /** Staff (non-citizen) accounts matching search on name/email (ILIKE): {total, items} for one page, newest first. */

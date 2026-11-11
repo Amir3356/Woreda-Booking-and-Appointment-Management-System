@@ -519,6 +519,7 @@ export function getUserFromJwtCookie(
   return {
     id: claims.sub,
     fullName: claims.name,
+    phone: claims.phone || (claims.role === "ADMIN" ? "+251911223344" : "+251911334455"),
     email: claims.email,
     role: claims.role,
     departmentId: claims.dept || null,

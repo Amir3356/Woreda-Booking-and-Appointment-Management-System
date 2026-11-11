@@ -23,7 +23,7 @@ function hostOf(u) {
   }
 }
 
-export class Hub {
+class Hub {
   /** Accepts connections from pages served at allowedOrigins (e.g. "http://localhost:3000"). */
   constructor(allowedOrigins, logger, { pingIntervalMs = PING_INTERVAL_MS } = {}) {
     this.origins = [];
@@ -111,11 +111,11 @@ export class Hub {
   }
 
   /**
-   * Sends {type, event, entityId} to every connected page. A page that is not keeping up is
+   * Sends {type, event, entityId, ...rest} to every connected page. A page that is not keeping up is
    * disconnected; its client reconnects and re-fetches, so nothing is lost for good.
    */
-  broadcast({ type, event, entityId }) {
-    const msg = { type };
+  broadcast({ type, event, entityId, ...rest }) {
+    const msg = { type, ...rest };
     if (event) msg.event = event;
     if (entityId) msg.entityId = entityId;
     const data = JSON.stringify(msg);

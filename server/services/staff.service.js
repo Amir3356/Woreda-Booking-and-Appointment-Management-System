@@ -17,9 +17,34 @@ export function createStaffService() {
       const { total, items } = await users.findStaffPage(search, cursor, pageSize);
       return {
         items: items.map((u) => ({
-          id: u.id, fullName: u.fullName, email: u.email, role: roleLabel(u.role),
+          id: u.id, fullName: u.fullName, email: u.email, phone: u.phone, role: roleLabel(u.role),
           departmentId: u.departmentId, departmentName: u.departmentName, isActive: u.isActive,
         })),
+        cursor: cursorMeta(cursor, pageSize, total),
+      };
+    },
+
+    /** Validated query in; {items, cursor} of registered citizens out. */
+    async listCitizens({ search, cursor, pageSize }) {
+      const { total, items } = await users.findCitizenPage(search, cursor, pageSize);
+      return {
+        items: items.map((u) => {
+          const parts = (u.address || "").split(",").map((s) => s.trim());
+          const kebele = parts.find((p) => p.toLowerCase().startsWith("kebele")) || "Kebele 03";
+          const woreda = parts.find((p) => p.toLowerCase().startsWith("woreda")) || "Woreda 03";
+          const location = parts.filter((p) => !p.toLowerCase().startsWith("kebele") && !p.toLowerCase().startsWith("woreda") && !p.toLowerCase().startsWith("house")).join(", ") || "Addis Ababa";
+          return {
+            id: u.id,
+            fullName: u.fullName,
+            phone: u.phone,
+            locations: location,
+            woreda,
+            kebele,
+            nationalId: u.nationalId,
+            isActive: u.isActive,
+            createdAt: u.createdAt,
+          };
+        }),
         cursor: cursorMeta(cursor, pageSize, total),
       };
     },
@@ -30,14 +55,16 @@ export function createStaffService() {
         throw new ValidationError().add("departmentId", "Department does not exist.");
       }
       const id = newId("usr");
+      const phoneVal = req.phone || "";
+      const emailVal = req.email || (phoneVal ? `${phoneVal.replace(/\D/g, "")}@woreda.gov.et` : "");
       await users
         .create({
-          id, fullName: req.fullName, email: req.email, phone: "", passwordHash: await bcrypt.hash(req.password, BCRYPT_COST),
+          id, fullName: req.fullName, email: emailVal, phone: phoneVal, passwordHash: await bcrypt.hash(req.password, BCRYPT_COST),
           nationalId: `ET-EMP-${id.slice(4)}`, role: req.role, departmentId: req.departmentId,
           counterNumber: null, address: null, isActive: true,
         })
         .catch((err) => {
-          throw isDuplicateKey(err) ? new ConflictError("email or national ID already registered") : err;
+          throw isDuplicateKey(err) ? new ConflictError("phone, email or national ID already registered") : err;
         });
       return id;
     },

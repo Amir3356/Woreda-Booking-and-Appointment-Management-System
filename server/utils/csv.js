@@ -5,7 +5,7 @@ function csvField(field) {
   return needsQuotes ? `"${field.replaceAll('"', '""')}"` : field;
 }
 
-export const CSV_HEADER = ["Reference", "Citizen", "Phone", "Department", "Service", "Date", "Time Slot", "Status"];
+const CSV_HEADER = ["Reference", "Citizen", "Phone", "Department", "Service", "Date", "Time Slot", "Status"];
 
 export function appointmentsCsv(list) {
   const rows = [CSV_HEADER, ...list.map((a) => [

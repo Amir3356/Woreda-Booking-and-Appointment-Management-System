@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useStore } from "@/context";
+import { EthiopianFlag } from "@/components/ui";
 import {
   Plus,
   Search,
@@ -83,7 +84,7 @@ export default function AdminUsersPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, phone, email..."
+            placeholder="Search name, phone..."
             className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
           />
         </div>
@@ -114,7 +115,7 @@ export default function AdminUsersPage() {
                 <th className="px-5 py-3">Full Name</th>
                 <th className="px-5 py-3">Role</th>
                 <th className="px-5 py-3">Department / Office</th>
-                <th className="px-5 py-3">Contact (Phone & Email)</th>
+                <th className="px-5 py-3">Phone Number</th>
                 <th className="px-5 py-3">National / Staff ID</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3 text-right">Actions</th>
@@ -140,9 +141,11 @@ export default function AdminUsersPage() {
                   <td className="px-5 py-3.5 text-slate-600">
                     {user.departmentName || (user.role === "ADMIN" ? "Central Admin" : "Public")}
                   </td>
-                  <td className="px-5 py-3.5 text-slate-600">
-                    <div>{user.phone}</div>
-                    <span className="text-[10px] text-slate-400 font-normal">{user.email || "No email"}</span>
+                  <td className="px-5 py-3.5 text-slate-600 font-mono">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
+                      <EthiopianFlag className="w-4 h-3 shrink-0 shadow-2xs" />
+                      <span>{user.phone || "+251 9XX XXX XXX"}</span>
+                    </span>
                   </td>
                   <td className="px-5 py-3.5 font-mono text-slate-700">{user.nationalId || "N/A"}</td>
                   <td className="px-5 py-3.5">
@@ -201,25 +204,21 @@ export default function AdminUsersPage() {
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Phone Number *</label>
-                <input
-                  type="tel"
-                  required
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="+251 9XX XXX XXX"
-                  className="w-full px-3 py-2 border rounded-lg"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Email Address</label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="name@woreda.gov.et"
-                  className="w-full px-3 py-2 border rounded-lg"
-                />
+                <div className="relative flex items-center">
+                  <div className="absolute left-3 flex items-center gap-2 pointer-events-none select-none">
+                    <EthiopianFlag className="w-5 h-3.5 shadow-xs shrink-0" />
+                    <span className="w-px h-4 bg-slate-300" />
+                  </div>
+                  <input
+                    type="tel"
+                    required
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    placeholder="+251 9XX XXX XXX"
+                    className="w-full pr-3 py-2 border rounded-lg text-xs"
+                    style={{ paddingLeft: "3.75rem" }}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

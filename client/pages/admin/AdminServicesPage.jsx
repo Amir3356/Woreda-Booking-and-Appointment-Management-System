@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useStore } from "@/context";
+import { DataTable } from "@/components/ui";
+import { useEscapeKey } from "@/hooks";
 import { subscribe } from "@/api/realtime";
 import { describeError } from "@/utils";
 import {
@@ -53,15 +55,21 @@ export default function AdminServicesPage() {
   const [selectedDeptFilter, setSelectedDeptFilter] = useState("ALL");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
+  const closeServiceModal = () => {
+    setModalOpen(false);
+    setEditingService(null);
+  };
+  useEscapeKey(modalOpen, closeServiceModal);
 
   const [form, setForm] = useState({
     name: "",
-    departmentId: departments[0]?.id || "",
   });
 
   const filteredServices = (services || []).filter((s) => {
     const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase());
-    const matchesDept = selectedDeptFilter === "ALL" || s.departmentId === selectedDeptFilter;
+    const matchesDept =
+      selectedDeptFilter === "ALL" ||
+      (selectedDeptFilter === "UNASSIGNED" ? !s.departmentId : s.departmentId === selectedDeptFilter);
     return matchesSearch && matchesDept;
   });
 
@@ -69,7 +77,6 @@ export default function AdminServicesPage() {
     setEditingService(null);
     setForm({
       name: "",
-      departmentId: departments[0]?.id || "",
     });
     setModalOpen(true);
   };
@@ -78,7 +85,6 @@ export default function AdminServicesPage() {
     setEditingService(srv);
     setForm({
       name: srv.name,
-      departmentId: srv.departmentId || departments[0]?.id || "",
     });
     setModalOpen(true);
   };
@@ -87,14 +93,9 @@ export default function AdminServicesPage() {
     e.preventDefault();
     if (!form.name.trim() || saving) return;
 
-    const targetDeptId = form.departmentId || departments[0]?.id || "";
-    if (!departments.some((d) => d.id === targetDeptId)) {
-      setErrorMsg("Could not save the service: choose an existing department.");
-      return;
-    }
     const payload = {
       name: form.name.trim(),
-      departmentId: targetDeptId,
+      departmentId: editingService?.departmentId || null,
       code: editingService?.code || `SRV-${Date.now().toString(36).toUpperCase()}`,
       durationMinutes: editingService?.durationMinutes || 30,
       dailyQuota: editingService?.dailyQuota || 40,
@@ -140,6 +141,82 @@ export default function AdminServicesPage() {
       setErrorMsg(describeError(err, `change the status of "${service.name}"`));
     }
   };
+
+  // Service table columns (TanStack Table via components/ui/DataTable).
+  const departmentName = (service) =>
+    !service.departmentId ? "Unassigned" : departments.find((d) => d.id === service.departmentId)?.name || "Unassigned";
+  const serviceColumns = [
+    {
+      id: "name",
+      accessorKey: "name",
+      header: "Service Name",
+      sortFn: "text",
+      meta: { className: "font-bold text-slate-900 max-w-xs" },
+      cell: ({ row }) => row.original.name,
+    },
+    {
+      id: "department",
+      accessorFn: departmentName,
+      header: "Department",
+      sortFn: "text",
+      meta: { className: "text-slate-600 font-medium" },
+      cell: ({ row }) => {
+        const name = departmentName(row.original);
+        return name === "Unassigned" ? (
+          <span className="text-slate-400 italic text-[11px]">Unassigned</span>
+        ) : (
+          name
+        );
+      },
+    },
+    {
+      id: "status",
+      accessorFn: (s) => (s.isActive ? "Active" : "Inactive"),
+      header: "Status",
+      cell: ({ row }) => {
+        const service = row.original;
+        return (
+          <button
+            onClick={() => handleToggleStatus(service)}
+            className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+              service.isActive
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-slate-100 text-slate-500 border-slate-200"
+            }`}
+          >
+            {service.isActive ? "ACTIVE" : "INACTIVE"}
+          </button>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: "Action",
+      enableSorting: false,
+      meta: { className: "text-center", headerClassName: "text-center" },
+      cell: ({ row }) => {
+        const service = row.original;
+        return (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleOpenEdit(service)}
+              className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 transition-all cursor-pointer"
+              title="Edit Service"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handleDelete(service)}
+              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all cursor-pointer"
+              title="Delete Service"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -199,6 +276,7 @@ export default function AdminServicesPage() {
             className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 cursor-pointer"
           >
             <option value="ALL">All Departments</option>
+            <option value="UNASSIGNED">Unassigned</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
@@ -210,101 +288,40 @@ export default function AdminServicesPage() {
 
       {/* Services Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
-              <tr>
-                <th className="px-5 py-3.5">Service Name</th>
-                <th className="px-5 py-3.5">Department</th>
-                <th className="px-5 py-3.5">Status</th>
-                <th className="px-5 py-3.5 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredServices.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-5 py-16 text-center">
-                    <div className="flex flex-col items-center gap-3 text-slate-400">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
-                        <FileText className="w-6 h-6 text-slate-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-700">
-                          {servicesLoaded ? "No services added yet" : "Loading services…"}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                          Public services and department counter designations configured by Central Administration will appear here.
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredServices.map((service) => {
-                  const dept = departments.find((d) => d.id === service.departmentId);
-                  return (
-                    <tr key={service.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-5 py-3.5 font-bold text-slate-900 max-w-xs">
-                        {service.name}
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-600 font-medium">
-                        {dept?.name || "Unknown department"}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <button
-                          onClick={() => handleToggleStatus(service)}
-                          className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
-                            service.isActive
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : "bg-slate-100 text-slate-500 border-slate-200"
-                          }`}
-                        >
-                          {service.isActive ? "ACTIVE" : "INACTIVE"}
-                        </button>
-                      </td>
-                      <td className="px-5 py-3.5 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => handleOpenEdit(service)}
-                            className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 transition-all cursor-pointer"
-                            title="Edit Service"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(service)}
-                            className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all cursor-pointer"
-                            title="Delete Service"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          data={filteredServices}
+          columns={serviceColumns}
+          getRowId={(s) => s.id}
+          initialSorting={[{ id: "name", desc: false }]}
+          itemLabel="services"
+          emptyState={
+            <div className="flex flex-col items-center gap-3 text-slate-400">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                <FileText className="w-6 h-6 text-slate-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-700">
+                  {servicesLoaded ? "No services added yet" : "Loading services…"}
+                </p>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  Public services and department counter designations configured by Central Administration will appear here.
+                </p>
+              </div>
+            </div>
+          }
+        />
       </div>
 
       {/* Add / Edit Service Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative my-8 animate-in fade-in zoom-in-95 duration-150">
+        <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && closeServiceModal()}>
+          <div className="modal-panel modal-panel--form" role="dialog" aria-modal="true" aria-labelledby="service-modal-title">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-base text-slate-900">
+              <h3 id="service-modal-title" className="font-bold text-base text-slate-900">
                 {editingService ? "Edit Service" : "Create New Government Service"}
               </h3>
-              <button
-                onClick={() => {
-                  setModalOpen(false);
-                  setEditingService(null);
-                }}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
+              <button type="button" onClick={closeServiceModal} className="modal-close" aria-label="Close">
+                <X aria-hidden="true" />
               </button>
             </div>
 
@@ -321,26 +338,6 @@ export default function AdminServicesPage() {
                 />
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Assigned Department *</label>
-                <select
-                  value={form.departmentId}
-                  onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-white cursor-pointer"
-                >
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                  {!departments.some((d) => d.id === form.departmentId) && (
-                    <option value={form.departmentId} disabled>
-                      {form.departmentId ? "Department no longer exists: choose another" : "Choose a department"}
-                    </option>
-                  )}
-                </select>
-              </div>
-
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
@@ -348,14 +345,14 @@ export default function AdminServicesPage() {
                     setModalOpen(false);
                     setEditingService(null);
                   }}
-                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
+                  className="modal-btn"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-all cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                  className="modal-btn modal-btn--primary"
                 >
                   {saving ? "Saving…" : editingService ? "Save Changes" : "Create Service"}
                 </button>

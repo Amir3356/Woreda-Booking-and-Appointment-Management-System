@@ -1,6 +1,7 @@
 // /api/v1/appointments.
 import { Router } from "express";
-import { requireRole, signedIn } from "../middleware/auth.js";
+import { checkAbility } from "../middleware/casl.js";
+import { Actions, Subjects } from "../security/abilities.js";
 import { validate } from "../middleware/validate.js";
 import {
   bookSchema, myAppointmentsQuery, registryQuery, rescheduleSchema, reviewSchema, trackQuery,
@@ -8,16 +9,20 @@ import {
 
 export function createAppointmentRoutes(c) {
   const router = Router();
-  const citizen = requireRole("CITIZEN");
-  const staff = requireRole("OFFICER", "ADMIN");
-  // Public route; the service itself requires a signed-in caller (401 before validation errors would be confusing).
-  router.post("/", signedIn, validate({ body: bookSchema }), c.book);
+  const canCreate = checkAbility(Actions.CREATE, Subjects.APPOINTMENT);
+  const canReadMine = checkAbility(Actions.READ_MINE, Subjects.APPOINTMENT);
+  const canReadRegistry = checkAbility(Actions.READ_REGISTRY, Subjects.APPOINTMENT);
+  const canReview = checkAbility(Actions.REVIEW, Subjects.APPOINTMENT);
+  const canReschedule = checkAbility(Actions.RESCHEDULE, Subjects.APPOINTMENT);
+  const canCancel = checkAbility(Actions.CANCEL, Subjects.APPOINTMENT);
+
+  router.post("/", canCreate, validate({ body: bookSchema }), c.book);
   router.get("/track", validate({ query: trackQuery }), c.track);
-  router.get("/my", citizen, validate({ query: myAppointmentsQuery }), c.mine);
-  router.get("/", staff, validate({ query: registryQuery }), c.list);
-  router.patch("/:id/status", staff, validate({ body: reviewSchema }), c.review);
-  router.post("/:id/reschedule", signedIn, validate({ body: rescheduleSchema }), c.reschedule);
-  router.post("/:id/cancel", signedIn, c.cancel);
+  router.get("/my", canReadMine, validate({ query: myAppointmentsQuery }), c.mine);
+  router.get("/", canReadRegistry, validate({ query: registryQuery }), c.list);
+  router.patch("/:id/status", canReview, validate({ body: reviewSchema }), c.review);
+  router.post("/:id/reschedule", canReschedule, validate({ body: rescheduleSchema }), c.reschedule);
+  router.post("/:id/cancel", canCancel, c.cancel);
   router.get("/:id/slip", c.slip);
   return router;
 }

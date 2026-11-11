@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useStore } from "@/context";
+import { DataTable } from "@/components/ui";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatDate } from "@/utils";
 import { AlertCircle, Check, X } from "lucide-react";
@@ -56,6 +57,137 @@ export default function OfficerAppointmentsPage() {
 
   const filtered = deptAppointments;
 
+  // Appointment table columns (TanStack Table via components/ui/DataTable).
+  const appointmentColumns = [
+    {
+      id: "citizen",
+      accessorKey: "citizenName",
+      header: "Citizen Details",
+      sortFn: "text",
+      meta: { className: "font-medium text-slate-900" },
+      cell: ({ row }) => {
+        const apt = row.original;
+        return (
+          <>
+            <div className="font-bold text-slate-900">{apt.citizenName}</div>
+            <div className="text-[11px] font-mono text-blue-900 font-semibold mt-0.5">
+              {apt.referenceNumber}
+            </div>
+            <span className="text-[10px] text-slate-500 font-normal">{apt.citizenPhone}</span>
+            {apt.tokenNumber && (
+              <span className="text-[10px] text-emerald-700 font-bold block mt-0.5">
+                Token: {apt.tokenNumber}
+              </span>
+            )}
+          </>
+        );
+      },
+    },
+    {
+      id: "service",
+      accessorFn: (apt) => apt.serviceName || "",
+      header: "Service Requested",
+      sortFn: "text",
+      meta: { className: "text-slate-700 font-medium" },
+      cell: ({ row }) => <div>{row.original.serviceName}</div>,
+    },
+    {
+      id: "message",
+      header: "Message",
+      enableSorting: false,
+      meta: { className: "text-slate-700 align-top" },
+      cell: ({ row }) =>
+        row.original.citizenNotes ? (
+          <p
+            className="max-w-[220px] whitespace-pre-line break-words line-clamp-3 text-[11px] leading-snug"
+            title={row.original.citizenNotes}
+          >
+            {row.original.citizenNotes}
+          </p>
+        ) : (
+          <span className="text-[11px] text-slate-400">—</span>
+        ),
+    },
+    {
+      id: "scheduled",
+      // "YYYY-MM-DD HH:MM": slot labels use 24h hours ("13:30 PM"), so text order is time order.
+      accessorFn: (apt) => `${apt.date} ${apt.timeSlot}`,
+      header: "Scheduled Date & Time",
+      meta: { className: "text-slate-600" },
+      cell: ({ row }) => (
+        <>
+          <div className="font-semibold text-slate-900">{formatDate(row.original.date)}</div>
+          <span className="text-[10px] text-blue-700 font-bold">{row.original.timeSlot}</span>
+        </>
+      ),
+    },
+    {
+      id: "booked",
+      accessorFn: (apt) => apt.createdAt || "",
+      header: "Booked Date",
+      meta: { className: "text-slate-500 font-medium" },
+      cell: ({ row }) => formatRequestDate(row.original.createdAt),
+    },
+    {
+      id: "status",
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const apt = row.original;
+        return (
+          <>
+            <StatusBadge status={apt.status} />
+            {apt.rejectionReason && (
+              <span
+                className="text-[10px] text-rose-600 block mt-0.5 truncate max-w-[130px]"
+                title={apt.rejectionReason}
+              >
+                Reason: {apt.rejectionReason}
+              </span>
+            )}
+          </>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: "Action",
+      enableSorting: false,
+      meta: { className: "text-center", headerClassName: "text-center" },
+      cell: ({ row }) => {
+        const apt = row.original;
+        return apt.status === "PENDING" ? (
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              type="button"
+              onClick={(e) => handleApprove(e, apt)}
+              disabled={busyId === apt.id}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+              title="Approve this booking"
+            >
+              <Check className="w-3.5 h-3.5" />
+              Approve
+            </button>
+            <button
+              type="button"
+              onClick={(e) => handleReject(e, apt)}
+              disabled={busyId === apt.id}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+              title="Reject this booking"
+            >
+              <X className="w-3.5 h-3.5" />
+              Reject
+            </button>
+          </div>
+        ) : (
+          <span className="text-[11px] text-slate-400" title="Only pending bookings can be approved or rejected">
+            —
+          </span>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Centered Page Header with Action Badge at Right Edge */}
@@ -106,132 +238,22 @@ export default function OfficerAppointmentsPage() {
 
       {/* Appointments Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-auto max-h-[70vh]">
-          <table className="w-full text-left text-xs">
-            {/* Column headers are always shown, also when there are no appointments yet, and stay
-                at the top while the list scrolls. */}
-            <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
-              <tr>
-                <th className="px-5 py-3.5 whitespace-nowrap">Citizen Details</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Service Requested</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Message</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Scheduled Date &amp; Time</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Booked Date</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">Status</th>
-                <th className="px-5 py-3.5 whitespace-nowrap text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
-                    <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="font-semibold text-slate-700">No appointments found</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      No citizen appointments booked for your department yet.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((apt) => (
-                  <tr
-                    key={apt.id}
-                    className="hover:bg-slate-50/80 transition-colors"
-                  >
-                    {/* Citizen Details */}
-                    <td className="px-5 py-3.5 font-medium text-slate-900">
-                      <div className="font-bold text-slate-900">{apt.citizenName}</div>
-                      <div className="text-[11px] font-mono text-blue-900 font-semibold mt-0.5">
-                        {apt.referenceNumber}
-                      </div>
-                      <span className="text-[10px] text-slate-500 font-normal">{apt.citizenPhone}</span>
-                      {apt.tokenNumber && (
-                        <span className="text-[10px] text-emerald-700 font-bold block mt-0.5">
-                          Token: {apt.tokenNumber}
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Service */}
-                    <td className="px-5 py-3.5 text-slate-700 font-medium">
-                      <div>{apt.serviceName}</div>
-                    </td>
-
-                    {/* Message the citizen wrote when booking */}
-                    <td className="px-5 py-3.5 text-slate-700 align-top">
-                      {apt.citizenNotes ? (
-                        <p
-                          className="max-w-[220px] whitespace-pre-line break-words line-clamp-3 text-[11px] leading-snug"
-                          title={apt.citizenNotes}
-                        >
-                          {apt.citizenNotes}
-                        </p>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">—</span>
-                      )}
-                    </td>
-
-                    {/* Scheduled Date & Time */}
-                    <td className="px-5 py-3.5 text-slate-600">
-                      <div className="font-semibold text-slate-900">{formatDate(apt.date)}</div>
-                      <span className="text-[10px] text-blue-700 font-bold">{apt.timeSlot}</span>
-                    </td>
-
-                    {/* Booked Date */}
-                    <td className="px-5 py-3.5 text-slate-500 font-medium">
-                      {formatRequestDate(apt.createdAt)}
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-5 py-3.5">
-                      <StatusBadge status={apt.status} />
-                      {apt.rejectionReason && (
-                        <span
-                          className="text-[10px] text-rose-600 block mt-0.5 truncate max-w-[130px]"
-                          title={apt.rejectionReason}
-                        >
-                          Reason: {apt.rejectionReason}
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Action: approve / reject */}
-                    <td className="px-5 py-3.5 text-center">
-                      {apt.status === "PENDING" ? (
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => handleApprove(e, apt)}
-                            disabled={busyId === apt.id}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-wait"
-                            title="Approve this booking"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handleReject(e, apt)}
-                            disabled={busyId === apt.id}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-wait"
-                            title="Reject this booking"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                            Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-slate-400" title="Only pending bookings can be approved or rejected">
-                          —
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          data={filtered}
+          columns={appointmentColumns}
+          getRowId={(apt) => apt.id}
+          itemLabel="appointments"
+          minWidth="1040px"
+          emptyState={
+            <div className="text-slate-400">
+              <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="font-semibold text-slate-700">No appointments found</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                No citizen appointments booked for your department yet.
+              </p>
+            </div>
+          }
+        />
       </div>
     </div>
   );
