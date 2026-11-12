@@ -24,7 +24,8 @@ test("CASL Abilities - OFFICER permissions (with department scope)", () => {
   // General allowed
   assert.equal(ability.can(Actions.READ, Subjects.DEPARTMENT), true);
   assert.equal(ability.can(Actions.READ, Subjects.SERVICE), true);
-  assert.equal(ability.can(Actions.READ_STAFF_SCHEDULE, Subjects.SCHEDULE), true);
+  // Schedule Management is administrator-only (no officer schedule view)
+  assert.equal(ability.can(Actions.READ_STAFF_SCHEDULE, Subjects.SCHEDULE), false);
   assert.equal(ability.can(Actions.READ_REGISTRY, Subjects.APPOINTMENT), true);
   assert.equal(ability.can(Actions.READ, Subjects.REPORT), true);
   assert.equal(ability.can(Actions.EXPORT, Subjects.REPORT), true);

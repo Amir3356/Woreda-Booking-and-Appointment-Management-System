@@ -29,8 +29,24 @@ export const scheduleSchema = z
     // Lunch break: both or neither; no bookings in between.
     lunchStart: lunchClock("Lunch start must be HH:MM."),
     lunchEnd: lunchClock("Lunch end must be HH:MM."),
+    // Default for services without their own capacity; optional (kept on update, 20 on create).
     dailyCapacity: z.number({ error: "Daily capacity must be positive." }).int({ error: "Daily capacity must be a whole number." })
-      .positive({ error: "Daily capacity must be positive." }),
+      .positive({ error: "Daily capacity must be positive." }).nullish().transform((v) => v ?? null),
+    // Each service's own Daily Appointment Capacity. Absent on update = unchanged.
+    serviceCapacities: z
+      .array(
+        z.object({
+          serviceId: z.string({ error: "Service is required." }).trim().min(1, { error: "Service is required." }),
+          dailyCapacity: z.number({ error: "Daily Appointment Capacity must be a whole number." })
+            .int({ error: "Daily Appointment Capacity must be a whole number." })
+            .positive({ error: "Daily Appointment Capacity must be at least 1." })
+            .max(10000, { error: "Daily Appointment Capacity is too large." }),
+        }),
+        { error: "Service capacities must be a list." },
+      )
+      .nullish()
+      .transform((v) => v ?? null)
+      .refine((v) => v === null || new Set(v.map((c) => c.serviceId)).size === v.length, { error: "Each service can be listed only once." }),
     effectiveStartDate: dateString("Start date must be YYYY-MM-DD."),
     effectiveEndDate: z.string().trim().nullish().transform((v) => (v ? v : null))
       .refine((v) => v === null || validDate(v), { error: "End date must be YYYY-MM-DD." }),
@@ -58,7 +74,7 @@ export const availabilityQuery = z.object({
   date: z.preprocess((v) => (Array.isArray(v) ? v[0] : v), dateString()),
 });
 
-// ---- Schedule Management: calendar exceptions, booking availability, capacities, calendar views ----
+// ---- Schedule Management: calendar exceptions and calendar views ----
 
 const MAX_RANGE_DAYS = 366;
 const MAX_VIEW_DAYS = 92;
@@ -116,29 +132,6 @@ export const exceptionSchema = z
       }
     }
   });
-
-export const dateAvailabilitySchema = z
-  .object({
-    departmentIds: z.array(z.string().trim().min(1), { error: "Departments must be a list." })
-      .min(1, { error: "Choose at least one department." }).transform((v) => [...new Set(v)]),
-    startDate: dateString("Start date must be YYYY-MM-DD."),
-    endDate: optionalDate("End date must be YYYY-MM-DD."),
-    enabled: z.boolean({ error: "Say whether booking is enabled (true) or disabled (false)." }),
-    reason: z.string().trim().max(200, { error: "Keep the reason under 200 characters." }).nullish().transform((v) => (v ? v : null)),
-  })
-  .transform((a) => ({ ...a, endDate: a.endDate ?? a.startDate }))
-  .superRefine((a, ctx) => {
-    if (a.endDate < a.startDate) ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date cannot precede start date." });
-    else if (span(a.startDate, a.endDate) > MAX_RANGE_DAYS) {
-      ctx.addIssue({ code: "custom", path: ["endDate"], message: `Choose at most ${MAX_RANGE_DAYS} days at a time.` });
-    }
-  });
-
-export const capacitySchema = z.object({
-  // null removes the department limit (only the per-service limits apply).
-  dailyCapacity: z.number({ error: "Daily capacity must be a whole number." }).int({ error: "Daily capacity must be a whole number." })
-    .positive({ error: "Daily capacity must be positive." }).max(10000, { error: "Daily capacity is too large." }).nullable(),
-});
 
 const rangeQuery = (maxDays) =>
   z

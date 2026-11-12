@@ -32,7 +32,7 @@ async function reservePlace(client, { serviceId, departmentId, date, timeSlot, e
   // Lock order is always service-day, then department-day, so concurrent bookings cannot deadlock.
   await lockKey(client, `slot:${serviceId}|${date}`);
   if (departmentId) await lockKey(client, `dept:${departmentId}|${date}`);
-  // Admin > Schedule Management: booking closures, calendar exceptions, then operating hours.
+  // Admin > Schedule Management: calendar exceptions, then the working hours.
   const day = await effectiveDay({ serviceId, departmentId, date }, client);
   if (!day.open) invalid(fields.date, closedIssue(day, date));
   const schedule = day.schedule;
@@ -88,14 +88,23 @@ export function createAppointmentService({ events, audit }) {
       if (!caller.authenticated) throw new UnauthorizedError("sign in to book an appointment");
 
       const cs = await publicServices.findWithDepartment(req.serviceId);
+      // Appointments belong to a department: a service still waiting for one cannot be booked.
+      if (cs && !cs.departmentId) invalid("serviceId", "This service is not assigned to a department yet, so it cannot be booked.");
       if (!cs || !cs.active || !cs.departmentActive) throw new NotFoundError();
-      if (!(await users.exists(caller.userId))) throw new UnauthorizedError("user account not found");
+      const account = await users.findById(caller.userId);
+      if (!account) throw new UnauthorizedError("user account not found");
+      // A citizen books under the full name and phone number of their account (entered at sign-up).
+      const isCitizen = account.role === "CITIZEN";
+      const citizenName = (isCitizen ? account.fullName : req.citizenName ?? account.fullName)?.trim();
+      const citizenPhone = isCitizen ? account.phone : req.citizenPhone ?? account.phone;
+      if (!citizenName) invalid("citizenName", "Your account has no full name. Update your profile, then book again.");
+      if (!citizenPhone) invalid("citizenPhone", "Your account has no phone number. Update your profile, then book again.");
 
       const id = await transaction(async (client) => {
         await reservePlace(client, { serviceId: req.serviceId, departmentId: cs.departmentId, date: req.date, timeSlot: req.timeSlot },
           { date: "date", timeSlot: "timeSlot" });
         return insertWithReference(client, {
-          citizenId: caller.userId, citizenName: req.citizenName, citizenPhone: req.citizenPhone,
+          citizenId: caller.userId, citizenName, citizenPhone,
           departmentId: cs.departmentId, serviceId: req.serviceId,
           date: req.date, timeSlot: req.timeSlot, status: "PENDING", citizenNotes: req.citizenNotes,
         });

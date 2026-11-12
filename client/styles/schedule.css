@@ -158,20 +158,6 @@
   color: #64748b;
 }
 
-.sm-readonly-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-left: 0.5rem;
-  padding: 0.15rem 0.55rem;
-  border-radius: 999px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: #475569;
-  vertical-align: middle;
-}
 
 /* ---- buttons ---- */
 .sm-btn {
@@ -652,21 +638,7 @@
   color: var(--tone, #475569);
 }
 
-.sm-day-flag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.1rem;
-  height: 1.1rem;
-  border-radius: 5px;
-  background: #ffe4e6;
-  color: var(--sm-disabled);
-}
 
-.sm-day-flag svg {
-  width: 11px;
-  height: 11px;
-}
 
 /* Capacity meter */
 .sm-meter {
@@ -1016,4 +988,44 @@
   .sm-btn {
     transition: none;
   }
+}
+
+/* Citizen > My Queue: coloured left edge by status (waiting / your turn / finished) */
+.sm-queue-card {
+  border-left: 4px solid var(--tone, #e2e8f0);
+}
+
+/* Admin > Working Hours form: one Daily Appointment Capacity per service */
+.sm-capacity-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 16rem;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.sm-capacity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: default;
+}
+
+.sm-capacity-row:last-child {
+  border-bottom: none;
+}
+
+.sm-capacity-name {
+  min-width: 0;
+  font-size: 0.8125rem;
+}
+
+.modal-panel .sm-capacity-input {
+  width: 6.5rem !important;
+  flex-shrink: 0;
+  text-align: right;
 }

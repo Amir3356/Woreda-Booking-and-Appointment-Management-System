@@ -3,37 +3,44 @@
 // the admin calendar and the citizen's list of open dates always agree.
 //
 // Precedence, strongest first:
-//   1. Booking disabled for the date (Appointment Availability)        -> closed  BOOKING_DISABLED
-//   2. A BLOCKED calendar exception                                     -> closed  BLOCKED
-//   3. An exceptional WORKING_DAY (its own hours and daily capacity)    -> open
-//   4. A PUBLIC_HOLIDAY / NON_WORKING_DAY exception                     -> closed
-//   5. The weekly operating hours (no schedule / not a working day)     -> closed or open
+//   1. A BLOCKED calendar exception                                     -> closed  BLOCKED
+//   2. An exceptional WORKING_DAY (its own hours and daily capacity)    -> open
+//   3. A PUBLIC_HOLIDAY / NON_WORKING_DAY exception                     -> closed
+//   4. The weekly working hours (no schedule / not a working day)       -> closed or open
 import { WEEKDAYS, minutes, weekdayOf } from "./date.js";
 import { coversDepartment } from "../models/calendar.model.js";
 
 export const CLOSED_REASONS = Object.freeze([
-  "BOOKING_DISABLED", "BLOCKED", "PUBLIC_HOLIDAY", "NON_WORKING_DAY", "NO_SCHEDULE", "NOT_WORKING_DAY",
+  "BLOCKED", "PUBLIC_HOLIDAY", "NON_WORKING_DAY", "NO_SCHEDULE", "NOT_WORKING_DAY",
 ]);
 
 /** Exceptions (API shape) in force on date for the department. */
+/** "Ethiopian Christmas (Religious Holiday)" from the holiday name (description) and type (title). */
+export function exceptionLabel(e) {
+  if (!e) return null;
+  const name = (e.description || "").trim();
+  const kind = (e.title || "").trim();
+  if (name && kind && name !== kind) return `${name} (${kind})`;
+  return name || kind || null;
+}
+
 export function exceptionsOn(exceptions, departmentId, date) {
   return exceptions.filter((e) => e.startDate <= date && e.endDate >= date && coversDepartment(e, departmentId));
 }
 
 /**
  * day: {
- *   date, baseSchedule (operating hours in force, or null), exceptions (already filtered to the
- *   department and date), closure ({ reason } or null), departmentCapacity (number or null)
+ *   date, baseSchedule (working hours in force, or null), exceptions (already filtered to the
+ *   department and date)
  * }
  * -> { open, reason, schedule, departmentCapacity, exception, note }
- *   schedule: the operating hours that apply when open (an exceptional working day's own hours).
- *   departmentCapacity: the department-wide daily limit for the day, or null for none.
+ *   schedule: the working hours that apply when open (an exceptional working day's own hours).
+ *   departmentCapacity: an exceptional working day's per-department daily capacity, else null.
  */
-export function resolveDay({ date, baseSchedule, exceptions = [], closure = null, departmentCapacity = null }) {
+export function resolveDay({ date, baseSchedule, exceptions = [] }) {
   const closed = (reason, exception = null, note = null) => ({
-    open: false, reason, schedule: null, departmentCapacity: null, exception, note: note ?? (exception?.title || null),
+    open: false, reason, schedule: null, departmentCapacity: null, exception, note: note ?? exceptionLabel(exception),
   });
-  if (closure) return closed("BOOKING_DISABLED", null, closure.reason || "Online booking disabled for this date");
   const blocked = exceptions.find((e) => e.type === "BLOCKED");
   if (blocked) return closed("BLOCKED", blocked);
   const working = exceptions.find((e) => e.type === "WORKING_DAY");
@@ -58,7 +65,7 @@ export function resolveDay({ date, baseSchedule, exceptions = [], closure = null
   if (holiday) return closed(holiday.type, holiday);
   if (!baseSchedule) return closed("NO_SCHEDULE");
   if (!(baseSchedule.workingDays ?? []).includes(weekdayOf(date))) return closed("NOT_WORKING_DAY");
-  return { open: true, reason: null, schedule: baseSchedule, departmentCapacity, exception: null, note: null };
+  return { open: true, reason: null, schedule: baseSchedule, departmentCapacity: null, exception: null, note: null };
 }
 
 /** Schedules (API shape) in force on date: ACTIVE and inside their effective period. */

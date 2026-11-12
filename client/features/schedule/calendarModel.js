@@ -7,7 +7,6 @@ import { addDays, localIsoDate, weekdayOfIso } from "@/utils";
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export const REASON_LABELS = {
-  BOOKING_DISABLED: "Booking disabled",
   BLOCKED: "Blocked",
   PUBLIC_HOLIDAY: "Public holiday",
   NON_WORKING_DAY: "Non-working day",
@@ -68,7 +67,6 @@ export function summarizeDay(entries) {
     total: entries.length,
     booked,
     capacity,
-    bookingDisabled: entries.some((e) => e.bookingDisabled),
     notes,
   };
 }

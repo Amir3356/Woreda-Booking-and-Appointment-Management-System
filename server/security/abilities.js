@@ -52,9 +52,6 @@ export function defineAbilityFor(caller) {
     // Can view public catalogs & services
     can(Actions.READ, [Subjects.DEPARTMENT, Subjects.SERVICE, Subjects.SCHEDULE]);
 
-    // Can read the staff schedule management list
-    can(Actions.READ_STAFF_SCHEDULE, Subjects.SCHEDULE);
-
     // Can read registry list of appointments
     can(Actions.READ_REGISTRY, Subjects.APPOINTMENT);
 

@@ -44,7 +44,7 @@ export function useCursorList(
       }
     } catch (err) {
       if (seq !== seqRef.current) return;
-      toast.error(describeError(err, actionLabel), { duration: 5000 });
+      toast.error(describeError(err, actionLabel), { duration: 6000 });
     } finally {
       if (seq === seqRef.current) {
         setLoading(false);

@@ -69,6 +69,50 @@ export function createQueueService({ events }) {
       };
     },
 
+    /**
+     * GET /queue/me: the signed-in citizen's place in today's queues. For each of their checked-in
+     * appointments: token, status, position, citizens ahead, the token being served and an
+     * estimated wait; plus today's appointments that still need a check-in at the desk.
+     */
+    async mine(caller) {
+      const queueDate = today();
+      const [tokens, todays] = await Promise.all([
+        queueTokens.findForCitizen(caller.userId, queueDate),
+        appointments.findByCitizen({ citizenId: caller.userId, fromDate: queueDate, statuses: ["PENDING", "APPROVED"] }),
+      ]);
+      return {
+        date: queueDate,
+        averageServiceMinutes: AVG_SERVICE_MINUTES,
+        queue: tokens.map((t) => {
+          const waiting = t.status === "WAITING";
+          return {
+            appointmentId: t.appointment_id,
+            referenceNumber: t.reference_number,
+            serviceName: t.service_name,
+            departmentName: t.department_name,
+            timeSlot: t.time_slot,
+            tokenNumber: t.token_number,
+            status: t.status, // WAITING | SERVING | COMPLETED | NO_SHOW
+            position: waiting ? t.ahead + 1 : null,
+            citizensAhead: waiting ? t.ahead : 0,
+            waitingTotal: t.waiting_total,
+            nowServing: t.now_serving ?? null,
+            counterNumber: t.status === "SERVING" ? t.counter_number : null,
+            checkedInTime: clock12(t.checked_in_time),
+            calledTime: t.called_time ? clock12(t.called_time) : null,
+            estimatedWaitMinutes: waiting ? t.ahead * AVG_SERVICE_MINUTES : 0,
+          };
+        }),
+        // Today's appointments not yet checked in (no queue token yet).
+        notCheckedIn: todays
+          .filter((a) => a.date === queueDate)
+          .map((a) => ({
+            appointmentId: a.id, referenceNumber: a.referenceNumber, serviceName: a.serviceName,
+            departmentName: a.departmentName, timeSlot: a.timeSlot, status: a.status,
+          })),
+      };
+    },
+
     /** Today's live queue; officers only see their own department. */
     async board(officer, departmentId) {
       const deptId = officer.departmentId || departmentId;

@@ -19,6 +19,7 @@ const HOLIDAY_TYPE_OPTIONS = [
   "Religious Holiday",
   "Public Holidays",
   "Election Day",
+  "Other Special Exception",
 ];
 
 const emptyForm = (start = localIsoDate(), end = start) => ({
@@ -186,10 +187,10 @@ export default function ExceptionsPage() {
     try {
       if (editing) {
         await scheduleApi.updateException(editing.id, payload);
-        toast.success(`${labelFor(payload)} updated.`, { duration: 5000 });
+        toast.success(`${labelFor(payload)} updated.`, { duration: 6000 });
       } else {
         await scheduleApi.createException(payload);
-        toast.success(`${labelFor(payload)} added for ${rangeLabel(payload.startDate, payload.endDate)}.`, { duration: 5000 });
+        toast.success(`${labelFor(payload)} added for ${rangeLabel(payload.startDate, payload.endDate)}.`, { duration: 6000 });
       }
       setForm(null);
       load();
@@ -205,7 +206,7 @@ export default function ExceptionsPage() {
     setBusy(true);
     try {
       await scheduleApi.removeException(deleteTarget.id);
-      toast.success(`${labelFor(deleteTarget)} deleted.`, { duration: 5000 });
+      toast.success(`${labelFor(deleteTarget)} deleted.`, { duration: 6000 });
       setDeleteTarget(null);
       load();
     } catch (err) {

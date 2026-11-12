@@ -1,11 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "@/hooks";
 import { useStore } from "@/context";
-import {
-  resolveUserSession,
-  verifyCredentials,
-  CANONICAL_OFFICER_CREDENTIALS,
-} from "@/services";
 import { EthiopianFlag } from "@/components/ui";
 import { http } from "@/api/httpClient";
 import { normalizeEthiopianPhone } from "@/utils";
@@ -22,6 +17,20 @@ import {
   CheckCircle2,
   CircleCheck,
 } from "lucide-react";
+
+// Server role code (or its label) -> client role, and the portal each role lands on.
+const ROLE_CODES = {
+  ADMIN: "ADMIN",
+  Admin: "ADMIN",
+  OFFICER: "OFFICER",
+  "Department Officer": "OFFICER",
+  CITIZEN: "CITIZEN",
+};
+const PORTAL_PATHS = {
+  ADMIN: "/admin",
+  OFFICER: "/officer/appointments", // the department's own desk: appointments of that department only
+  CITIZEN: "/citizen/book",
+};
 
 // What the portal does, shown on the brand panel (one line each).
 const PORTAL_FEATURES = [
@@ -82,204 +91,41 @@ export default function AuthPage() {
       emailClean = `${emailClean}@woreda.gov.et`;
     }
 
-    // Administrators and staff sign in against auth-service, returning an authenticated session.
-    // In-browser fallback accounts are also supported.
+    // Every account (administrator, department staff provisioned in Admin > Account Provision,
+    // citizen) signs in against the database. The server checks the password and returns the
+    // role and department, which decide the portal: role-based access is enforced by the server
+    // token, never by data kept in the browser.
     setLoading(true);
     try {
       const credentials = isPhone
         ? { phone: normalizedPhone, password: passwordClean }
         : { email: emailClean, password: passwordClean };
       const { data } = await http.post("/auth/login", credentials);
-      if (data?.token && data?.user) {
-        const u = data.user;
-        const isOfficer = u.role === "OFFICER" || u.role === "Department Officer";
-        const isAdmin = u.role === "ADMIN" || u.role === "Admin" || u.role === "Central Administrator";
-        const role = isOfficer ? "OFFICER" : isAdmin ? "ADMIN" : "CITIZEN";
-        const portalPath = isOfficer ? "/officer/appointments" : isAdmin ? "/admin" : "/citizen/book";
+      const u = data?.user;
+      if (!data?.token || !u) throw new Error("unexpected sign-in response");
 
-        const currentDepts = useStore.getState().departments || [];
-        const matchedDept = currentDepts.find((d) => d.id === u.departmentId);
-        const departmentName = isOfficer
-          ? (u.departmentName || matchedDept?.name || "Kebele Office")
-          : isAdmin
-          ? "Woreda Central Administration"
-          : null;
+      const role = ROLE_CODES[u.role] || "CITIZEN";
+      const departmentName =
+        role === "OFFICER" ? u.departmentName || "Department" : role === "ADMIN" ? "Woreda Central Administration" : null;
 
-        const authenticatedUser = {
-          ...u,
-          role,
-          departmentName,
-          isProvisioned: true,
-        };
-
-        setCurrentUser(authenticatedUser, data.token);
-
-        // Keep Admin > Account Provision in sync with server officer account
-        if (isOfficer) {
-          useStore.getState().addProvisionedAccount({
-            id: u.id,
-            fullName: u.fullName,
-            phone: u.phone,
-            email: u.email,
-            password: passwordClean,
-            role: departmentName || "Department Officer",
-            departmentId: u.departmentId,
-          });
-        }
-
-        router.push(portalPath);
-        return;
-      }
+      setCurrentUser({ ...u, role, departmentName }, data.token);
+      router.push(PORTAL_PATHS[role]);
     } catch (err) {
-      if (err?.status === 429) {
-        setLoading(false);
-        setError("Too many sign-in attempts. Please wait a few minutes and try again.");
-        return;
-      }
-      if (err?.status === 401 && err.message?.includes("deactivated")) {
-        setLoading(false);
-        setError("This account is currently deactivated. Please contact administration.");
-        return;
-      }
-      // If 401 or network error, proceed to fallback checking against client/in-browser provisioned accounts
-    }
-    setLoading(false);
-
-    // Refresh and assemble all provisioned accounts and users from memory, defaults, and localStorage
-    const provMap = new Map();
-    const usersMap = new Map();
-
-    // 1. Seed canonical officers
-    CANONICAL_OFFICER_CREDENTIALS.forEach((c) => {
-      provMap.set(c.email.toLowerCase(), {
-        fullName: c.fullName,
-        email: c.email,
-        phone: "+251911000000",
-        password: c.password,
-        role: "OFFICER",
-        departmentId: c.departmentId,
-        departmentName: c.departmentName,
-        isProvisioned: true,
-        isActive: true,
-      });
-    });
-
-    // 2. Overlay in-memory Zustand store
-    const storeProv = useStore.getState().provisionedAccounts || [];
-    storeProv.forEach((a) => {
-      const k = (a.phone || a.email || a.id || "").trim().toLowerCase();
-      if (k) {
-        const existing = provMap.get(k) || {};
-        provMap.set(k, {
-          ...existing,
-          ...a,
-          password: (a.password || "").trim() || existing.password || "Password@123",
-          isProvisioned: true,
-          isActive: a.isActive !== false,
-        });
-      }
-    });
-
-    // 3. Overlay browser localStorage ("woreda-booking-storage")
-    let currentDepts = useStore.getState().departments || [];
-    if (typeof window !== "undefined" && window.localStorage) {
-      try {
-        const raw = window.localStorage.getItem("woreda-booking-storage");
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          const localProv = parsed?.state?.provisionedAccounts || [];
-          const localUsers = parsed?.state?.users || [];
-          const localDepts = parsed?.state?.departments || [];
-
-          localProv.forEach((a) => {
-            const k = (a.phone || a.email || a.id || "").trim().toLowerCase();
-            if (k) {
-              const existing = provMap.get(k) || {};
-              provMap.set(k, {
-                ...existing,
-                ...a,
-                password: (a.password || "").trim() || existing.password || "Password@123",
-                isProvisioned: true,
-                isActive: a.isActive !== false,
-              });
-            }
-          });
-
-          localUsers.forEach((u) => {
-            const k = (u.phone || u.email || u.id || "").trim().toLowerCase();
-            if (k) usersMap.set(k, u);
-          });
-
-          if (localDepts.length > 0) currentDepts = localDepts;
-        }
-
-        // 4. Overlay secondary backup storage ("woreda_provisioned_accounts")
-        const rawBackup = window.localStorage.getItem("woreda_provisioned_accounts");
-        if (rawBackup) {
-          const parsedBackup = JSON.parse(rawBackup);
-          if (Array.isArray(parsedBackup)) {
-            parsedBackup.forEach((a) => {
-              const k = (a.phone || a.email || a.id || "").trim().toLowerCase();
-              if (k) {
-                const existing = provMap.get(k) || {};
-                provMap.set(k, {
-                  ...existing,
-                  ...a,
-                  password: (a.password || "").trim() || existing.password || "Password@123",
-                  isProvisioned: true,
-                  isActive: a.isActive !== false,
-                });
-              }
-            });
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    const storeUsers = useStore.getState().users || [];
-    storeUsers.forEach((u) => {
-      const k = (u.phone || u.email || u.id || "").trim().toLowerCase();
-      if (k && !usersMap.has(k)) usersMap.set(k, u);
-    });
-
-    const currentProvisioned = Array.from(provMap.values());
-    const currentUsers = Array.from(usersMap.values());
-
-    // 1. Strict credential check against Admin, provisioned staff, and registered users
-    const isValid = verifyCredentials(inputIdentifier, passwordClean, currentUsers, currentProvisioned);
-    if (!isValid) {
-      setError(isPhone ? "Invalid phone number or password." : "Invalid email or password.");
-      return;
-    }
-
-    // 2. Resolve user session
-    const session = resolveUserSession(inputIdentifier, currentUsers, currentDepts, currentProvisioned);
-    if (!session || !session.user) {
-      setError(isPhone ? "No registered account found for this phone number." : "No registered account found for this email.");
-      return;
-    }
-
-    if (session.user.isActive === false) {
-      setError("This account is currently deactivated. Please contact administration.");
-      return;
-    }
-
-    setLoading(true);
-    setCurrentUser(session.user);
-
-    // Keep store synchronized so the active session immediately has all accounts
-    useStore.setState({
-      provisionedAccounts: currentProvisioned,
-      users: currentUsers,
-      departments: currentDepts,
-    });
-
-    setTimeout(() => {
       setLoading(false);
-      router.push(session.portalPath || (session.role === "OFFICER" ? "/officer/appointments" : session.role === "ADMIN" ? "/admin" : "/citizen/book"));
-    }, 200);
+      if (err?.status === 429) {
+        setError("Too many sign-in attempts. Please wait a few minutes and try again.");
+      } else if (err?.status === 401 && /deactivated/i.test(err.message || "")) {
+        setError("This account is currently deactivated. Please contact administration.");
+      } else if (err?.status === 401 && /department/i.test(err.message || "")) {
+        setError("Your staff account is not assigned to a department. Please contact administration.");
+      } else if (err?.status === 401 || err?.status === 422) {
+        setError(isPhone ? "Invalid phone number or password." : "Invalid email or password.");
+      } else if (err instanceof TypeError) {
+        setError("Cannot reach the server. Check your connection and try again.");
+      } else {
+        setError("Sign-in failed. Please try again.");
+      }
+    }
   };
 
   // Handle Sign Up (Public self-registration for Citizens ONLY)

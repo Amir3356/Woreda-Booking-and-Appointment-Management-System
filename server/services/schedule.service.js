@@ -18,6 +18,9 @@ export function createScheduleService({ events }) {
     if (fields.departmentId !== null && !(await departments.exists(fields.departmentId))) v.add("departmentId", "Department does not exist.");
     if (fields.departmentId === null && fields.serviceId !== null) v.add("serviceId", "A service schedule needs the service's department.");
     if (fields.serviceId !== null && !(await publicServices.exists(fields.serviceId))) v.add("serviceId", "Service does not exist.");
+    for (const c of fields.serviceCapacities ?? []) {
+      if (!(await publicServices.exists(c.serviceId))) v.add("serviceCapacities", `Service ${c.serviceId} does not exist.`);
+    }
     v.throwIfAny();
   }
 
@@ -28,23 +31,14 @@ export function createScheduleService({ events }) {
   }
 
   return {
-    /** Every schedule for the administrator; a department officer sees only their department's (read-only). */
-    async list(caller) {
-      if (caller?.role && caller.role !== "ADMIN") {
-        if (!caller.departmentId) return [];
-        return (await schedules.findByDepartment(caller.departmentId)).map(labelled);
-      }
+    /** Every schedule (administrator only, enforced by the route). */
+    async list() {
       return (await schedules.findAll()).map(labelled);
     },
 
-    /** Cursor-paged schedule list for the admin/staff working-hours table. */
-    async listPaged(caller, { search = "", status = "", cursor = 0, pageSize = 5 } = {}) {
-      const isOfficer = caller?.role && caller.role !== "ADMIN";
-      if (isOfficer && !caller.departmentId) {
-        return { items: [], cursor: cursorMeta(cursor, pageSize, 0) };
-      }
+    /** Cursor-paged schedule list for the administrator's working-hours table. */
+    async listPaged(_caller, { search = "", status = "", cursor = 0, pageSize = 5 } = {}) {
       const { total, items } = await schedules.findPage({
-        departmentId: isOfficer ? caller.departmentId : undefined,
         search,
         status,
         offset: cursor,

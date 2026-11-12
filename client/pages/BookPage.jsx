@@ -5,7 +5,8 @@ import Navbar from "@/layout/Navbar";
 import Footer from "@/layout/Footer";
 import AppointmentSlip from "@/features/appointments/AppointmentSlip";
 import { useStore } from "@/context";
-import { formatETB, formatDate } from "@/utils";
+import { scheduleApi } from "@/api";
+import { addDays, closedMessage, displayDate, displayTime, formatDate, formatETB, localIsoDate } from "@/utils";
 import {
   Building2,
   FileText,
@@ -31,7 +32,6 @@ function BookingContent() {
     services,
     currentUser,
     bookAppointment,
-    getAvailableSlots,
   } = useStore();
 
   const [step, setStep] = useState(1);
@@ -48,6 +48,7 @@ function BookingContent() {
 
   const [submittedAppointment, setSubmittedAppointment] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (initialDeptId) setSelectedDeptId(initialDeptId);
@@ -58,19 +59,61 @@ function BookingContent() {
   const departmentServices = services.filter((s) => s.departmentId === selectedDeptId && s.isActive);
   const selectedService = services.find((s) => s.id === selectedServiceId);
 
-  // Available slots for the selected date
-  const availableSlots = selectedServiceId && selectedDate
-    ? getAvailableSlots(selectedServiceId, selectedDate)
-    : [];
+  // Everything below comes from the server, which applies Admin > Schedule Management: the working
+  // days and hours, the lunch break, calendar exceptions (holidays) and the daily capacity.
+  const minDateStr = localIsoDate();
 
-  // Minimum booking date: set after mount to prevent prerender clock mismatch
-  const [minDateStr, setMinDateStr] = useState("2026-11-02");
-
+  // Dates that can be booked for the chosen service over the next 60 days (shown as quick choices).
+  const [openDates, setOpenDates] = useState({ serviceId: "", dates: [], loading: false });
   useEffect(() => {
-    const t = new Date();
-    t.setDate(t.getDate() + 1);
-    setMinDateStr(t.toISOString().split("T")[0]);
-  }, []);
+    if (!selectedServiceId) return undefined;
+    let cancelled = false;
+    setOpenDates({ serviceId: selectedServiceId, dates: [], loading: true });
+    scheduleApi
+      .bookableDates({ serviceId: selectedServiceId, from: minDateStr, to: addDays(minDateStr, 59) })
+      .then(({ data }) => {
+        if (!cancelled) {
+          setOpenDates({ serviceId: selectedServiceId, dates: (data || []).filter((d) => d.available).map((d) => d.date), loading: false });
+        }
+      })
+      .catch(() => !cancelled && setOpenDates({ serviceId: selectedServiceId, dates: [], loading: false }));
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedServiceId, minDateStr]);
+
+  // Times of the chosen service on the chosen date: only the working hours, lunch break excluded.
+  const [availability, setAvailability] = useState({ key: "", loading: false, data: null, error: "" });
+  const [availabilityReload, setAvailabilityReload] = useState(0); // bump to check the same date again
+  const availabilityKey = selectedServiceId && selectedDate ? `${selectedServiceId}|${selectedDate}` : "";
+  useEffect(() => {
+    if (!availabilityKey) {
+      setAvailability({ key: "", loading: false, data: null, error: "" });
+      return undefined;
+    }
+    let cancelled = false;
+    setAvailability({ key: availabilityKey, loading: true, data: null, error: "" });
+    scheduleApi
+      .availabilityWithRetry({ serviceId: selectedServiceId, date: selectedDate })
+      .then(({ data }) => !cancelled && setAvailability({ key: availabilityKey, loading: false, data, error: "" }))
+      // No message on failure; pressing Continue checks the date again.
+      .catch(() => !cancelled && setAvailability({ key: availabilityKey, loading: false, data: null, error: "failed" }));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availabilityKey, availabilityReload]);
+
+  const dayInfo = availability.key === availabilityKey ? availability.data : null;
+  const daySlots = (dayInfo?.slots || []).filter((sl) => sl.status !== "Unavailable" || sl.lunchBreak);
+  const hasFreeTime = daySlots.some((sl) => sl.status === "Available");
+  const dateProblem = !selectedDate || availability.loading || availability.key !== availabilityKey || availability.error
+    ? ""
+    : dayInfo?.closedReason
+        ? closedMessage(dayInfo.closedReason, { date: selectedDate, note: dayInfo.closedNote })
+        : !hasFreeTime
+          ? "Every appointment time on that day is taken. Choose another date."
+          : "";
 
   const handleNextStep = () => {
     setErrorMsg("");
@@ -78,7 +121,7 @@ function BookingContent() {
       if (!selectedDeptId) {
         const msg = "Please select a government department to continue.";
         setErrorMsg(msg);
-        toast.error(msg, { duration: 5000 });
+        toast.error(msg, { duration: 6000 });
         return;
       }
       setStep(2);
@@ -86,7 +129,7 @@ function BookingContent() {
       if (!selectedServiceId) {
         const msg = "Please choose a public service.";
         setErrorMsg(msg);
-        toast.error(msg, { duration: 5000 });
+        toast.error(msg, { duration: 6000 });
         return;
       }
       setStep(3);
@@ -97,7 +140,22 @@ function BookingContent() {
       if (!selectedDate) {
         const msg = "Please choose your desired appointment date.";
         setErrorMsg(msg);
-        toast.error(msg, { duration: 5000 });
+        toast.error(msg, { duration: 6000 });
+        return;
+      }
+      if (availability.loading || availability.key !== availabilityKey) {
+        const msg = "Checking that date… please wait a moment.";
+        setErrorMsg(msg);
+        return;
+      }
+      if (availability.error) {
+        // The check failed: run it again rather than continuing without knowing the times.
+        setAvailabilityReload((n) => n + 1);
+        return;
+      }
+      if (dateProblem) {
+        setErrorMsg(dateProblem);
+        toast.error(dateProblem, { duration: 6000 });
         return;
       }
       setStep(5);
@@ -105,7 +163,7 @@ function BookingContent() {
       if (!selectedTimeSlot) {
         const msg = "Please select an available desk time slot.";
         setErrorMsg(msg);
-        toast.error(msg, { duration: 5000 });
+        toast.error(msg, { duration: 6000 });
         return;
       }
       setStep(6);
@@ -113,7 +171,7 @@ function BookingContent() {
       if (!citizenName.trim() || !citizenPhone.trim()) {
         const msg = "Full name and verified phone number are mandatory.";
         setErrorMsg(msg);
-        toast.error(msg, { duration: 5000 });
+        toast.error(msg, { duration: 6000 });
         return;
       }
       setStep(7);
@@ -121,29 +179,53 @@ function BookingContent() {
       if (!agreementChecked) {
         const msg = "Please confirm that all supplied information and requirements are accurate.";
         setErrorMsg(msg);
-        toast.error(msg, { duration: 5000 });
+        toast.error(msg, { duration: 6000 });
         return;
       }
       handleSubmitBooking();
     }
   };
 
-  const handleSubmitBooking = () => {
-    const newApt = bookAppointment({
-      citizenName,
-      citizenPhone,
-      citizenNotes,
-      departmentId: selectedDepartment.id,
-      departmentName: selectedDepartment.name,
-      serviceId: selectedService.id,
-      serviceName: selectedService.name,
-      date: selectedDate,
-      timeSlot: selectedTimeSlot,
-    });
-
-    setSubmittedAppointment(newApt);
-    toast.success("Appointment successfully scheduled!", { duration: 5000 });
-    setStep(8); // Confirmation slip step
+  // The server checks the booking again (working day, working hours, lunch break, calendar
+  // exceptions, capacity); only its answer counts.
+  const handleSubmitBooking = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const newApt = await bookAppointment({
+        citizenName,
+        citizenPhone,
+        citizenNotes,
+        departmentId: selectedDepartment.id,
+        departmentName: selectedDepartment.name,
+        serviceId: selectedService.id,
+        serviceName: selectedService.name,
+        date: selectedDate,
+        timeSlot: selectedTimeSlot,
+      });
+      setSubmittedAppointment(newApt);
+      toast.success("Appointment successfully scheduled!", { duration: 6000 });
+      setStep(8); // Confirmation slip step
+    } catch (err) {
+      let msg = "Could not book the appointment. Please try again.";
+      if (err?.status === 401) {
+        msg = "Please sign in with your citizen account to book an appointment.";
+      } else if (err?.status === 422 && err.details?.length) {
+        msg = err.details.map((d) => d.issue).join(" ");
+        setStep(err.details.some((d) => d.field === "date") ? 4 : 5);
+      } else if (err?.status === 409) {
+        msg = "That time was just taken or the day is fully booked. Please choose another time.";
+        setStep(5);
+      } else if (err instanceof TypeError) {
+        msg = "The server is unreachable. Check your connection and try again.";
+      }
+      setErrorMsg(msg);
+      toast.error(msg, { duration: 6000 });
+      // Times may have changed: read them again.
+      setAvailabilityReload((n) => n + 1);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const stepLabels = [
@@ -395,7 +477,7 @@ function BookingContent() {
                 </h2>
               </div>
               <p className="text-xs text-slate-500 mb-6">
-                Office working days are Monday through Friday (08:30 – 17:30). Weekends and official public holidays are blocked.
+                Only the working days set by the Woreda administration can be booked. Holidays and other closed dates are blocked.
               </p>
 
               <div className="max-w-md mx-auto space-y-4">
@@ -415,10 +497,44 @@ function BookingContent() {
                   />
                 </div>
 
+                {openDates.serviceId === selectedServiceId && openDates.dates.length > 0 && (
+                  <div>
+                    <span className="block text-xs font-bold text-slate-700 uppercase mb-2">Next available dates:</span>
+                    <div className="sm-chips" role="group" aria-label="Next available dates">
+                      {openDates.dates.slice(0, 6).map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          className="sm-chip"
+                          aria-pressed={selectedDate === d}
+                          onClick={() => {
+                            setSelectedDate(d);
+                            setSelectedTimeSlot("");
+                          }}
+                        >
+                          {displayDate(d).replace(/, \d{4}$/, "")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {openDates.serviceId === selectedServiceId && !openDates.loading && openDates.dates.length === 0 && (
+                  <p className="text-xs text-amber-800">No dates are open for booking for this service in the next 60 days.</p>
+                )}
+
                 {selectedDate && (
                   <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs">
                     <span className="text-slate-500 block mb-1">Selected Date:</span>
                     <p className="font-bold text-slate-900 text-sm">{formatDate(selectedDate)}</p>
+                    {availability.loading && <p className="text-slate-500 mt-1">Checking availability…</p>}
+                    {!availability.loading && dayInfo && !dateProblem && (
+                      <p className="text-emerald-700 font-semibold mt-1">
+                        Open {displayTime(dayInfo.openingTime)} – {displayTime(dayInfo.closingTime)}
+                      </p>
+                    )}
+                    {dateProblem && (
+                      <p role="alert" className="text-amber-800 font-semibold mt-1">{dateProblem}</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -438,25 +554,31 @@ function BookingContent() {
                 Date: <span className="font-semibold text-slate-800">{formatDate(selectedDate)}</span>
               </p>
 
+              {availability.loading && <p className="text-xs text-slate-500">Checking available times…</p>}
+              {!availability.loading && daySlots.length === 0 && (
+                <p className="text-xs text-amber-800">No appointment times are available on this date. Go back and choose another date.</p>
+              )}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {availableSlots.map((slot) => {
-                  const isSelected = selectedTimeSlot === slot.time;
+                {daySlots.map((slot) => {
+                  const available = slot.status === "Available";
+                  const isSelected = selectedTimeSlot === slot.timeSlot;
                   return (
                     <button
-                      key={slot.time}
-                      disabled={!slot.available}
-                      onClick={() => setSelectedTimeSlot(slot.time)}
+                      key={slot.timeSlot}
+                      type="button"
+                      disabled={!available}
+                      onClick={() => setSelectedTimeSlot(slot.timeSlot)}
                       className={`p-3 rounded-xl text-center border-2 transition-all ${
-                        !slot.available
+                        !available
                           ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60"
                           : isSelected
                           ? "border-blue-700 bg-blue-50 text-blue-900 font-bold shadow-xs"
                           : "border-slate-200 bg-white hover:border-slate-300 text-slate-800"
                       }`}
                     >
-                      <p className="text-xs font-bold">{slot.time}</p>
+                      <p className="text-xs font-bold">{displayTime(slot.timeSlot)}</p>
                       <span className="text-[10px] text-slate-500 block mt-0.5">
-                        {slot.available ? `${slot.remainingCapacity} slots left` : "Fully Booked"}
+                        {slot.lunchBreak ? "Lunch break" : available ? `${slot.remainingCapacity} slots left` : "Fully Booked"}
                       </span>
                     </button>
                   );

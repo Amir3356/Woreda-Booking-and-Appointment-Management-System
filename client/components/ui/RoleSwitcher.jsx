@@ -30,6 +30,17 @@ export default function RoleSwitcher() {
     };
   }
 
+  // The role as shown in Admin > Account Provision (Role column): a department officer's role is
+  // their department; the administrator is "Admin".
+  const roleLabel =
+    activeUser?.role === "OFFICER"
+      ? activeUser.departmentName || currentUser?.departmentName || "Department Officer"
+      : activeUser?.role === "ADMIN"
+        ? "Admin"
+        : activeUser?.role === "CITIZEN"
+          ? "Citizen"
+          : "Guest";
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -56,12 +67,12 @@ export default function RoleSwitcher() {
         <div className="w-7 h-7 rounded-lg bg-[#0b2545] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
           {activeUser?.fullName?.charAt(0) || <User className="w-3.5 h-3.5" />}
         </div>
-        <div className="text-left hidden sm:block">
-          <span className="block font-semibold text-slate-800 leading-tight">
+        <div className="text-left" style={{ display: "block", minWidth: 0, maxWidth: "15rem" }}>
+          <span className="block font-semibold text-slate-800 leading-tight truncate">
             {activeUser?.fullName || "User"}
           </span>
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider">
-            {activeUser?.role || "GUEST"}
+          <span className="block text-[11px] text-slate-500 leading-tight truncate" title={roleLabel}>
+            {roleLabel}
           </span>
         </div>
         <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-0.5" />
@@ -72,12 +83,18 @@ export default function RoleSwitcher() {
           {/* User Profile Summary Header */}
           <div className="px-4 py-3 border-b border-slate-100">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#0b2545] text-white flex items-center justify-center font-bold text-sm uppercase shrink-0">
+              <div
+                className="rounded-xl bg-[#0b2545] text-white flex items-center justify-center font-bold text-sm uppercase shrink-0"
+                style={{ width: "2.25rem", height: "2.25rem", flexShrink: 0 }}
+              >
                 {activeUser?.fullName?.charAt(0) || <User className="w-4 h-4" />}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-slate-800 truncate">
                   {activeUser?.fullName || "User Account"}
+                </p>
+                <p className="text-[11px] text-slate-600 mt-0.5" style={{ overflowWrap: "anywhere" }}>
+                  <span className="font-semibold text-slate-800">Role:</span> {roleLabel}
                 </p>
                 <p className="text-[11px] text-slate-500 truncate font-mono flex items-center gap-1.5 mt-0.5">
                   <EthiopianFlag className="w-3.5 h-2.5 shrink-0 shadow-2xs" />

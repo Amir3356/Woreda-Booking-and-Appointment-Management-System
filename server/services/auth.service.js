@@ -67,6 +67,11 @@ export function createAuthService({ jwtSecret, logger, events }) {
         throw new UnauthorizedError(hasEmail ? "invalid email or password" : "invalid phone number or password");
       }
       if (!user.isActive) throw new UnauthorizedError("account is deactivated");
+      // A department officer works only on their own department's appointments; without one
+      // (e.g. the department was deleted) the account cannot be scoped, so it may not sign in.
+      if (user.role === "OFFICER" && !user.departmentId) {
+        throw new UnauthorizedError("staff account is not assigned to a department");
+      }
       await sessions.clearLoginFailures(identifier).catch((err) => logger.warn({ err: err.message }, "clear login failures"));
       return session(toJSON(user));
     },

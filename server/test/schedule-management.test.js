@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { departmentHoursOn, eachDate, exceptionsOn, resolveDay, serviceScheduleOn } from "../utils/calendar.js";
 import { applyDailyCapacity } from "../utils/slots.js";
-import { capacitySchema, dateAvailabilitySchema, exceptionSchema } from "../validations/schedule.validation.js";
+import { exceptionSchema } from "../validations/schedule.validation.js";
 
 const weekdays = {
   status: "ACTIVE", departmentId: "d1", serviceId: null, workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
@@ -27,7 +27,7 @@ test("resolveDay - holidays and non-working days close a normal working day", ()
 
 test("resolveDay - an exceptional working day opens a closed day with its own hours and capacity", () => {
   const working = exc("WORKING_DAY", { openingTime: "09:00", closingTime: "12:00", dailyCapacity: 15 });
-  const day = resolveDay({ date: SATURDAY, baseSchedule: weekdays, exceptions: [working], departmentCapacity: 100 });
+  const day = resolveDay({ date: SATURDAY, baseSchedule: weekdays, exceptions: [working] });
   assert.equal(day.open, true);
   assert.equal(day.schedule.openingTime, "09:00");
   assert.equal(day.schedule.closingTime, "12:00");
@@ -38,17 +38,13 @@ test("resolveDay - an exceptional working day opens a closed day with its own ho
   assert.equal(resolveDay({ date: SATURDAY, baseSchedule: null, exceptions: [exc("PUBLIC_HOLIDAY"), working] }).open, true);
 });
 
-test("resolveDay - blocked dates and disabled booking override everything", () => {
+test("resolveDay - blocked dates override everything", () => {
   const working = exc("WORKING_DAY", { openingTime: "09:00", closingTime: "12:00", dailyCapacity: 15 });
   assert.equal(resolveDay({ date: MONDAY, baseSchedule: weekdays, exceptions: [working, exc("BLOCKED")] }).reason, "BLOCKED");
-  const disabled = resolveDay({ date: MONDAY, baseSchedule: weekdays, exceptions: [working], closure: { reason: "Audit" } });
-  assert.equal(disabled.reason, "BOOKING_DISABLED");
-  assert.equal(disabled.note, "Audit");
 });
 
-test("resolveDay - the department daily capacity is passed through on open days", () => {
-  assert.equal(resolveDay({ date: MONDAY, baseSchedule: weekdays, departmentCapacity: 25 }).departmentCapacity, 25);
-  assert.equal(resolveDay({ date: SATURDAY, baseSchedule: weekdays, departmentCapacity: 25 }).departmentCapacity, null);
+test("resolveDay - only exceptional working days carry a department capacity", () => {
+  assert.equal(resolveDay({ date: MONDAY, baseSchedule: weekdays }).departmentCapacity, null);
 });
 
 test("exceptionsOn - matches date range and department scope", () => {
@@ -141,15 +137,6 @@ test("exceptionSchema - scope needs matching departments and a sane range", () =
   assert.equal(tooLong.success, false);
 });
 
-test("dateAvailabilitySchema and capacitySchema", () => {
-  const a = dateAvailabilitySchema.parse({ departmentIds: ["d1", "d1"], startDate: MONDAY, enabled: false });
-  assert.deepEqual(a.departmentIds, ["d1"]);
-  assert.equal(a.endDate, MONDAY);
-  assert.equal(dateAvailabilitySchema.safeParse({ departmentIds: [], startDate: MONDAY, enabled: true }).success, false);
-  assert.equal(capacitySchema.safeParse({ dailyCapacity: null }).success, true);
-  assert.equal(capacitySchema.safeParse({ dailyCapacity: 0 }).success, false);
-});
-
 test("Woreda-wide schedule applies to every department without its own", () => {
   const woreda = { ...weekdays, departmentId: null, openingTime: "08:00", closingTime: "17:00" };
   assert.equal(departmentHoursOn([woreda], "d9", MONDAY), woreda);
@@ -168,8 +155,8 @@ test("buildSlots / scheduleIssue - the configured lunch break is not bookable", 
   assert.equal(status["13:30 PM"], "Available");
   assert.match(scheduleIssue(sch, MONDAY, "12:30 PM").issue, /lunch break \(12:00–13:30\)/);
   assert.equal(scheduleIssue(sch, MONDAY, "13:30 PM"), null);
-  // Without a configured break the old 12:30 slot stays closed.
-  assert.ok(scheduleIssue(weekdays, MONDAY, "12:30 PM"));
+  // Without a configured break there is no break: 12:30 is bookable.
+  assert.equal(scheduleIssue(weekdays, MONDAY, "12:30 PM"), null);
 });
 
 test("scheduleSchema - Woreda-wide schedule with a lunch break", async () => {
@@ -208,4 +195,38 @@ test("scheduleListQuery and exceptionListQuery support optional cursor paginatio
   assert.equal(pagedExceptions.cursor, 10);
   assert.equal(pagedExceptions.pageSize, 5);
   assert.equal(pagedExceptions.from, "2026-11-01");
+});
+
+test("buildSlots - times follow the configured working hours, not a fixed 08:30-16:30 grid", async () => {
+  const { buildSlots, scheduleIssue } = await import("../utils/slots.js");
+  const sch = { ...weekdays, openingTime: "07:30", closingTime: "18:00", lunchStart: "12:00", lunchEnd: "13:00" };
+  const slots = buildSlots(sch, MONDAY, {}, 3);
+  assert.equal(slots[0].timeSlot, "07:30 AM");
+  assert.equal(slots.at(-1).timeSlot, "17:30 PM"); // ends exactly at closing
+  const status = Object.fromEntries(slots.map((s) => [s.timeSlot, s]));
+  assert.equal(status["11:30 AM"].status, "Available");
+  assert.equal(status["12:00 PM"].status, "Unavailable");
+  assert.equal(status["12:00 PM"].lunchBreak, true);
+  assert.equal(status["12:30 PM"].status, "Unavailable");
+  assert.equal(status["13:00 PM"].status, "Available"); // booking reopens right after lunch
+  assert.equal(scheduleIssue(sch, MONDAY, "07:30 AM"), null);
+  assert.equal(scheduleIssue(sch, MONDAY, "17:30 PM"), null);
+  assert.ok(scheduleIssue(sch, MONDAY, "07:00 AM")); // before opening
+  assert.ok(scheduleIssue(sch, MONDAY, "18:00 PM")); // would end after closing
+  assert.equal(scheduleIssue(sch, SATURDAY, "09:00 AM").field, "date"); // not a working day
+  // A closed day has no times at all.
+  assert.deepEqual(buildSlots(sch, SATURDAY, {}, 3), []);
+  assert.deepEqual(buildSlots(null, MONDAY, {}, 3), []);
+});
+
+test("buildSlots - opening at a half hour keeps 30-minute steps from the opening time", async () => {
+  const { buildSlots, scheduleIssue } = await import("../utils/slots.js");
+  const sch = { ...weekdays, openingTime: "08:15", closingTime: "10:15" };
+  assert.deepEqual(buildSlots(sch, MONDAY, {}, 3).map((s) => s.timeSlot), ["08:15 AM", "08:45 AM", "09:15 AM", "09:45 AM"]);
+  assert.ok(scheduleIssue(sch, MONDAY, "08:30 AM")); // off the grid
+});
+
+test("resolveDay - a holiday is named in the closed note", () => {
+  const holiday = { ...exc("PUBLIC_HOLIDAY"), title: "Religious Holiday", description: "Ethiopian Christmas" };
+  assert.equal(resolveDay({ date: MONDAY, baseSchedule: weekdays, exceptions: [holiday] }).note, "Ethiopian Christmas (Religious Holiday)");
 });

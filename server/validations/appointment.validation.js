@@ -6,8 +6,10 @@ import {
 } from "./common.js";
 
 export const bookSchema = z.object({
-  citizenName: requiredText("Citizen name is required (min 3 characters).", 3),
-  citizenPhone: phone,
+  // Optional: a citizen's booking always uses the full name and phone number of their account
+  // (given at sign-up); staff booking on someone's behalf may send them.
+  citizenName: requiredText("Citizen name is required (min 3 characters).", 3).optional(),
+  citizenPhone: phone.optional(),
   citizenEmail: nullableText.optional(),
   departmentId: optionalText, // taken from the service
   serviceId: requiredText("Service is required."),

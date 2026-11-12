@@ -1,9 +1,8 @@
-// Admin > Schedule Management beyond the weekly operating hours: calendar exceptions, per-date
-// booking availability, department daily capacities, the calendar views and the impact of a change
-// on booked appointments. Only the administrator changes anything (routes + CASL); department
-// officers read their own department, read-only. Changes never touch existing appointments:
-// they stay as booked, and the impact endpoint lets the administrator see them before confirming.
-import { ForbiddenError, NotFoundError, ValidationError } from "../utils/errors.js";
+// Admin > Schedule Management beyond the weekly working hours: calendar exceptions, the calendar
+// view and the impact of a change on booked appointments. Administrator only (routes + CASL).
+// Changes never touch existing appointments: they stay as booked, and the impact endpoint lets the
+// administrator see them before confirming.
+import { NotFoundError, ValidationError } from "../utils/errors.js";
 import { newId } from "../utils/id.js";
 import { today, weekdayOf } from "../utils/date.js";
 import { cursorMeta } from "../utils/pagination.js";
@@ -12,14 +11,6 @@ import * as calendar from "../repositories/calendar.repository.js";
 import * as schedules from "../repositories/schedule.repository.js";
 import * as departments from "../repositories/department.repository.js";
 import * as appointments from "../repositories/appointment.repository.js";
-
-/** The department(s) a caller may see: officers only their own; the administrator any (or all). */
-function scopeFor(caller, requested) {
-  if (caller?.role === "ADMIN") return requested || null;
-  if (!caller?.departmentId) throw new ForbiddenError("Your account is not assigned to a department.");
-  if (requested && requested !== caller.departmentId) throw new ForbiddenError("You can only view your own department's schedule.");
-  return caller.departmentId;
-}
 
 /** Day status shown on the calendars. */
 function dayStatus(rules, booked) {
@@ -48,17 +39,15 @@ export function createScheduleManagementService({ events }) {
   return {
     // ---- calendar exceptions ----
 
-    async listExceptions(caller, { from, to, departmentId, type }) {
-      const scoped = scopeFor(caller, departmentId);
-      return calendar.findExceptions({ from, to, departmentId: scoped, types: type ? [type] : undefined });
+    async listExceptions(_caller, { from, to, departmentId, type }) {
+      return calendar.findExceptions({ from, to, departmentId: departmentId || null, types: type ? [type] : undefined });
     },
 
-    async listExceptionsPaged(caller, { from, to, departmentId, type, cursor = 0, pageSize = 5 }) {
-      const scoped = scopeFor(caller, departmentId);
+    async listExceptionsPaged(_caller, { from, to, departmentId, type, cursor = 0, pageSize = 5 }) {
       const { total, items } = await calendar.findExceptionsPage({
         from,
         to,
-        departmentId: scoped,
+        departmentId: departmentId || null,
         types: type ? [type] : undefined,
         offset: cursor,
         limit: pageSize,
@@ -88,56 +77,23 @@ export function createScheduleManagementService({ events }) {
       announce("exception_deleted", id, null);
     },
 
-    // ---- appointment availability (per-date booking switch) ----
-
-    async setDateAvailability(caller, { departmentIds, startDate, endDate, enabled, reason }) {
-      await checkDepartments(departmentIds);
-      const range = { departmentIds, from: startDate, to: endDate };
-      const changed = enabled
-        ? await calendar.openDates(range)
-        : await calendar.closeDates({ ...range, reason, by: caller.userId });
-      announce(enabled ? "booking_enabled" : "booking_disabled", departmentIds.join(","), range);
-      return { enabled, departmentIds, startDate, endDate, changed };
-    },
-
-    // ---- department daily capacities ----
-
-    async listCapacities(caller) {
-      const scoped = scopeFor(caller, null);
-      const [list, caps] = await Promise.all([departments.findAll(), calendar.findCapacities()]);
-      return list
-        .filter((d) => !scoped || d.id === scoped)
-        .map((d) => ({ departmentId: d.id, department: d.name, isActive: d.isActive, dailyCapacity: caps[d.id] ?? null }));
-    },
-
-    async setCapacity(caller, departmentId, dailyCapacity) {
-      if (!(await departments.exists(departmentId))) throw new NotFoundError();
-      if (dailyCapacity === null) await calendar.removeCapacity(departmentId);
-      else await calendar.upsertCapacity(departmentId, dailyCapacity, caller.userId);
-      announce("capacity_updated", departmentId, { dailyCapacity });
-      return { departmentId, dailyCapacity };
-    },
-
     // ---- calendar views (month / week) ----
 
     /**
-     * Every date in [from, to] for each department in scope: its status, why, hours, capacity
-     * and booked appointments, with the exceptions and closure in force.
+     * Every date in [from, to] for each department (or the one asked for): its status, why,
+     * hours, capacity and booked appointments, with the exceptions in force.
      */
-    async calendar(caller, { from, to, departmentId }) {
-      const scoped = scopeFor(caller, departmentId);
+    async calendar(_caller, { from, to, departmentId }) {
+      const scoped = departmentId || null;
       const deptIds = scoped ? [scoped] : undefined;
-      const [deptList, scheduleList, exceptions, closures, caps, counts] = await Promise.all([
+      const [deptList, scheduleList, exceptions, counts] = await Promise.all([
         departments.findAll(),
         schedules.findActiveList({ departmentId: scoped }),
         calendar.findExceptions({ from, to, departmentId: scoped }),
-        calendar.findClosures({ from, to, departmentIds: deptIds }),
-        calendar.findCapacities(),
         appointments.countByDepartmentDay({ from, to, departmentIds: deptIds }),
       ]);
       const depts = deptList.filter((d) => !scoped || d.id === scoped);
       if (scoped && depts.length === 0) throw new NotFoundError();
-      const closed = new Map(closures.map((c) => [`${c.departmentId}|${c.date}`, c]));
       const now = today();
       const days = eachDate(from, to).map((date) => ({
         date,
@@ -145,13 +101,10 @@ export function createScheduleManagementService({ events }) {
         past: date < now,
         entries: depts.map((d) => {
           const onDay = exceptionsOn(exceptions, d.id, date);
-          const closure = closed.get(`${d.id}|${date}`) ?? null;
           const rules = resolveDay({
             date,
             baseSchedule: departmentHoursOn(scheduleList, d.id, date),
             exceptions: onDay,
-            closure,
-            departmentCapacity: caps[d.id] ?? null,
           });
           const booked = counts[`${d.id}|${date}`] ?? 0;
           return {
@@ -164,8 +117,6 @@ export function createScheduleManagementService({ events }) {
             capacity: rules.departmentCapacity,
             booked,
             remaining: rules.departmentCapacity ? Math.max(0, rules.departmentCapacity - booked) : null,
-            bookingDisabled: Boolean(closure),
-            closureReason: closure?.reason ?? null,
             exceptions: onDay.map((e) => ({ id: e.id, type: e.type, title: e.title })),
           };
         }),
@@ -173,7 +124,7 @@ export function createScheduleManagementService({ events }) {
       return {
         from,
         to,
-        departments: depts.map((d) => ({ id: d.id, name: d.name, isActive: d.isActive, dailyCapacity: caps[d.id] ?? null })),
+        departments: depts.map((d) => ({ id: d.id, name: d.name, isActive: d.isActive })),
         days,
       };
     },

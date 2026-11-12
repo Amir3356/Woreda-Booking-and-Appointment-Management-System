@@ -1,5 +1,5 @@
 // Data access for "schedules", joined with department and service names.
-import { one, query, rows } from "../config/database.js";
+import { one, query, rows, transaction } from "../config/database.js";
 import { fromRow } from "../models/schedule.model.js";
 import { containsPattern } from "../utils/pagination.js";
 
@@ -8,9 +8,20 @@ const FROM_WITH_NAMES = `
   LEFT JOIN departments d ON d.id = sc.department_id
   LEFT JOIN services s ON s.id = sc.service_id`;
 
+// Each service's own daily capacity in the schedule, as [{ serviceId, service, dailyCapacity }].
+const SERVICE_CAPACITIES = `
+  (SELECT COALESCE(json_agg(json_build_object('serviceId', c.service_id, 'service', sv.name, 'dailyCapacity', c.daily_capacity)
+                            ORDER BY sv.name), '[]'::json)
+   FROM schedule_service_capacities c JOIN services sv ON sv.id = c.service_id
+   WHERE c.schedule_id = sc.id) AS service_capacities`;
+
 const SELECT_WITH_NAMES = `
-  SELECT sc.*, d.name AS department_name, s.name AS service_name
+  SELECT sc.*, d.name AS department_name, s.name AS service_name, ${SERVICE_CAPACITIES}
   ${FROM_WITH_NAMES}`;
+
+/** The capacity of the service given as query parameter $n in this schedule (null when it has none of its own). */
+const ownCapacity = (n) =>
+  `(SELECT c.daily_capacity FROM schedule_service_capacities c WHERE c.schedule_id = sc.id AND c.service_id = $${n}) AS own_capacity`;
 
 /** All schedules: Woreda-wide (all departments) first, then by department name, newest effective start first. */
 export async function findAll() {
@@ -57,21 +68,18 @@ export async function findActiveList({ departmentId, serviceId } = {}, client) {
     params.push(departmentId);
     where.push(`(sc.department_id = $${params.length} OR sc.department_id IS NULL)`);
   }
+  let extra = "";
   if (serviceId) {
     params.push(serviceId);
     where.push(`(sc.service_id = $${params.length} OR sc.service_id IS NULL)`);
+    extra = `, ${ownCapacity(params.length)}`; // dailyCapacity becomes that service's own capacity
   }
-  return (await rows(`${SELECT_WITH_NAMES} WHERE ${where.join(" AND ")} ORDER BY d.name NULLS FIRST, sc.effective_start_date`, params, client))
-    .map(fromRow);
-}
-
-/** Schedules that apply to one department, its own and the Woreda-wide ones (all statuses): the read-only view of department staff. */
-export async function findByDepartment(departmentId) {
   return (await rows(
-    `${SELECT_WITH_NAMES} WHERE sc.department_id = $1 OR sc.department_id IS NULL ORDER BY sc.effective_start_date DESC`,
-    [departmentId],
-  ))
-    .map(fromRow);
+    `SELECT sc.*, d.name AS department_name, s.name AS service_name, ${SERVICE_CAPACITIES}${extra}
+     ${FROM_WITH_NAMES} WHERE ${where.join(" AND ")} ORDER BY d.name NULLS FIRST, sc.effective_start_date`,
+    params,
+    client,
+  )).map(fromRow);
 }
 
 export async function findById(id) {
@@ -92,10 +100,12 @@ export async function findBookable(date) {
 /**
  * The ACTIVE schedule effective on date for a service: its own, else its department's
  * department-wide one, else the Woreda-wide one (all departments). Most specific wins. Null if none.
+ * Its dailyCapacity is the service's own Daily Appointment Capacity when the schedule sets one.
  */
 export async function findActive(serviceId, departmentId, date, client) {
   return fromRow(await one(
-    `${SELECT_WITH_NAMES}
+    `SELECT sc.*, d.name AS department_name, s.name AS service_name, ${SERVICE_CAPACITIES}, ${ownCapacity(1)}
+     ${FROM_WITH_NAMES}
      WHERE sc.status = 'ACTIVE'
        AND (sc.service_id = $1
             OR (sc.service_id IS NULL AND (sc.department_id IS NULL OR ($2::text IS NOT NULL AND sc.department_id = $2))))
@@ -108,28 +118,50 @@ export async function findActive(serviceId, departmentId, date, client) {
   ));
 }
 
-const values = (s) => [s.departmentId, s.serviceId, s.workingDays, s.openingTime, s.closingTime, s.dailyCapacity,
+/** Default capacity for services without their own (e.g. services added after the schedule). */
+export const DEFAULT_SERVICE_CAPACITY = 20;
+
+const values = (s) => [s.departmentId, s.serviceId, s.workingDays, s.openingTime, s.closingTime, s.dailyCapacity ?? null,
   s.effectiveStartDate, s.effectiveEndDate, s.lunchStart ?? null, s.lunchEnd ?? null];
 
-export async function create(s) {
-  await query(
-    `INSERT INTO schedules (id, status, department_id, service_id, working_days, opening_time, closing_time, daily_capacity,
-       effective_start_date, effective_end_date, lunch_start, lunch_end)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-    [s.id, s.status ?? "ACTIVE", ...values(s)],
+/** Replaces the per-service capacities of a schedule when a list is given (null leaves them unchanged). */
+async function replaceServiceCapacities(client, scheduleId, list) {
+  if (!list) return;
+  await client.query("DELETE FROM schedule_service_capacities WHERE schedule_id = $1", [scheduleId]);
+  if (list.length === 0) return;
+  await client.query(
+    `INSERT INTO schedule_service_capacities (schedule_id, service_id, daily_capacity)
+     SELECT $1, x.service_id, x.daily_capacity FROM unnest($2::text[], $3::int[]) AS x(service_id, daily_capacity)`,
+    [scheduleId, list.map((c) => c.serviceId), list.map((c) => c.dailyCapacity)],
   );
 }
 
-/** Replaces the editable fields (status only when given); false when the schedule does not exist. */
-export async function update(id, s) {
-  const { rowCount } = await query(
-    `UPDATE schedules SET department_id = $2, service_id = $3, working_days = $4, opening_time = $5, closing_time = $6,
-       daily_capacity = $7, effective_start_date = $8, effective_end_date = $9, lunch_start = $10, lunch_end = $11,
-       status = COALESCE($12, status), updated_at = now()
-     WHERE id = $1`,
-    [id, ...values(s), s.status ?? null],
-  );
-  return rowCount > 0;
+export function create(s) {
+  return transaction(async (client) => {
+    await client.query(
+      `INSERT INTO schedules (id, status, department_id, service_id, working_days, opening_time, closing_time, daily_capacity,
+         effective_start_date, effective_end_date, lunch_start, lunch_end)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, ${DEFAULT_SERVICE_CAPACITY}), $9, $10, $11, $12)`,
+      [s.id, s.status ?? "ACTIVE", ...values(s)],
+    );
+    await replaceServiceCapacities(client, s.id, s.serviceCapacities ?? []);
+  });
+}
+
+/** Replaces the editable fields (status and default capacity only when given); false when the schedule does not exist. */
+export function update(id, s) {
+  return transaction(async (client) => {
+    const { rowCount } = await client.query(
+      `UPDATE schedules SET department_id = $2, service_id = $3, working_days = $4, opening_time = $5, closing_time = $6,
+         daily_capacity = COALESCE($7, daily_capacity), effective_start_date = $8, effective_end_date = $9, lunch_start = $10,
+         lunch_end = $11, status = COALESCE($12, status), updated_at = now()
+       WHERE id = $1`,
+      [id, ...values(s), s.status ?? null],
+    );
+    if (rowCount === 0) return false;
+    await replaceServiceCapacities(client, id, s.serviceCapacities);
+    return true;
+  });
 }
 
 /** Flips ACTIVE <-> INACTIVE; returns the new status, or null when the schedule does not exist. */

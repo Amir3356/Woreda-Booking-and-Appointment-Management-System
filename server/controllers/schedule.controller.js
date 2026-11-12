@@ -1,4 +1,4 @@
-// /api/v1/schedules: operating hours, Schedule Management (exceptions, availability, capacities,
+// /api/v1/schedules: operating hours, Schedule Management (exceptions,
 // calendar views, impact) and the public bookable list, slot availability and bookable dates.
 import { ok, okWithCursor } from "../utils/response.js";
 
@@ -67,17 +67,7 @@ export function createScheduleController({ scheduleService, availabilityService,
       ok(res, 200, "Calendar exception deleted successfully.", null);
     },
 
-    // ---- appointment availability, capacities, calendar, impact ----
-    async setDateAvailability(req, res) {
-      const result = await mgmt.setDateAvailability(req.caller, req.body);
-      ok(res, 200, result.enabled ? "Booking enabled for the selected dates." : "Booking disabled for the selected dates.", result);
-    },
-    async listCapacities(req, res) {
-      ok(res, 200, "Daily capacities retrieved successfully.", await mgmt.listCapacities(req.caller));
-    },
-    async setCapacity(req, res) {
-      ok(res, 200, "Daily capacity updated successfully.", await mgmt.setCapacity(req.caller, req.params.departmentId, req.body.dailyCapacity));
-    },
+    // ---- calendar, impact ----
     async calendar(req, res) {
       ok(res, 200, "Calendar retrieved successfully.", await mgmt.calendar(req.caller, req.validatedQuery));
     },

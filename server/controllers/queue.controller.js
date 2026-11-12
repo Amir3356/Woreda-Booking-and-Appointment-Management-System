@@ -6,6 +6,9 @@ export function createQueueController(queueService) {
     async checkIn(req, res) {
       ok(res, 200, "Citizen checked in and queue token issued.", await queueService.checkIn(req.caller, req.body));
     },
+    async mine(req, res) {
+      ok(res, 200, "Your queue position retrieved successfully.", await queueService.mine(req.caller));
+    },
     async board(req, res) {
       ok(res, 200, "Queue retrieved successfully.", await queueService.board(req.caller, req.validatedQuery.departmentId));
     },

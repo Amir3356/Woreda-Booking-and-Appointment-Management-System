@@ -76,3 +76,31 @@ export async function finalize(id, departmentId, status, client) {
   );
   return row ? row.appointment_id : null;
 }
+
+/**
+ * A citizen's queue tokens for a day, each with its live place in the department's queue:
+ * ahead = WAITING tokens of the same department and day that checked in earlier,
+ * waitingTotal = all WAITING tokens there, nowServing = the token most recently called.
+ * Only counts and token numbers of other citizens are read, never their names.
+ */
+export async function findForCitizen(citizenId, queueDate) {
+  return rows(
+    `SELECT q.id, q.token_number, q.status, q.counter_number, q.called_time, q.checked_in_time, q.department_id,
+            a.id AS appointment_id, a.reference_number, a.time_slot, s.name AS service_name, d.name AS department_name,
+            (SELECT COUNT(*) FROM queue_tokens w
+              WHERE w.department_id = q.department_id AND w.queue_date = q.queue_date AND w.status = 'WAITING'
+                AND (w.created_at, w.id) < (q.created_at, q.id))::int AS ahead,
+            (SELECT COUNT(*) FROM queue_tokens w
+              WHERE w.department_id = q.department_id AND w.queue_date = q.queue_date AND w.status = 'WAITING')::int AS waiting_total,
+            (SELECT x.token_number FROM queue_tokens x
+              WHERE x.department_id = q.department_id AND x.queue_date = q.queue_date AND x.status = 'SERVING'
+              ORDER BY x.called_time DESC NULLS LAST, x.updated_at DESC LIMIT 1) AS now_serving
+     FROM queue_tokens q
+     JOIN appointments a ON a.id = q.appointment_id
+     JOIN services s ON s.id = a.service_id
+     JOIN departments d ON d.id = q.department_id
+     WHERE a.citizen_id = $1 AND q.queue_date = $2
+     ORDER BY q.created_at`,
+    [citizenId, queueDate],
+  );
+}

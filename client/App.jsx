@@ -36,12 +36,12 @@ import OfficerAppointmentsPage from "@/pages/officer/OfficerAppointmentsPage";
 import OfficerQueuePage from "@/pages/officer/OfficerQueuePage";
 import OfficerVerifyPage from "@/pages/officer/OfficerVerifyPage";
 import OfficerReportsPage from "@/pages/officer/OfficerReportsPage";
-import OfficerSchedulePage from "@/pages/officer/OfficerSchedulePage";
 
 // Citizen pages
 import CitizenBookAppointmentPage from "@/pages/citizen/CitizenBookAppointmentPage";
 import CitizenProfilePage from "@/pages/citizen/CitizenProfilePage";
 import CitizenNotificationsPage from "@/pages/citizen/CitizenNotificationsPage";
+import CitizenQueuePage from "@/pages/citizen/CitizenQueuePage";
 
 export default function App() {
   // Departments come from the server; until the fetch returns the seeded defaults are shown,
@@ -142,7 +142,6 @@ export default function App() {
         <Route path="queue" element={<OfficerQueuePage />} />
         <Route path="verify" element={<OfficerVerifyPage />} />
         <Route path="reports" element={<OfficerReportsPage />} />
-        <Route path="schedule" element={<OfficerSchedulePage />} />
       </Route>
 
       {/* Citizen Portal */}
@@ -150,6 +149,7 @@ export default function App() {
         {/* Citizens work on Book Appointment; there is no separate start or history page. */}
         <Route index element={<Navigate to="book" replace />} />
         <Route path="book" element={<CitizenBookAppointmentPage />} />
+        <Route path="queue" element={<CitizenQueuePage />} />
         <Route path="appointments" element={<Navigate to="/citizen/book" replace />} />
         <Route path="profile" element={<CitizenProfilePage />} />
         <Route path="notifications" element={<CitizenNotificationsPage />} />

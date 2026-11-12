@@ -115,16 +115,14 @@ export function displayDate(iso) {
 
 /** A citizen-facing sentence for availability.closedReason (note: the holiday / exception name). */
 export function closedMessage(reason, { date, schedule, note } = {}) {
-  const named = note ? ` (${note})` : "";
   switch (reason) {
-    case "BOOKING_DISABLED":
-      return "Online booking is closed on that date. Choose another date.";
+    // Calendar Exceptions (public, religious and election holidays, other special closures).
     case "BLOCKED":
-      return `That date is not available for appointments${named}. Choose another date.`;
     case "PUBLIC_HOLIDAY":
-      return `That date is a public holiday${named}. Choose another date.`;
     case "NON_WORKING_DAY":
-      return `That date is a non-working day${named}. Choose another date.`;
+      return `No appointments can be booked on that date${note ? `: ${note}` : ""}. Choose another date.`;
+    case "SERVICE_UNASSIGNED":
+      return "This service is not yet assigned to a department, so it cannot be booked. Please choose another service.";
     case "DEPARTMENT_CAPACITY_REACHED":
       return "The department is fully booked on that date. Choose another date.";
     case "NO_SCHEDULE":

@@ -1,13 +1,13 @@
 // Admin > Schedule Management > Working Hours: one set of working days, opening / closing times
 // and lunch break shared by every department of the Woreda, with a daily appointment capacity
 // and an effective period.
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { scheduleApi } from "@/api";
 import { useStore } from "@/context";
 import { DataTable } from "@/components/ui";
 import { useCursorList, useEscapeKey } from "@/hooks";
-import { addDays, describeError, formatWorkingDays, localIsoDate, displayDate } from "@/utils";
+import { addDays, describeError, formatWorkingDays, localIsoDate, displayDate, displayTime } from "@/utils";
 import { ConfirmDialog } from "@/features/schedule";
 import {
   Clock,
@@ -20,18 +20,21 @@ import {
   Circle,
 } from "lucide-react";
 
+const DEFAULT_CAPACITY = 20;
 const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const PAGE_SIZE = 5;
 
 
-/** The lunch break line under the working hours in the table. */
-const lunchText = (sch) => (sch.lunchStart && sch.lunchEnd ? `Lunch ${sch.lunchStart} – ${sch.lunchEnd}` : "No lunch break");
 
-/** Booked appointments a change to this schedule could affect: from today to its end (or a year ahead). */
+/**
+ * Booked appointments a change to this schedule could affect: from today (or its start) to its end,
+ * at most one year ahead — the server checks up to 366 days at a time.
+ */
 function impactOf(sch) {
   const today = localIsoDate();
   const start = sch.effectiveStartDate > today ? sch.effectiveStartDate : today;
-  const end = sch.effectiveEndDate || addDays(today, 365);
+  const yearAhead = addDays(start, 364);
+  const end = sch.effectiveEndDate && sch.effectiveEndDate < yearAhead ? sch.effectiveEndDate : yearAhead;
   // No department = the Woreda-wide schedule: every department is affected.
   return end < start ? null : { from: start, to: end, departmentIds: sch.departmentId ? [sch.departmentId] : [] };
 }
@@ -42,7 +45,22 @@ export default function OperatingHoursPage() {
     updateSchedule,
     deleteSchedule,
     toggleScheduleStatus,
+    services: storeServices,
+    departments: storeDepartments,
+    loadServices,
+    loadDepartments,
   } = useStore();
+
+  // Every active service gets its own Daily Appointment Capacity in the schedule form.
+  useEffect(() => {
+    loadServices().catch(() => {});
+    loadDepartments().catch(() => {});
+  }, [loadServices, loadDepartments]);
+  const departmentName = (id) => (storeDepartments || []).find((d) => d.id === id)?.name || "";
+  const capacityServices = (storeServices || [])
+    .filter((srv) => srv.isActive)
+    .map((srv) => ({ ...srv, departmentName: departmentName(srv.departmentId) }))
+    .sort((a, b) => (a.departmentName || "~").localeCompare(b.departmentName || "~") || a.name.localeCompare(b.name));
 
   // Search state
   const [searchTerm, setSearchTerm] = useState("");
@@ -68,14 +86,13 @@ export default function OperatingHoursPage() {
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  // Confirmation before saving an edit or deactivating: { kind: "save" | "toggle", sch, payload? }
+  // Confirmation before activating / deactivating: { kind: "toggle", sch }
   const [pending, setPending] = useState(null);
   useEscapeKey(modalOpen && !pending, () => setModalOpen(false));
   const [saving, setSaving] = useState(false);
 
   const triggerToast = (msg) => {
-    toast.success(msg, { duration: 5000 });
+    toast.success(msg, { duration: 6000 });
   };
 
   const emptyForm = {
@@ -84,7 +101,7 @@ export default function OperatingHoursPage() {
     closingTime: "17:30",
     lunchStart: "12:30",
     lunchEnd: "13:30",
-    dailyCapacity: 20,
+    capacities: {}, // { serviceId: "20" }; a service not in it shows the default 20
     effectiveStartDate: localIsoDate(),
     effectiveEndDate: "",
     status: "Active",
@@ -108,7 +125,13 @@ export default function OperatingHoursPage() {
       closingTime: sch.closingTime || "17:30",
       lunchStart: sch.lunchStart || "",
       lunchEnd: sch.lunchEnd || "",
-      dailyCapacity: sch.dailyCapacity || 20,
+      // Each service's own capacity; services without one show the schedule's default.
+      capacities: Object.fromEntries(
+        (storeServices || []).map((srv) => {
+          const own = (sch.serviceCapacities || []).find((c) => c.serviceId === srv.id);
+          return [srv.id, String(own ? own.dailyCapacity : sch.dailyCapacity || DEFAULT_CAPACITY)];
+        }),
+      ),
       effectiveStartDate: sch.effectiveStartDate || localIsoDate(),
       effectiveEndDate: sch.effectiveEndDate || "",
       status: sch.status || "Active",
@@ -122,25 +145,23 @@ export default function OperatingHoursPage() {
       return true;
     } catch (err) {
       const msg = describeError(err, action);
-      toast.error(msg, { duration: 5000 });
+      toast.error(msg, { duration: 6000 });
       return false;
     }
   };
 
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget) return;
-    const target = deleteTarget;
-    setDeleteTarget(null);
-    if (await run(`delete schedule ${target.id}`, () => deleteSchedule(target.id))) {
-      triggerToast(`Schedule ${target.id} deleted successfully.`);
+  // The delete icon deletes the schedule straight away (no confirmation dialog).
+  const handleDelete = async (target) => {
+    if (await run("delete the schedule", () => deleteSchedule(target.id))) {
+      triggerToast("Schedule deleted successfully.");
       reloadSchedules();
     }
   };
 
   const toggleNow = async (sch) => {
     const nextStatus = sch.status === "Active" ? "Inactive" : "Active";
-    if (await run(`change the status of schedule ${sch.id}`, () => toggleScheduleStatus(sch.id))) {
-      triggerToast(`Schedule ${sch.id} marked as ${nextStatus}.`);
+    if (await run("change the schedule status", () => toggleScheduleStatus(sch.id))) {
+      triggerToast(`Schedule marked as ${nextStatus}.`);
       reloadSchedules();
     }
   };
@@ -148,15 +169,9 @@ export default function OperatingHoursPage() {
   const handleToggleStatus = (sch) => setPending({ kind: "toggle", sch });
 
   const confirmPending = async () => {
-    const p = pending;
-    if (p.kind === "toggle") {
-      setSaving(true);
-      await toggleNow(p.sch);
-      setSaving(false);
-      setPending(null);
-      return;
-    }
-    await save(p.payload);
+    setSaving(true);
+    await toggleNow(pending.sch);
+    setSaving(false);
     setPending(null);
   };
 
@@ -174,27 +189,39 @@ export default function OperatingHoursPage() {
     e.preventDefault();
     if (saving) return;
     if (form.workingDays.length === 0) {
-      toast.error("Could not save the schedule: choose at least one working day.", { duration: 5000 });
+      toast.error("Could not save the schedule: choose at least one working day.", { duration: 6000 });
       return;
     }
     if (form.closingTime <= form.openingTime) {
-      toast.error("Could not save the schedule: closing time must be after opening time.", { duration: 5000 });
+      toast.error("Could not save the schedule: closing time must be after opening time.", { duration: 6000 });
       return;
     }
     const hasLunch = Boolean(form.lunchStart || form.lunchEnd);
     if (hasLunch) {
       if (!form.lunchStart || !form.lunchEnd) {
-        toast.error("Could not save the schedule: set both the lunch start and end time, or clear both.", { duration: 5000 });
+        toast.error("Could not save the schedule: set both the lunch start and end time, or clear both.", { duration: 6000 });
         return;
       }
       if (form.lunchEnd <= form.lunchStart) {
-        toast.error("Could not save the schedule: lunch end must be after lunch start.", { duration: 5000 });
+        toast.error("Could not save the schedule: lunch end must be after lunch start.", { duration: 6000 });
         return;
       }
       if (form.lunchStart <= form.openingTime || form.lunchEnd >= form.closingTime) {
-        toast.error("Could not save the schedule: the lunch break must fall within the working hours.", { duration: 5000 });
+        toast.error("Could not save the schedule: the lunch break must fall within the working hours.", { duration: 6000 });
         return;
       }
+    }
+
+    // Each service's own Daily Appointment Capacity (whole number, at least 1).
+    const serviceCapacities = capacityServices.map((srv) => ({
+      serviceId: srv.id,
+      dailyCapacity: Number(form.capacities[srv.id] ?? DEFAULT_CAPACITY),
+    }));
+    const badCapacity = serviceCapacities.find((c) => !Number.isInteger(c.dailyCapacity) || c.dailyCapacity < 1 || c.dailyCapacity > 10000);
+    if (badCapacity) {
+      const name = capacityServices.find((srv) => srv.id === badCapacity.serviceId)?.name || "a service";
+      toast.error(`Could not save the schedule: the Daily Appointment Capacity of ${name} must be a whole number from 1 to 10000.`, { duration: 6000 });
+      return;
     }
 
     const payload = {
@@ -205,52 +232,32 @@ export default function OperatingHoursPage() {
       closingTime: form.closingTime,
       lunchStart: hasLunch ? form.lunchStart : null,
       lunchEnd: hasLunch ? form.lunchEnd : null,
-      dailyCapacity: Number(form.dailyCapacity) || 1,
+      dailyCapacity: null, // default for services added later: kept on edit, 20 on create
+      serviceCapacities,
       effectiveStartDate: form.effectiveStartDate || localIsoDate(),
       effectiveEndDate: form.effectiveEndDate || null,
       status: form.status,
     };
 
-    // Changing an existing schedule: confirm, showing appointments booked under it.
-    if (editingSchedule) {
-      setPending({ kind: "save", sch: editingSchedule, payload });
-      return;
-    }
+    // Create and Save Changes both save straight away (no confirmation dialog).
     await save(payload);
   };
 
   const save = async (payload) => {
     setSaving(true);
-    const action = editingSchedule ? `update schedule ${editingSchedule.id}` : "create the schedule";
-    let saved = null;
-    const ok = await run(action, async () => {
-      saved = editingSchedule
-        ? await updateSchedule(editingSchedule.id, payload)
-        : await addSchedule(payload);
-    });
+    const action = editingSchedule ? "update the schedule" : "create the schedule";
+    const ok = await run(action, () =>
+      editingSchedule ? updateSchedule(editingSchedule.id, payload) : addSchedule(payload)
+    );
     setSaving(false);
     if (!ok) return; // keep the form open so the administrator can correct it
-    triggerToast(
-      editingSchedule
-        ? `Schedule ${editingSchedule.id} updated successfully.`
-        : `Schedule ${saved?.id || ""} created successfully.`
-    );
+    triggerToast(editingSchedule ? "Schedule updated successfully." : "Schedule created successfully.");
     setModalOpen(false);
     reloadSchedules();
   };
 
   // Schedule table columns (TanStack Table via components/ui/DataTable).
   const scheduleColumns = [
-    {
-      id: "id",
-      accessorKey: "id",
-      header: "Schedule ID",
-      cell: ({ row }) => (
-        <span className="font-mono font-bold text-slate-900 bg-slate-100 text-slate-800 px-2 py-0.5 rounded text-xs border border-slate-200">
-          {row.original.id}
-        </span>
-      ),
-    },
     {
       id: "workingDays",
       header: "Working Days",
@@ -262,45 +269,64 @@ export default function OperatingHoursPage() {
       ),
     },
     {
-      id: "hours",
+      id: "openingTime",
       accessorKey: "openingTime",
-      header: "Working Hours",
-      meta: { className: "font-mono text-slate-700 font-medium" },
-      cell: ({ row }) => (
-        <>
-          <div>{`${row.original.openingTime} – ${row.original.closingTime}`}</div>
-          <div className="text-[11px] text-slate-500">{lunchText(row.original)}</div>
-        </>
-      ),
+      header: "Opening Time",
+      meta: { className: "text-slate-700 font-medium whitespace-nowrap" },
+      cell: ({ row }) => displayTime(row.original.openingTime),
+    },
+    {
+      id: "closingTime",
+      accessorKey: "closingTime",
+      header: "Closing Time",
+      meta: { className: "text-slate-700 font-medium whitespace-nowrap" },
+      cell: ({ row }) => displayTime(row.original.closingTime),
+    },
+    {
+      id: "lunchStart",
+      accessorFn: (sch) => sch.lunchStart || "",
+      header: "Lunch Break Start",
+      meta: { className: "text-slate-700 whitespace-nowrap" },
+      cell: ({ row }) =>
+        row.original.lunchStart ? displayTime(row.original.lunchStart) : <span className="text-slate-400">No break</span>,
+    },
+    {
+      id: "lunchEnd",
+      accessorFn: (sch) => sch.lunchEnd || "",
+      header: "Lunch Break Stop",
+      meta: { className: "text-slate-700 whitespace-nowrap" },
+      cell: ({ row }) =>
+        row.original.lunchEnd ? displayTime(row.original.lunchEnd) : <span className="text-slate-400">No break</span>,
     },
     {
       id: "capacity",
       accessorKey: "dailyCapacity",
-      header: "Daily Capacity",
+      header: "Daily Appointment Capacity",
+      enableSorting: false,
       sortFn: "basic",
       meta: { className: "text-slate-600" },
       cell: ({ row }) => (
         <>
-          <span className="font-semibold text-slate-900">{row.original.dailyCapacity}</span> slots/day
+          {(row.original.serviceCapacities || []).length === 0 ? (
+            <>
+              <span className="font-semibold text-slate-900">{row.original.dailyCapacity}</span> per service per day
+            </>
+          ) : (
+            (row.original.serviceCapacities || []).map((c) => (
+              <div key={c.serviceId} className="whitespace-nowrap">
+                {c.service}: <span className="font-semibold text-slate-900">{c.dailyCapacity}</span>/day
+              </div>
+            ))
+          )}
         </>
       ),
     },
     {
-      id: "period",
+      id: "effectiveStartDate",
       accessorKey: "effectiveStartDate",
-      header: "Effective Period",
-      meta: { className: "text-slate-600 whitespace-nowrap" },
-      cell: ({ row }) => {
-        const sch = row.original;
-        return (
-          <>
-            <div className="font-medium text-slate-800">From {displayDate(sch.effectiveStartDate)}</div>
-            <div className="text-[11px] text-slate-500">
-              {sch.effectiveEndDate ? `Until ${displayDate(sch.effectiveEndDate)}` : "No end date"}
-            </div>
-          </>
-        );
-      },
+      header: "Effective Start Date",
+      meta: { className: "text-slate-700 whitespace-nowrap" },
+      cell: ({ row }) => displayDate(row.original.effectiveStartDate),
     },
     {
       id: "status",
@@ -349,7 +375,7 @@ export default function OperatingHoursPage() {
             </button>
             <button
               type="button"
-              onClick={() => setDeleteTarget(sch)}
+              onClick={() => handleDelete(sch)}
               className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all cursor-pointer"
               title="Delete Schedule"
             >
@@ -573,60 +599,54 @@ export default function OperatingHoursPage() {
                 </p>
               </div>
 
-              {/* Daily Capacity */}
+              {/* Daily Appointment Capacity: one per service */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Daily Appointment Capacity
+                  Daily Appointment Capacity per Service
                 </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="500"
-                  required
-                  value={form.dailyCapacity}
-                  onChange={(e) =>
-                    setForm({ ...form, dailyCapacity: parseInt(e.target.value) || 20 })
-                  }
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Bookings per day for each service under this schedule.
+                <p className="text-[11px] text-slate-500 mb-2">
+                  The most appointments each service can take per day.
                 </p>
+                {capacityServices.length === 0 ? (
+                  <p className="text-[11px] text-slate-500">No active services yet: add them in Service Management.</p>
+                ) : (
+                  <div className="sm-capacity-list">
+                    {capacityServices.map((srv) => (
+                      <label key={srv.id} className="sm-capacity-row">
+                        <span className="sm-capacity-name">
+                          <span className="font-semibold text-slate-800">{srv.name}</span>
+                          <span className="block text-[11px] text-slate-500">
+                            {srv.departmentName || "Not assigned to a department (cannot be booked yet)"}
+                          </span>
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="10000"
+                          required
+                          aria-label={`Daily Appointment Capacity for ${srv.name}`}
+                          value={form.capacities[srv.id] ?? String(DEFAULT_CAPACITY)}
+                          onChange={(e) => setForm({ ...form, capacities: { ...form.capacities, [srv.id]: e.target.value } })}
+                          className="sm-capacity-input px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Effective Start Date & Effective End Date (Optional) */}
-              <div
-                className="grid-cols-2"
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: "0.75rem",
-                }}
-              >
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Effective Start Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={form.effectiveStartDate}
-                    onChange={(e) => setForm({ ...form, effectiveStartDate: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Effective End Date (Optional)
-                  </label>
-                  <input
-                    type="date"
-                    min={form.effectiveStartDate || undefined}
-                    value={form.effectiveEndDate}
-                    onChange={(e) => setForm({ ...form, effectiveEndDate: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+              {/* Effective Start Date */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Effective Start Date
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={form.effectiveStartDate}
+                  onChange={(e) => setForm({ ...form, effectiveStartDate: e.target.value })}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
               {/* Schedule Status Radio */}
@@ -682,47 +702,25 @@ export default function OperatingHoursPage() {
         </div>
       )}
 
-      {/* Delete confirmation, with the appointments booked under this schedule */}
-      {deleteTarget && (
-        <ConfirmDialog
-          title="Delete schedule?"
-          tone="danger"
-          confirmLabel="Delete schedule"
-          busy={saving}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={handleConfirmDelete}
-          impact={impactOf(deleteTarget)}
-          message={
-            <>
-              Schedule <strong>{deleteTarget.id}</strong> will be deleted. Without another schedule in force,
-              citizens can no longer book any department.
-            </>
-          }
-        />
-      )}
 
-      {/* Confirmation before saving an edit or deactivating */}
+      {/* Confirmation before activating / deactivating */}
       {pending && (
         <ConfirmDialog
-          title={pending.kind === "save" ? "Save changes to this schedule?" : pending.sch.status === "Active" ? "Deactivate schedule?" : "Activate schedule?"}
-          tone={pending.kind === "toggle" && pending.sch.status === "Active" ? "danger" : "primary"}
-          confirmLabel={pending.kind === "save" ? "Save changes" : pending.sch.status === "Active" ? "Deactivate" : "Activate"}
+          title={pending.sch.status === "Active" ? "Deactivate schedule?" : "Activate schedule?"}
+          tone={pending.sch.status === "Active" ? "danger" : "primary"}
+          confirmLabel={pending.sch.status === "Active" ? "Deactivate" : "Activate"}
           busy={saving}
           onCancel={() => setPending(null)}
           onConfirm={confirmPending}
-          impact={pending.kind === "toggle" && pending.sch.status !== "Active" ? null : impactOf(pending.sch)}
+          impact={pending.sch.status === "Active" ? impactOf(pending.sch) : null}
           message={
-            pending.kind === "save" ? (
+            pending.sch.status === "Active" ? (
               <>
-                The new hours apply to bookings made from now on for <strong>all departments</strong>.
-              </>
-            ) : pending.sch.status === "Active" ? (
-              <>
-                Citizens will no longer be able to book under schedule <strong>{pending.sch.id}</strong>.
+                Citizens will no longer be able to book under this schedule.
               </>
             ) : (
               <>
-                Schedule <strong>{pending.sch.id}</strong> will be used for bookings again.
+                This schedule will be used for bookings again.
               </>
             )
           }

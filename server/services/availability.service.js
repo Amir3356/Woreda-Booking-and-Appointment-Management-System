@@ -1,6 +1,6 @@
 // Per-slot availability of a service on a date (public: the booking page shows it before sign-in),
 // and the citizen's list of bookable dates. Both follow the full scheduling rules: operating hours,
-// calendar exceptions, booking closures and the service and department daily capacities.
+// calendar exceptions and the daily capacities (per service; per department on exceptional working days).
 import { nowMinutes, parseDate, today } from "../utils/date.js";
 import { DEFAULT_MAX_PARALLEL_SLOTS, applyDailyCapacity, buildSlots, closedReason, markPast, perTimeCapacity } from "../utils/slots.js";
 import { eachDate, exceptionsOn, resolveDay, serviceScheduleOn } from "../utils/calendar.js";
@@ -37,6 +37,11 @@ export function createAvailabilityService() {
         slots = markPast(slots, nowMinutes());
         if (!reason && hadOpen && slots.every((s) => s.status === "Unavailable")) reason = "DAY_OVER";
       }
+      // Appointments belong to a department: a service not yet assigned to one cannot be booked.
+      if (service && !departmentId) {
+        reason = "SERVICE_UNASSIGNED";
+        slots = [];
+      }
       return {
         serviceId,
         date,
@@ -62,15 +67,13 @@ export function createAvailabilityService() {
       const service = await publicServices.findById(serviceId);
       if (!service) throw new NotFoundError();
       const departmentId = service.departmentId ?? null;
-      const [list, exceptions, closures, capacities, serviceCounts, departmentCounts] = await Promise.all([
+      if (!departmentId) return eachDate(from, to).map((date) => ({ date, available: false, reason: "SERVICE_UNASSIGNED" }));
+      const [list, exceptions, serviceCounts, departmentCounts] = await Promise.all([
         schedules.findActiveList({ serviceId }),
         calendar.findExceptions({ from, to, departmentId }),
-        departmentId ? calendar.findClosures({ from, to, departmentIds: [departmentId] }) : [],
-        departmentId ? calendar.findCapacities() : {},
         appointments.countServiceDays({ serviceId, from, to }),
         departmentId ? appointments.countByDepartmentDay({ from, to, departmentIds: [departmentId] }) : {},
       ]);
-      const closed = new Map(closures.map((c) => [c.date, c]));
       const relevant = list.filter(
         (s) => s.serviceId === serviceId || (departmentId && s.departmentId === departmentId) || (!s.departmentId && !s.serviceId),
       );
@@ -81,8 +84,6 @@ export function createAvailabilityService() {
           date,
           baseSchedule: serviceScheduleOn(relevant, serviceId, departmentId, date),
           exceptions: exceptionsOn(exceptions, departmentId, date),
-          closure: closed.get(date) ?? null,
-          departmentCapacity: departmentId ? (capacities[departmentId] ?? null) : null,
         });
         if (!rules.open) return { date, available: false, reason: rules.reason };
         if ((serviceCounts[date] ?? 0) >= rules.schedule.dailyCapacity) return { date, available: false, reason: "DAILY_CAPACITY_REACHED" };

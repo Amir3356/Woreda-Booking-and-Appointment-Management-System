@@ -1,4 +1,4 @@
-// Data access for calendar exceptions, per-date booking closures and department daily capacities.
+// Data access for calendar exceptions (holidays, non-working days, blocked dates, exceptional working days).
 import { one, query, rows, transaction } from "../config/database.js";
 import { exceptionFromRow } from "../models/calendar.model.js";
 
@@ -112,77 +112,5 @@ export function updateException(id, e) {
 
 export async function removeException(id) {
   const { rowCount } = await query("DELETE FROM calendar_exceptions WHERE id = $1", [id]);
-  return rowCount > 0;
-}
-
-// ---- booking closures (Appointment Availability) ----
-
-/** Closures in [from, to], optionally for some departments: [{ departmentId, date, reason }]. */
-export async function findClosures({ from, to, departmentIds } = {}, client) {
-  const params = [from, to];
-  let filter = "";
-  if (departmentIds?.length) {
-    params.push(departmentIds);
-    filter = "AND department_id = ANY($3)";
-  }
-  const list = await rows(
-    `SELECT department_id, date, reason FROM booking_closures WHERE date BETWEEN $1 AND $2 ${filter} ORDER BY date`,
-    params,
-    client,
-  );
-  return list.map((r) => ({ departmentId: r.department_id, date: r.date, reason: r.reason ?? "" }));
-}
-
-/** The closure of one department on one date, or null. */
-export async function findClosure(departmentId, date, client) {
-  const r = await one("SELECT reason FROM booking_closures WHERE department_id = $1 AND date = $2", [departmentId, date], client);
-  return r ? { reason: r.reason ?? "" } : null;
-}
-
-/** Closes booking for every department on every date in [from, to]; returns rows written. */
-export async function closeDates({ departmentIds, from, to, reason, by }) {
-  const { rowCount } = await query(
-    `INSERT INTO booking_closures (department_id, date, reason, created_by)
-     SELECT dep, day::date, $4, $5
-     FROM unnest($1::text[]) AS dep, generate_series($2::date, $3::date, interval '1 day') AS day
-     ON CONFLICT (department_id, date) DO UPDATE SET reason = EXCLUDED.reason, created_by = EXCLUDED.created_by, created_at = now()`,
-    [departmentIds, from, to, reason ?? null, by ?? null],
-  );
-  return rowCount;
-}
-
-/** Re-opens booking for the departments on [from, to]; returns rows removed. */
-export async function openDates({ departmentIds, from, to }) {
-  const { rowCount } = await query(
-    "DELETE FROM booking_closures WHERE department_id = ANY($1) AND date BETWEEN $2 AND $3",
-    [departmentIds, from, to],
-  );
-  return rowCount;
-}
-
-// ---- department daily capacities ----
-
-/** { departmentId: dailyCapacity } for every department that has one. */
-export async function findCapacities(client) {
-  const list = await rows("SELECT department_id, daily_capacity FROM department_capacities", [], client);
-  return Object.fromEntries(list.map((r) => [r.department_id, r.daily_capacity]));
-}
-
-export async function findCapacity(departmentId, client) {
-  const r = await one("SELECT daily_capacity FROM department_capacities WHERE department_id = $1", [departmentId], client);
-  return r ? r.daily_capacity : null;
-}
-
-export async function upsertCapacity(departmentId, dailyCapacity, by) {
-  await query(
-    `INSERT INTO department_capacities (department_id, daily_capacity, updated_by) VALUES ($1, $2, $3)
-     ON CONFLICT (department_id) DO UPDATE SET daily_capacity = EXCLUDED.daily_capacity,
-       updated_by = EXCLUDED.updated_by, updated_at = now()`,
-    [departmentId, dailyCapacity, by ?? null],
-  );
-}
-
-export async function removeCapacity(departmentId) {
-  const { rowCount } = await query("DELETE FROM department_capacities WHERE department_id = $1", [departmentId]);
   return rowCount > 0;
 }

@@ -225,6 +225,16 @@
   white-space: nowrap;
 }
 
+.sidebar-user-role {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fcd34d;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sidebar-user-email {
   margin-top: 0.125rem;
   font-size: 0.75rem;

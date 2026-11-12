@@ -14,6 +14,15 @@ export const scheduleApi = {
   active: () => http.get("/schedules/active"),
   /** @param {{ serviceId: string, date: string }} params */
   availability: (params) => http.get("/schedules/availability", params),
+  /** Same as availability, retried once after a short pause when the request fails (e.g. a brief network blip). */
+  availabilityWithRetry: async (params) => {
+    try {
+      return await http.get("/schedules/availability", params);
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      return http.get("/schedules/availability", params);
+    }
+  },
   /** Which dates can be booked. @param {{ serviceId: string, from: string, to: string }} params */
   bookableDates: (params) => http.get("/schedules/bookable-dates", params),
 
@@ -22,11 +31,6 @@ export const scheduleApi = {
   calendar: (params) => http.get("/schedules/calendar", params),
   /** Outstanding appointments a change would touch. @param {{ from, to, departmentIds?: string }} params */
   impact: (params) => http.get("/schedules/impact", params),
-  /** @param {{ departmentIds: string[], startDate, endDate, enabled: boolean, reason?: string }} payload */
-  setDateAvailability: (payload) => http.put("/schedules/date-availability", payload),
-  capacities: () => http.get("/schedules/capacities"),
-  /** dailyCapacity null removes the department limit. */
-  setCapacity: (departmentId, dailyCapacity) => http.put(`/schedules/capacities/${departmentId}`, { dailyCapacity }),
   exceptions: (params) => http.get("/schedules/exceptions", params),
   createException: (payload) => http.post("/schedules/exceptions", payload),
   updateException: (id, payload) => http.put(`/schedules/exceptions/${id}`, payload),

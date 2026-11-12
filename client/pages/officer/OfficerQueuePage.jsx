@@ -1,5 +1,12 @@
-import { useState } from "react";
+// Officer > Queue: the department's live desk queue from the server (GET /queue). Call Next,
+// Mark Completed and No-Show go to the server, so citizens' positions (Citizen > My Queue) move
+// at once; the board re-reads itself when the server announces a change over the WebSocket.
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { useStore } from "@/context";
+import { queueApi } from "@/api";
+import { subscribe } from "@/api/realtime";
+import { describeError } from "@/utils";
 import {
   Megaphone,
   Clock,
@@ -7,36 +14,73 @@ import {
 } from "lucide-react";
 
 export default function OfficerQueuePage() {
-  const {
-    currentUser,
-    queue,
-    updateQueueStatus,
-    callNextCitizen,
-  } = useStore();
+  const currentUser = useStore((s) => s.currentUser);
+  const counterNumber = currentUser?.counterNumber || 1;
 
-  const officerDeptId = currentUser?.departmentId;
-  const deptQueue = queue.filter((q) => {
-    if (!officerDeptId) return true;
-    return q.departmentId === officerDeptId;
-  });
+  const [board, setBoard] = useState({ nowServing: null, waitingList: [] });
+  const [busy, setBusy] = useState(false);
+  const loadBoard = useCallback(async () => {
+    try {
+      const { data } = await queueApi.board();
+      setBoard({ nowServing: data?.nowServing || null, waitingList: data?.waitingList || [] });
+    } catch (err) {
+      toast.error(describeError(err, "load the queue"), { duration: 6000 });
+    }
+  }, []);
+  useEffect(() => {
+    loadBoard();
+    let timer = null;
+    const soon = () => {
+      clearTimeout(timer);
+      timer = setTimeout(loadBoard, 300);
+    };
+    const offs = [subscribe("appointments.changed", soon), subscribe("reconnected", soon)];
+    return () => {
+      clearTimeout(timer);
+      offs.forEach((off) => off());
+    };
+  }, [loadBoard]);
 
-  const currentlyServing = deptQueue.find((q) => q.status === "SERVING");
-  const waitingList = deptQueue.filter((q) => q.status === "WAITING");
+  const currentlyServing = board.nowServing;
+  const waitingList = board.waitingList;
 
   const [announcementMsg, setAnnouncementMsg] = useState("");
+  const announce = (msg) => {
+    setAnnouncementMsg(msg);
+    setTimeout(() => setAnnouncementMsg(""), 6000);
+  };
 
-  const handleCallNext = () => {
-    const called = callNextCitizen(officerDeptId, currentUser?.counterNumber || 1);
-    if (called) {
-      setAnnouncementMsg(`Chime: Token ${called.tokenNumber} please proceed to Counter Desk #1`);
-      setTimeout(() => setAnnouncementMsg(""), 5000);
+  const handleCallNext = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { data } = await queueApi.callNext({ counterNumber });
+      announce(`Chime: Token ${data.calledToken} please proceed to Counter Desk #${data.counterNumber}`);
+      await loadBoard();
+    } catch (err) {
+      toast.error(err?.status === 409 ? "No citizens are waiting in the queue." : describeError(err, "call the next citizen"), { duration: 6000 });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleFinalize = async (status) => {
+    if (!currentlyServing || busy) return;
+    setBusy(true);
+    try {
+      await queueApi.finalize(currentlyServing.id, status);
+      toast.success(`Token ${currentlyServing.tokenNumber} marked as ${status === "COMPLETED" ? "completed" : "no-show"}.`, { duration: 6000 });
+      await loadBoard();
+    } catch (err) {
+      toast.error(describeError(err, "update the queue token"), { duration: 6000 });
+    } finally {
+      setBusy(false);
     }
   };
 
   const handleReAnnounce = () => {
     if (currentlyServing) {
-      setAnnouncementMsg(`Chime (Repeat): Token ${currentlyServing.tokenNumber} please proceed to Counter Desk #1`);
-      setTimeout(() => setAnnouncementMsg(""), 5000);
+      announce(`Chime (Repeat): Token ${currentlyServing.tokenNumber} please proceed to Counter Desk #${currentlyServing.counterNumber}`);
     }
   };
 
@@ -54,6 +98,7 @@ export default function OfficerQueuePage() {
         <div className="flex items-center gap-2">
           <button
             onClick={handleCallNext}
+            disabled={busy}
             className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow-md transition-all active:scale-95"
           >
             <Megaphone className="w-4 h-4 text-amber-300" />
@@ -82,7 +127,7 @@ export default function OfficerQueuePage() {
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-widest text-amber-300 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-              NOW SERVING AT COUNTER #1
+              NOW SERVING AT COUNTER #{currentlyServing?.counterNumber || counterNumber}
             </span>
             <span className="text-xs font-medium text-slate-300">
               Department: {currentUser?.departmentName}
@@ -131,13 +176,15 @@ export default function OfficerQueuePage() {
                   Repeat Call
                 </button>
                 <button
-                  onClick={() => updateQueueStatus(currentlyServing.id, "NO_SHOW")}
+                  onClick={() => handleFinalize("NO_SHOW")}
+                  disabled={busy}
                   className="px-3.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-semibold border border-rose-500/30"
                 >
                   No-Show
                 </button>
                 <button
-                  onClick={() => updateQueueStatus(currentlyServing.id, "COMPLETED")}
+                  onClick={() => handleFinalize("COMPLETED")}
+                  disabled={busy}
                   className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow"
                 >
                   Mark Completed
@@ -215,14 +262,6 @@ export default function OfficerQueuePage() {
                     <span className="font-medium text-slate-700">{item.checkedInTime}</span>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      updateQueueStatus(item.id, "SERVING");
-                    }}
-                    className="px-3.5 py-1.5 rounded-lg bg-[#0b2545] hover:bg-[#133b5c] text-white font-bold text-xs shadow-xs"
-                  >
-                    Direct Call
-                  </button>
                 </div>
               </div>
             ))

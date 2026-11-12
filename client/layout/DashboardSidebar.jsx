@@ -5,7 +5,9 @@ import {
   Building2,
   FileText,
   Calendar,
-  CalendarClock,
+  ClipboardCheck,
+  ListOrdered,
+  MonitorSpeaker,
   Clock,
   UserCog,
   Users,
@@ -58,19 +60,25 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
             icon: Calendar,
             badge: pendingAppointmentsCount > 0 ? pendingAppointmentsCount : null,
           },
-          { href: "/officer/schedule", label: "Department Schedule", icon: CalendarClock },
+          { href: "/officer/verify", label: "Verify Check-in", icon: ClipboardCheck },
+          { href: "/officer/queue", label: "Queue", icon: MonitorSpeaker },
         ],
       },
     ],
     CITIZEN: [
       {
         label: "Main Menu",
-        items: [{ href: "/citizen/book", label: "Book Appointment", icon: Calendar }],
+        items: [
+          { href: "/citizen/book", label: "Book Appointment", icon: Calendar },
+          { href: "/citizen/queue", label: "My Queue", icon: ListOrdered },
+        ],
       },
     ],
   };
 
   const sections = sectionsByRole[role] || sectionsByRole.ADMIN;
+  // Same as the Role column of Admin > Account Provision: a department officer's role is their department.
+  const roleLabel = role === "OFFICER" ? currentUser?.departmentName || ROLE_LABELS.OFFICER : ROLE_LABELS[role] || role;
   const subtitle =
     role === "OFFICER"
       ? currentUser?.departmentName || "Kebele Office"
@@ -136,8 +144,11 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
             <User />
           </span>
           <span className="sidebar-user-text">
-            <span className="sidebar-user-name">
-              {currentUser?.fullName || "Signed-in User"} · {ROLE_LABELS[role] || role}
+            <span className="sidebar-user-name" title={currentUser?.fullName || "Signed-in User"}>
+              {currentUser?.fullName || "Signed-in User"}
+            </span>
+            <span className="sidebar-user-role" title={roleLabel}>
+              {roleLabel}
             </span>
             <span className="sidebar-user-email" title={currentUser?.phone || (role === "ADMIN" ? "+251911223344" : role === "OFFICER" ? "+251911334455" : subtitle)}>
               <span className="inline-flex items-center gap-1.5 font-mono">

@@ -1,7 +1,6 @@
 // Month and week calendars of department availability (data: GET /schedules/calendar).
 // Month: one cell per day, for one department or summarised over all of them.
 // Week: one row per department, one cell per day, with hours and booked / capacity.
-import { Ban } from "lucide-react";
 import { localIsoDate } from "@/utils";
 import { WEEKDAYS, entryLabel, entryTone, inRange, summarizeDay } from "./calendarModel";
 
@@ -21,7 +20,7 @@ export function CalendarLegend({ showMixed = false }) {
     ["is-available", "Available"],
     ["is-exceptional", "Exceptional working day"],
     ["is-full", "Fully booked"],
-    ["is-holiday", "Holiday, blocked or booking disabled"],
+    ["is-holiday", "Holiday or blocked"],
     ["is-unavailable", "Closed (no working hours)"],
   ];
   if (showMixed) items.push(["is-mixed", "Differs by department"]);
@@ -156,7 +155,6 @@ export default function ScheduleCalendar({ view = "month", data, month, departme
           {data.days.map((d) => {
             const entries = visible(d.entries);
             const tone = entries.length === 1 ? entryTone(entries[0]) : summarizeDay(entries).tone;
-            const disabled = entries.some((e) => e.bookingDisabled);
             const cls = [
               "sm-day",
               tone,
@@ -179,11 +177,6 @@ export default function ScheduleCalendar({ view = "month", data, month, departme
               >
                 <div className="sm-day-top">
                   <span className="sm-day-num">{Number(d.date.slice(8))}</span>
-                  {disabled && (
-                    <span className="sm-day-flag" title="Online booking disabled">
-                      <Ban aria-hidden="true" />
-                    </span>
-                  )}
                 </div>
                 <DayContent entries={entries} />
               </Tag>

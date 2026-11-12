@@ -1,5 +1,4 @@
-// Tables "calendar_exceptions" (+ "calendar_exception_departments"), "booking_closures" and
-// "department_capacities" (Admin > Schedule Management).
+// Tables "calendar_exceptions" + "calendar_exception_departments" (Admin > Schedule Management).
 export const EXCEPTION_TYPES = Object.freeze(["PUBLIC_HOLIDAY", "NON_WORKING_DAY", "BLOCKED", "WORKING_DAY"]);
 export const SCOPES = Object.freeze(["ALL", "DEPARTMENT", "DEPARTMENTS"]);
 
