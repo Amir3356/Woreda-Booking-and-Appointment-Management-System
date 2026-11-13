@@ -3,7 +3,6 @@
 // the server announces a queue change over the WebSocket (check-in, call next, completed / no-show),
 // so it updates without polling.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import {
   Clock,
   Users,
@@ -11,7 +10,6 @@ import {
   Check,
   BellRing,
   Building2,
-  X,
 } from "lucide-react";
 import { useStore } from "@/context";
 import { queueApi } from "@/api";
@@ -24,11 +22,7 @@ export default function CitizenQueuePage() {
   const loadAppointments = useStore((s) => s.loadAppointments);
 
   const [state, setState] = useState({ loading: true, data: null, error: false });
-  const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [newlyCompleted, setNewlyCompleted] = useState([]);
   const request = useRef(0);
-  const isInitialSyncDone = useRef(false);
-  const previousStatuses = useRef(new Map());
 
   const load = useCallback(async () => {
     const id = ++request.current;
@@ -160,53 +154,6 @@ export default function CitizenQueuePage() {
     return (a.position || 999) - (b.position || 999);
   });
 
-  // Track live completion toast notifications:
-  // ONLY fires when an appointment transitions to COMPLETED live during this session
-  // (e.g. when the department taps "Complete Service").
-  // Baseline on initial load NEVER fires toast.
-  useEffect(() => {
-    if (!allRows || allRows.length === 0) return;
-
-    // Record baseline statuses on initial data load without showing any toast
-    if (!isInitialSyncDone.current) {
-      allRows.forEach((row) => {
-        const id = String(row.appointmentId || row.referenceNumber || row.id || "");
-        if (id) {
-          previousStatuses.current.set(id, row.status);
-        }
-      });
-      isInitialSyncDone.current = true;
-      return;
-    }
-
-    // Subsequent updates: check for a live status transition to COMPLETED
-    const liveFinished = [];
-    allRows.forEach((row) => {
-      const id = String(row.appointmentId || row.referenceNumber || row.id || "");
-      if (!id) return;
-
-      const prevStatus = previousStatuses.current.get(id);
-
-      // Transition happened live from an active state to COMPLETED
-      if (prevStatus && prevStatus !== "COMPLETED" && row.status === "COMPLETED") {
-        liveFinished.push(row);
-        setBannerDismissed(false);
-        const deptName = row.departmentName || "Civil Registration Department";
-        toast.success("Service Completed Successfully", {
-          description: `Your service for "${row.serviceName || "appointment"}" has been marked as completed by ${deptName}.`,
-          duration: Infinity,
-          closeButton: true,
-        });
-      }
-
-      previousStatuses.current.set(id, row.status);
-    });
-
-    if (liveFinished.length > 0) {
-      setNewlyCompleted((prev) => [...prev, ...liveFinished]);
-    }
-  }, [allRows]);
-
   const completedRows = allRows.filter((r) => r.status === "COMPLETED");
   const servingRows = allRows.filter((r) => r.status === "SERVING");
 
@@ -315,7 +262,7 @@ export default function CitizenQueuePage() {
 
         return (
           <span className="font-semibold text-slate-800 text-xs">
-            {pos !== null && pos !== undefined ? `#${pos}` : "—"}
+            {pos !== null && pos !== undefined ? pos : "—"}
           </span>
         );
       },
@@ -372,41 +319,6 @@ export default function CitizenQueuePage() {
           </p>
         </div>
       </header>
-
-      {/* Completed Service Notification Banner (shown only when a service was completed live in this session) */}
-      {!bannerDismissed && newlyCompleted.length > 0 && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 shadow-xs flex items-center justify-between gap-4 animate-in fade-in duration-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-emerald-950">
-                Service Completed Successfully
-              </h3>
-              <p className="text-xs text-emerald-700 mt-0.5">
-                Your service for{" "}
-                <strong>
-                  {newlyCompleted.map((r) => r.serviceName).filter(Boolean).join(", ")}
-                </strong>{" "}
-                has been marked as completed by{" "}
-                <strong>
-                  {newlyCompleted[0]?.departmentName || "Civil Registration Department"}
-                </strong>.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setBannerDismissed(true)}
-            className="text-emerald-700 hover:text-emerald-900 p-1.5 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer shrink-0"
-            aria-label="Close notification"
-            title="Close notification"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       {/* Now Serving Live Alert Banner */}
       {servingRows.length > 0 && (

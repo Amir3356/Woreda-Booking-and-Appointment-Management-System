@@ -39,7 +39,7 @@ async function issueToken(a, officerId) {
   }
 }
 
-export function createQueueService({ events }) {
+export function createQueueService({ events, audit } = {}) {
   return {
     /** Verifies an APPROVED appointment at the desk and issues today's next queue token. */
     /** req: validated body (validations/queue.validation.js). */
@@ -178,6 +178,15 @@ export function createQueueService({ events }) {
         await appointments.markFinal(apptId, req.status, client);
         return apptId;
       });
+      if (audit && appointmentId) {
+        const a = await appointments.findById(appointmentId);
+        if (a) {
+          await audit.record(officer, req.status, a, {
+            fromStatus: "SERVING",
+            reason: req.status === "COMPLETED" ? "Service completed at counter" : "No-show at counter",
+          });
+        }
+      }
       events.publish(`appointment.${req.status.toLowerCase()}`, appointmentId, { queueTokenId: id });
       return { id, status: req.status };
     },

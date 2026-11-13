@@ -117,3 +117,82 @@
   margin-bottom: 1rem;
 }
 
+/* Civic Spatial Intelligence & Geography Dashboard Styles */
+.geo-hero-panel {
+  background: linear-gradient(135deg, #06182c 0%, #0b2545 55%, #133863 100%);
+  border-radius: var(--radius-2xl);
+  color: #ffffff;
+  padding: 1.75rem;
+  box-shadow: 0 10px 25px -5px rgba(11, 37, 69, 0.35);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.geo-hero-panel::after {
+  content: "";
+  position: absolute;
+  right: -30px;
+  top: -30px;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, rgba(255, 255, 255, 0) 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.geo-stat-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-2xl);
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease-in-out;
+}
+
+.geo-stat-card:hover {
+  box-shadow: 0 6px 16px -2px rgba(15, 23, 42, 0.08);
+  border-color: #cbd5e1;
+}
+
+.geo-card-elevated {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-2xl);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease-in-out;
+  overflow: hidden;
+}
+
+.geo-card-elevated:hover {
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+  border-color: #cbd5e1;
+}
+
+.geo-perspective-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.geo-perspective-btn.active {
+  background-color: #ffffff;
+  color: #0b2545;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.geo-perspective-btn:not(.active) {
+  color: #64748b;
+}
+
+.geo-perspective-btn:not(.active):hover {
+  color: #0f172a;
+}
+
+

@@ -5,12 +5,12 @@ import { newId } from "../utils/id.js";
 import { pagination } from "../utils/pagination.js";
 import * as auditLogs from "../repositories/auditLog.repository.js";
 
-export function createAuditService({ logger }) {
+export function createAuditService({ logger, events } = {}) {
   return {
     /** caller: req.caller; appointment: the appointment after the change (API shape). */
     async record(caller, action, appointment, { fromStatus = null, reason = null } = {}) {
       try {
-        await auditLogs.create({
+        const entry = await auditLogs.create({
           id: newId("aud"),
           action,
           fromStatus,
@@ -28,6 +28,7 @@ export function createAuditService({ logger }) {
           timeSlot: appointment.timeSlot ?? "",
           reason: reason || null,
         });
+        events?.publish("audit.created", entry?.id, entry);
       } catch (err) {
         logger.error({ action, appointmentId: appointment?.id, err: err.message }, "audit entry not saved");
       }

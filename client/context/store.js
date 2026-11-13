@@ -203,7 +203,7 @@ export const useStore = create(
           userRole: "CITIZEN",
           action: "CITIZEN_REGISTRATION",
           entity: newCitizen.phone,
-          details: `New citizen registered: ${newCitizen.fullName} (${newCitizen.woreda}, ${newCitizen.kebele})`,
+          details: `New citizen registered: ${newCitizen.fullName} (${newCitizen.phone})`,
         });
       },
 
@@ -799,35 +799,17 @@ export const useStore = create(
       },
       merge: (persistedState, currentState) => {
         const { currentUser: persistedUser, ...safePersisted } = persistedState || {};
-        
-        // Departments come from the API; an old browser copy (which may hold departments the
-        // server never had) is ignored.
+
+        // Departments come from the API; an old browser copy is ignored.
         delete safePersisted.departments;
         const currentDepartments = currentState.departments || [];
 
-        // Strip legacy pre-seeded mock officer accounts so Account Provision starts clean
-        const LEGACY_MOCK_OFFICER_EMAILS = new Set([
-          "tigist.kbl@woreda.gov.et",
-          "yared.lnd@woreda.gov.et",
-          "solomon.trd@woreda.gov.et",
-          "hana.tax@woreda.gov.et",
-          "mesfin.soc@woreda.gov.et",
-          "selam.health@woreda.gov.et",
-          "berhanu.audit@woreda.gov.et",
-        ]);
-
-        // Ensure provisioned accounts are populated, merging defaults with any admin edits
         const persistedProv = safePersisted.provisionedAccounts || [];
         const provMap = new Map();
 
-        // Overlay user-created and persisted provisioned accounts with robust password preservation
         persistedProv.forEach((a) => {
           const emailKey = (a.email || "").trim().toLowerCase();
           if (!emailKey) return;
-          // Filter out legacy pre-seeded mock officer accounts
-          if (LEGACY_MOCK_OFFICER_EMAILS.has(emailKey) && (!a.createdAt || a.createdAt === "2026-11-01T08:00:00Z")) {
-            return;
-          }
           const resolvedPassword = (a.password || "").trim() || "Password@123";
 
           provMap.set(emailKey, {
@@ -842,71 +824,9 @@ export const useStore = create(
           });
         });
 
-        // Also merge un-purgeable secondary backup storage if available in browser
-        if (typeof window !== "undefined" && window.localStorage) {
-          try {
-            const rawBackup = window.localStorage.getItem("woreda_provisioned_accounts");
-            if (rawBackup) {
-              const parsedBackup = JSON.parse(rawBackup);
-              if (Array.isArray(parsedBackup)) {
-                // Purge legacy mock accounts from backup storage
-                const sanitizedBackup = parsedBackup.filter((a) => {
-                  const emailKey = (a.email || "").trim().toLowerCase();
-                  return !(LEGACY_MOCK_OFFICER_EMAILS.has(emailKey) && (!a.createdAt || a.createdAt === "2026-11-01T08:00:00Z"));
-                });
-                window.localStorage.setItem("woreda_provisioned_accounts", JSON.stringify(sanitizedBackup));
-
-                sanitizedBackup.forEach((a) => {
-                  const emailKey = (a.email || "").trim().toLowerCase();
-                  if (!emailKey) return;
-                  const existing = provMap.get(emailKey) || {};
-                  const resolvedPassword =
-                    (a.password || "").trim() ||
-                    existing.password ||
-                    "Password@123";
-
-                  provMap.set(emailKey, {
-                    ...existing,
-                    ...a,
-                    fullName: (a.fullName || existing.fullName || "").trim(),
-                    phone: (a.phone || existing.phone || "").trim(),
-                    email: (a.email || existing.email || "").trim(),
-                    password: resolvedPassword,
-                    role: a.role || existing.role || "Department Officer",
-                    departmentId: a.departmentId || existing.departmentId || null,
-                    isProvisioned: true,
-                    isActive: a.isActive !== false,
-                  });
-                });
-              }
-            }
-          } catch {
-            // ignore
-          }
-        }
-
         const cleanedProvisioned = Array.from(provMap.values());
-
-        // Strip legacy mock queue
-        const LEGACY_MOCK_QUEUE_IDS = new Set(["q-1", "q-2"]);
-        const cleanedQueue = (safePersisted.queue || []).filter(
-          (q) => !LEGACY_MOCK_QUEUE_IDS.has(q.id)
-        );
-
-        // Strip legacy mock users, keeping provisioned users intact
-        const LEGACY_MOCK_USER_IDS = new Set([
-          "usr-officer-1",
-          "usr-officer-2",
-          "usr-officer-3",
-          "usr-citizen-1",
-          "usr-citizen-2",
-          "usr-citizen-3",
-        ]);
-        const cleanedUsers = (safePersisted.users || []).filter(
-          (u) =>
-            (!LEGACY_MOCK_USER_IDS.has(u.id) || u.isProvisioned) &&
-            !LEGACY_MOCK_OFFICER_EMAILS.has((u.email || "").trim().toLowerCase())
-        );
+        const cleanedQueue = safePersisted.queue || [];
+        const cleanedUsers = safePersisted.users || [];
 
         // Synchronize provisioned accounts into users so both stores stay aligned
         const usersByEmail = new Map(

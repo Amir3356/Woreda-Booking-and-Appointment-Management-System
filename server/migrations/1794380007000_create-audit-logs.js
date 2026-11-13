@@ -6,7 +6,7 @@ export const up = (pgm) => {
   pgm.createTable("audit_logs", {
     id: { type: "text", primaryKey: true },
     at: { type: "timestamptz", notNull: true, default: pgm.func("now()") },
-    action: { type: "text", notNull: true, check: "action IN ('BOOKED', 'APPROVED', 'REJECTED', 'CANCELLED', 'RESCHEDULED')" },
+    action: { type: "text", notNull: true, check: "action IN ('BOOKED', 'APPROVED', 'REJECTED', 'CANCELLED', 'RESCHEDULED', 'COMPLETED')" },
     from_status: { type: "text" },
     to_status: { type: "text", notNull: true },
     actor_id: { type: "text" },

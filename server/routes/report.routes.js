@@ -10,6 +10,7 @@ export function createReportRoutes(c) {
   const canReadReport = checkAbility(Actions.READ, Subjects.REPORT);
   const canExportReport = checkAbility(Actions.EXPORT, Subjects.REPORT);
   router.get("/summary", canReadReport, validate({ query: summaryQuery }), c.summary);
+  router.get("/geographical", canReadReport, c.geographical);
   router.get("/export-csv", canExportReport, validate({ query: registryQuery }), c.exportCsv);
   return router;
 }

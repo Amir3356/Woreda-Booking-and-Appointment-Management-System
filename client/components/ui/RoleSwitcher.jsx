@@ -18,15 +18,10 @@ export default function RoleSwitcher() {
   let activeUser = currentUser;
   if (isAdmin && (!currentUser || currentUser?.role !== "ADMIN")) {
     activeUser = {
-      fullName: currentUser?.role === "ADMIN" ? currentUser.fullName : "Amir Siraj",
-      phone: currentUser?.role === "ADMIN" ? (currentUser.phone || "+251911223344") : "+251911223344",
+      fullName: "Amir Siraj",
+      phone: "+251938617803",
+      email: "amirsiraj1995@gmail.com",
       role: "ADMIN",
-    };
-  } else if (isOfficer && (!currentUser || currentUser?.role !== "OFFICER")) {
-    activeUser = {
-      fullName: currentUser?.role === "OFFICER" ? currentUser.fullName : "W/ro Tigist Mulugeta",
-      phone: currentUser?.role === "OFFICER" ? (currentUser.phone || "+251911334455") : "+251911334455",
-      role: "OFFICER",
     };
   }
 
@@ -101,7 +96,7 @@ export default function RoleSwitcher() {
                   <span>
                     {activeUser?.phone ||
                       currentUser?.phone ||
-                      (activeUser?.role === "ADMIN" ? "+251911223344" : "+251911334455")}
+                      (activeUser?.role === "ADMIN" ? "+251938617803" : "")}
                   </span>
                 </p>
               </div>

@@ -27,6 +27,7 @@ export const staffApi = {
 
 export const reportApi = {
   summary: (params) => http.get("/reports/summary", params),
+  geographical: () => http.get("/reports/geographical"),
   /** Returns the raw Response so the caller can read it as a CSV blob. */
   exportCsv: (params) => request("GET", "/reports/export-csv", { params, raw: true }),
 };

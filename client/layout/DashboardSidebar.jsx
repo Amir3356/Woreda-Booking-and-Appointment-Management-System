@@ -13,8 +13,6 @@ import {
   ShieldCheck,
   User,
   LogOut,
-  BarChart3,
-  LayoutDashboard,
 } from "lucide-react";
 import { useStore } from "@/context";
 import { EthiopianFlag } from "@/components/ui";
@@ -34,12 +32,6 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   const sectionsByRole = {
     ADMIN: [
       {
-        label: "Overview",
-        items: [
-          { href: "/admin", label: "Geography Analysis", icon: LayoutDashboard },
-        ],
-      },
-      {
         label: "Accounts",
         items: [
           { href: "/admin/account-provision", label: "Account Provision", icon: UserCog },
@@ -55,14 +47,8 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
         ],
       },
       {
-        label: "Reports & Analytics",
-        items: [
-          { href: "/admin/reports", label: "Reports & Analytics", icon: BarChart3 },
-        ],
-      },
-      {
         label: "Audit",
-        items: [{ href: "/admin/audit", label: "Audit Trail", icon: ShieldCheck }],
+        items: [{ href: "/admin/audit", label: "Audit Logs", icon: ShieldCheck }],
       },
     ],
     OFFICER: [

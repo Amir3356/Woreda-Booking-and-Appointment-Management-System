@@ -1,13 +1,13 @@
 // Officer > Queue: the department's live desk queue.
 // Real-time citizen token dispatch, calling system, and counter queue progression.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useStore } from "@/context";
 import { queueApi } from "@/api";
 import { subscribe } from "@/api/realtime";
 import { describeError, displayTime, formatDate } from "@/utils";
 import { DataTable } from "@/components/ui";
-import { Check, Clock } from "lucide-react";
+import { Check, Clock, Search, Briefcase, Filter, X } from "lucide-react";
 
 function parseTimeToMinutes(val) {
   if (!val) return 0;
@@ -30,11 +30,24 @@ export default function OfficerQueuePage() {
   const appointments = useStore((s) => s.appointments);
   const loadAppointments = useStore((s) => s.loadAppointments);
   const updateAppointmentStatus = useStore((s) => s.updateAppointmentStatus);
+  const services = useStore((s) => s.services);
+  const loadServices = useStore((s) => s.loadServices);
 
   const counterNumber = currentUser?.counterNumber || 1;
 
   const [board, setBoard] = useState({ nowServing: null, waitingList: [] });
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selectedService, setSelectedService] = useState("ALL");
+  const [selectedStatus, setSelectedStatus] = useState("ALL");
+
+  useEffect(() => {
+    loadServices?.().catch(() => {});
+    const offCatalog = subscribe("catalog.changed", () => {
+      loadServices?.().catch(() => {});
+    });
+    return () => offCatalog();
+  }, [loadServices]);
 
   const loadBoard = useCallback(async () => {
     try {
@@ -96,6 +109,7 @@ export default function OfficerQueuePage() {
       appointmentId: matchingApt?.id || item.appointmentId || item.id,
       tokenNumber: item.tokenNumber,
       citizenName: item.citizenName || matchingApt?.citizenName || "—",
+      serviceId: matchingApt?.serviceId || item.serviceId || null,
       serviceName: item.serviceName || matchingApt?.serviceName || "—",
       counterNumber: item.counterNumber || counterNumber,
       date: matchingApt?.date || item.appointmentDate || new Date().toISOString().split("T")[0],
@@ -126,6 +140,7 @@ export default function OfficerQueuePage() {
       appointmentId: matchingApt?.id || item.appointmentId || item.id,
       tokenNumber: item.tokenNumber,
       citizenName: item.citizenName || matchingApt?.citizenName || "—",
+      serviceId: matchingApt?.serviceId || item.serviceId || null,
       serviceName: item.serviceName || matchingApt?.serviceName || "—",
       counterNumber: null,
       date: matchingApt?.date || item.appointmentDate || new Date().toISOString().split("T")[0],
@@ -155,6 +170,7 @@ export default function OfficerQueuePage() {
       appointmentId: apt.id,
       tokenNumber: apt.tokenNumber || (apt.referenceNumber ? `WRD-${apt.referenceNumber.slice(-4)}` : "—"),
       citizenName: apt.citizenName || "—",
+      serviceId: apt.serviceId || null,
       serviceName: apt.serviceName || apt.service || "—",
       counterNumber: counterNumber,
       date: apt.date || new Date().toISOString().split("T")[0],
@@ -222,6 +238,60 @@ export default function OfficerQueuePage() {
     };
   });
 
+  const allServices = services || [];
+  const assignedServices = useMemo(() => {
+    const deptList = allServices.filter(
+      (s) => Boolean(currentUser?.departmentId) && s.departmentId === currentUser.departmentId
+    );
+    const map = new Map();
+    deptList.forEach((s) => {
+      if (s.name) map.set(s.name.toLowerCase(), { id: s.id, name: s.name });
+    });
+    allRows.forEach((r) => {
+      if (r.serviceName && r.serviceName !== "—" && !map.has(r.serviceName.toLowerCase())) {
+        map.set(r.serviceName.toLowerCase(), { id: r.serviceId || r.serviceName, name: r.serviceName });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [allServices, currentUser?.departmentId, allRows]);
+
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allRows.filter((row) => {
+      if (selectedService !== "ALL") {
+        const matchesService =
+          row.serviceId === selectedService ||
+          row.serviceName?.toLowerCase() === selectedService.toLowerCase();
+        if (!matchesService) return false;
+      }
+
+      if (selectedStatus !== "ALL") {
+        if (row.status !== selectedStatus) return false;
+      }
+
+      if (q) {
+        const citizen = (row.citizenName || "").toLowerCase();
+        const service = (row.serviceName || "").toLowerCase();
+        const token = String(row.tokenNumber || "").toLowerCase();
+        const pos = String(row.position != null ? row.position : "").toLowerCase();
+        const date = (row.date || "").toLowerCase();
+        const time = (row.timeSlot || "").toLowerCase();
+        const status = (row.status || "").toLowerCase();
+        const matchesQuery =
+          citizen.includes(q) ||
+          service.includes(q) ||
+          token.includes(q) ||
+          pos.includes(q) ||
+          date.includes(q) ||
+          time.includes(q) ||
+          status.includes(q);
+        if (!matchesQuery) return false;
+      }
+
+      return true;
+    });
+  }, [allRows, selectedService, selectedStatus, search]);
+
   const handleFinalize = async (row, status = "COMPLETED") => {
     if (busy) return;
     setBusy(true);
@@ -265,7 +335,7 @@ export default function OfficerQueuePage() {
         }
         return (
           <span className="font-semibold text-slate-800 text-xs">
-            {row.original.position != null ? `#${row.original.position}` : "—"}
+            {row.original.position != null ? row.original.position : "—"}
           </span>
         );
       },
@@ -447,18 +517,95 @@ export default function OfficerQueuePage() {
         </p>
       </div>
 
+      {/* Search and Dropdown Filter Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        {/* Search input */}
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search queue by citizen, service, token, time..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-1 cursor-pointer"
+              title="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Dropdown Filters */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Public Services Dropdown Filter */}
+          <div className="flex items-center gap-1.5">
+            <Briefcase className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={selectedService}
+              onChange={(e) => setSelectedService(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 shadow-2xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer max-w-[200px] truncate"
+            >
+              <option value="ALL">All Services</option>
+              {assignedServices.map((s) => (
+                <option key={s.id || s.name} value={s.id || s.name}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Dropdown Filter */}
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-2xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="WAITING">Waiting</option>
+              <option value="COMPLETED">Completed</option>
+            </select>
+          </div>
+
+          {/* Reset Filters button */}
+          {(search || selectedService !== "ALL" || selectedStatus !== "ALL") && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setSelectedService("ALL");
+                setSelectedStatus("ALL");
+              }}
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer font-medium"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Reset</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Queue Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <DataTable
           columns={queueColumns}
-          data={allRows}
+          data={filteredRows}
           getRowId={(row) => String(row.id)}
           itemLabel="citizens in queue"
           pageSize={10}
           minWidth="1020px"
           emptyState={
             <div className="text-slate-400 py-8 text-center text-xs">
-              No citizens currently in queue for this department.
+              {search || selectedService !== "ALL" || selectedStatus !== "ALL"
+                ? "No citizens match the selected search or filter criteria."
+                : "No citizens currently in queue for this department."}
             </div>
           }
         />

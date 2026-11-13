@@ -4,18 +4,16 @@ import { useStore } from "@/context";
 import { DataTable } from "@/components/ui";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatDate } from "@/utils";
+import { subscribe, isLive } from "@/api/realtime";
 import {
   AlertCircle,
   Check,
   X,
   Clock,
   Briefcase,
-  Layers,
-  CheckCircle2,
-  Clock4,
   FileText,
   Filter,
-  Building2,
+  Search,
   ChevronRight,
 } from "lucide-react";
 
@@ -25,16 +23,38 @@ export default function OfficerAppointmentsPage() {
     appointments,
     services,
     loadServices,
+    loadDepartments,
     updateAppointmentStatus,
   } = useStore();
 
   useEffect(() => {
-    loadServices?.().catch(() => {});
-  }, [loadServices]);
+    let timer = null;
+    const refreshCatalog = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        loadServices?.().catch(() => {});
+        loadDepartments?.().catch(() => {});
+      }, 150);
+    };
+
+    // Initial load
+    refreshCatalog();
+
+    // Live catalog change updates without refreshing the page
+    const offCatalog = subscribe("catalog.changed", refreshCatalog);
+    const offReconnect = subscribe("reconnected", refreshCatalog);
+
+    return () => {
+      clearTimeout(timer);
+      offCatalog();
+      offReconnect();
+    };
+  }, [loadServices, loadDepartments]);
 
   const [busyId, setBusyId] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [search, setSearch] = useState("");
   const [selectedServiceFilter, setSelectedServiceFilter] = useState("ALL");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("ALL");
 
@@ -87,6 +107,18 @@ export default function OfficerAppointmentsPage() {
     );
   }, [services, currentUser?.departmentId]);
 
+  // Reset selected service filter if the selected service was removed/unassigned
+  useEffect(() => {
+    if (selectedServiceFilter !== "ALL" && assignedServices.length > 0) {
+      const stillAssigned = assignedServices.some(
+        (s) => s.id === selectedServiceFilter || s.name === selectedServiceFilter
+      );
+      if (!stillAssigned) {
+        setSelectedServiceFilter("ALL");
+      }
+    }
+  }, [assignedServices, selectedServiceFilter]);
+
   // 2. Strict department scoping for appointments (RBAC Scoped)
   const effectiveAppointments = appointments || [];
   const deptAppointments = useMemo(() => {
@@ -95,28 +127,7 @@ export default function OfficerAppointmentsPage() {
     );
   }, [effectiveAppointments, currentUser?.departmentId]);
 
-  // 3. Count bookings per assigned service
-  const serviceBookingCounts = useMemo(() => {
-    const map = new Map();
-    deptAppointments.forEach((a) => {
-      if (a.serviceId) map.set(a.serviceId, (map.get(a.serviceId) || 0) + 1);
-      if (a.serviceName) map.set(a.serviceName, (map.get(a.serviceName) || 0) + 1);
-    });
-    return map;
-  }, [deptAppointments]);
-
-  // 4. Summary metrics
-  const totalBookings = deptAppointments.length;
-  const pendingCount = deptAppointments.filter((a) => a.status === "PENDING").length;
-  const approvedCount = deptAppointments.filter((a) =>
-    ["APPROVED", "CHECKED_IN", "IN_PROGRESS"].includes(a.status)
-  ).length;
-  const completedCount = deptAppointments.filter((a) => a.status === "COMPLETED").length;
-  const rejectedCount = deptAppointments.filter((a) =>
-    ["REJECTED", "CANCELLED"].includes(a.status)
-  ).length;
-
-  // 5. Sort newest first
+  // 3. Sort newest first
   const sortedAppointments = useMemo(() => {
     return [...deptAppointments].sort((a, b) => {
       const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -126,8 +137,9 @@ export default function OfficerAppointmentsPage() {
     });
   }, [deptAppointments]);
 
-  // 6. Filter by service and status
+  // 6. Filter by service, status, and search query
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return sortedAppointments.filter((apt) => {
       if (selectedServiceFilter !== "ALL") {
         const matches =
@@ -136,20 +148,39 @@ export default function OfficerAppointmentsPage() {
         if (!matches) return false;
       }
       if (selectedStatusFilter === "PENDING") {
-        return apt.status === "PENDING";
+        if (apt.status !== "PENDING") return false;
+      } else if (selectedStatusFilter === "APPROVED") {
+        if (!["APPROVED", "CHECKED_IN", "IN_PROGRESS"].includes(apt.status)) return false;
+      } else if (selectedStatusFilter === "COMPLETED") {
+        if (apt.status !== "COMPLETED") return false;
+      } else if (selectedStatusFilter === "REJECTED") {
+        if (!["REJECTED", "CANCELLED"].includes(apt.status)) return false;
       }
-      if (selectedStatusFilter === "APPROVED") {
-        return ["APPROVED", "CHECKED_IN", "IN_PROGRESS"].includes(apt.status);
+
+      if (q) {
+        const citizen = (apt.citizenName || "").toLowerCase();
+        const phone = (apt.citizenPhone || "").toLowerCase();
+        const service = (apt.serviceName || "").toLowerCase();
+        const ref = (apt.referenceNumber || "").toLowerCase();
+        const date = (apt.date || "").toLowerCase();
+        const time = (apt.timeSlot || "").toLowerCase();
+        const notes = (apt.citizenNotes || apt.notes || "").toLowerCase();
+        const status = (apt.status || "").toLowerCase();
+        const matchesQuery =
+          citizen.includes(q) ||
+          phone.includes(q) ||
+          service.includes(q) ||
+          ref.includes(q) ||
+          date.includes(q) ||
+          time.includes(q) ||
+          notes.includes(q) ||
+          status.includes(q);
+        if (!matchesQuery) return false;
       }
-      if (selectedStatusFilter === "COMPLETED") {
-        return apt.status === "COMPLETED";
-      }
-      if (selectedStatusFilter === "REJECTED") {
-        return ["REJECTED", "CANCELLED"].includes(apt.status);
-      }
+
       return true;
     });
-  }, [sortedAppointments, selectedServiceFilter, selectedStatusFilter]);
+  }, [sortedAppointments, selectedServiceFilter, selectedStatusFilter, search]);
 
   // Appointment table columns
   const appointmentColumns = [
@@ -318,247 +349,86 @@ export default function OfficerAppointmentsPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* 1. Department Header Banner */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start sm:items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center font-bold shrink-0">
-              <Building2 className="w-6 h-6 text-blue-700" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg font-bold text-slate-900 leading-tight">
-                  {currentUser?.departmentName || "Municipal Department"}
-                </h2>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
-                  Department Head Portal
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Logged in as <strong className="text-slate-700">{currentUser?.fullName || "Department Officer"}</strong>
-                {currentUser?.phone ? ` (${currentUser.phone})` : ""} · Counter Desk #{currentUser?.counterNumber || 1}
-              </p>
-            </div>
-          </div>
-          <div className="text-xs font-medium text-slate-500 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 self-start sm:self-center">
-            Role: <span className="font-bold text-slate-800">Department Head (RBAC)</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Assigned Services Section (View Assigned Services by Admin) */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-          <div>
-            <div className="flex items-center gap-2">
-              <Briefcase className="w-4 h-4 text-blue-600" />
-              <h3 className="text-sm font-bold text-slate-900">
-                Assigned Services ({assignedServices.length})
-              </h3>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Public services assigned to your department by Central Administration. Citizens book these services to be served at your desk.
-            </p>
-          </div>
-          <span className="text-[11px] text-slate-400 font-medium shrink-0">
-            {assignedServices.length === 1 ? "1 service assigned" : `${assignedServices.length} services assigned`}
-          </span>
-        </div>
-
-        {assignedServices.length === 0 ? (
-          <div className="py-6 text-center text-slate-400">
-            <AlertCircle className="w-7 h-7 mx-auto mb-1.5 text-slate-300" />
-            <p className="text-xs font-semibold text-slate-700">No Services Assigned Yet</p>
-            <p className="text-[11px] text-slate-400 mt-0.5 max-w-md mx-auto">
-              Central Administration has not yet mapped public services to this department. Once assigned in Department Management, they will automatically appear here.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-3.5">
-            {assignedServices.map((srv) => {
-              const bookingsCount = serviceBookingCounts.get(srv.id) || serviceBookingCounts.get(srv.name) || 0;
-              const isSelected = selectedServiceFilter === srv.id || selectedServiceFilter === srv.name;
-              return (
-                <button
-                  key={srv.id}
-                  type="button"
-                  onClick={() => setSelectedServiceFilter(isSelected ? "ALL" : srv.id)}
-                  className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer ${
-                    isSelected
-                      ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500"
-                      : "border-slate-200 bg-slate-50/70 hover:bg-slate-100/70 hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-bold text-xs text-slate-900 line-clamp-1">{srv.name}</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-1" title="Service Active" />
-                  </div>
-                  {srv.description && (
-                    <p className="text-[10px] text-slate-500 line-clamp-1 mt-1">{srv.description}</p>
-                  )}
-                  <div className="flex items-center justify-between text-[11px] mt-2.5 pt-2 border-t border-slate-200/60">
-                    <span className="text-slate-500">Citizen Bookings</span>
-                    <span className="font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full text-[10px]">
-                      {bookingsCount} {bookingsCount === 1 ? "booking" : "bookings"}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* 3. Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-            <span>Assigned Services</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Layers className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-black text-slate-900 mt-2">{assignedServices.length}</div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Assigned by Admin</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-            <span>Pending Review</span>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-              pendingCount > 0 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"
-            }`}>
-              <Clock4 className="w-4 h-4" />
-            </div>
-          </div>
-          <div className={`text-2xl font-black mt-2 ${pendingCount > 0 ? "text-amber-600" : "text-slate-900"}`}>
-            {pendingCount}
-          </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Awaiting decision</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-            <span>Approved / Active</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-black text-slate-900 mt-2">{approvedCount}</div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Scheduled for service</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-            <span>Completed</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Check className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-black text-emerald-700 mt-2">{completedCount}</div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Citizens served</p>
-        </div>
-      </div>
-
-      {/* 4. Filter Controls (Service filter & Status filter) */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
-        {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => setSelectedStatusFilter("ALL")}
-            className={`px-3 py-1.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap ${
-              selectedStatusFilter === "ALL"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            All Requests ({totalBookings})
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedStatusFilter("PENDING")}
-            className={`px-3 py-1.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap ${
-              selectedStatusFilter === "PENDING"
-                ? "bg-amber-600 text-white border-amber-600"
-                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            Pending Approval ({pendingCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedStatusFilter("APPROVED")}
-            className={`px-3 py-1.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap ${
-              selectedStatusFilter === "APPROVED"
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            Approved ({approvedCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedStatusFilter("COMPLETED")}
-            className={`px-3 py-1.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap ${
-              selectedStatusFilter === "COMPLETED"
-                ? "bg-emerald-600 text-white border-emerald-600"
-                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            Completed ({completedCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedStatusFilter("REJECTED")}
-            className={`px-3 py-1.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap ${
-              selectedStatusFilter === "REJECTED"
-                ? "bg-rose-600 text-white border-rose-600"
-                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            Rejected ({rejectedCount})
-          </button>
-        </div>
-
-        {/* Assigned Service Chips for Quick Scope Filtering */}
-        {assignedServices.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pt-2 border-t border-slate-100 text-xs">
-            <span className="text-slate-400 font-semibold text-[11px] shrink-0 mr-1 flex items-center gap-1">
-              <Filter className="w-3 h-3 text-slate-400" />
-              Service:
-            </span>
+      {/* Search & Dropdown Filters Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        {/* Search Input Box */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search citizen, phone, service, date, ref..."
+            className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
+          />
+          {search && (
             <button
               type="button"
-              onClick={() => setSelectedServiceFilter("ALL")}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer whitespace-nowrap ${
-                selectedServiceFilter === "ALL"
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200"
-              }`}
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-1 cursor-pointer"
+              title="Clear search"
             >
-              All Services ({totalBookings})
+              <X className="w-3.5 h-3.5" />
             </button>
-            {assignedServices.map((srv) => {
-              const count = serviceBookingCounts.get(srv.id) || serviceBookingCounts.get(srv.name) || 0;
-              const isSelected = selectedServiceFilter === srv.id || selectedServiceFilter === srv.name;
-              return (
-                <button
-                  key={srv.id}
-                  type="button"
-                  onClick={() => setSelectedServiceFilter(srv.id)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer whitespace-nowrap ${
-                    isSelected
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200"
-                  }`}
-                >
-                  {srv.name} ({count})
-                </button>
-              );
-            })}
+          )}
+        </div>
+
+        {/* Dropdown Filters */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Public Services Dropdown Filter */}
+          <div className="flex items-center gap-1.5">
+            <Briefcase className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={selectedServiceFilter}
+              onChange={(e) => setSelectedServiceFilter(e.target.value)}
+              onFocus={() => {
+                if (!isLive()) {
+                  loadServices?.().catch(() => {});
+                  loadDepartments?.().catch(() => {});
+                }
+              }}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 shadow-2xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer max-w-[200px] truncate"
+            >
+              <option value="ALL">All Services</option>
+              {assignedServices.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
+
+          {/* Status Dropdown Filter */}
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={selectedStatusFilter}
+              onChange={(e) => setSelectedStatusFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-2xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Reject</option>
+            </select>
+          </div>
+
+          {/* Reset Filters button */}
+          {(search || selectedServiceFilter !== "ALL" || selectedStatusFilter !== "ALL") && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setSelectedServiceFilter("ALL");
+                setSelectedStatusFilter("ALL");
+              }}
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer font-medium"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Reset</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 5. Citizen Appointments Table */}
@@ -574,8 +444,8 @@ export default function OfficerAppointmentsPage() {
               <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="font-semibold text-slate-700">No appointments found</p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                {selectedServiceFilter !== "ALL" || selectedStatusFilter !== "ALL"
-                  ? "No citizen appointments match the selected service or status filters."
+                {search || selectedServiceFilter !== "ALL" || selectedStatusFilter !== "ALL"
+                  ? "No citizen appointments match the selected search or filter criteria."
                   : "No citizen appointments booked for your department's services yet."}
               </p>
             </div>

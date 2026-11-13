@@ -14,16 +14,17 @@ import { Search, Filter, ShieldCheck } from "lucide-react";
 const ACTION_STYLE = {
   BOOKED: { label: "Pending", cls: "bg-amber-50 text-amber-800 border-amber-200", dot: "bg-amber-500" },
   APPROVED: { label: "Approved", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-  REJECTED: { label: "Rejected", cls: "bg-rose-50 text-rose-700 border-rose-200", dot: "bg-rose-500" },
+  REJECTED: { label: "Reject", cls: "bg-rose-50 text-rose-700 border-rose-200", dot: "bg-rose-500" },
+  COMPLETED: { label: "Complete Services", cls: "bg-teal-50 text-teal-700 border-teal-200", dot: "bg-teal-500" },
   CANCELLED: { label: "Cancelled", cls: "bg-slate-100 text-slate-700 border-slate-300", dot: "bg-slate-500" },
   RESCHEDULED: { label: "Rescheduled", cls: "bg-blue-50 text-blue-700 border-blue-200", dot: "bg-blue-500" },
 };
 
-// Action filter: only the three review states. "Pending" = a citizen's new booking waiting for review.
+// Action filter: only Approved, Reject, and Complete Services.
 const ACTION_FILTERS = [
-  { value: "BOOKED", label: "Pending" },
   { value: "APPROVED", label: "Approved" },
-  { value: "REJECTED", label: "Rejected" },
+  { value: "REJECTED", label: "Reject" },
+  { value: "COMPLETED", label: "Complete Services" },
 ];
 
 const ROLE_LABEL = { OFFICER: "Department Officer", CITIZEN: "Citizen", ADMIN: "Administrator" };
@@ -67,23 +68,45 @@ export default function AdminAuditPage() {
     }
   }, [page, action, departmentId, search]);
 
-  // Load now (search is debounced) and again whenever an appointment changes anywhere.
+  // Live real-time updates without refreshing the page
   useEffect(() => {
-    const t = setTimeout(load, 250);
-    let refresh = null;
-    const soon = () => {
-      clearTimeout(refresh);
-      refresh = setTimeout(load, 300);
+    load();
+
+    const handleRealtimeNotice = (msg) => {
+      if (page === 1 && msg?.auditEntry) {
+        const e = msg.auditEntry;
+        const matchesAction = action === "ALL" || e.action === action;
+        const matchesDept = departmentId === "ALL" || e.departmentId === departmentId;
+        const q = search.trim().toLowerCase();
+        const matchesSearch =
+          !q ||
+          (e.citizenName || "").toLowerCase().includes(q) ||
+          (e.serviceName || "").toLowerCase().includes(q);
+
+        if (matchesAction && matchesDept && matchesSearch) {
+          setEntries((prev) => {
+            const exists = prev.some((item) => item.id === e.id);
+            if (exists) return prev;
+            return [e, ...prev].slice(0, PAGE_SIZE);
+          });
+          setTotal((prev) => prev + 1);
+        }
+      }
+      load();
     };
-    const offChange = subscribe("appointments.changed", soon);
-    const offReconnect = subscribe("reconnected", soon);
+
+    const offAudit = subscribe("audit.changed", handleRealtimeNotice);
+    const offAppt = subscribe("appointments.changed", () => load());
+    const offReconnect = subscribe("reconnected", () => load());
+    const interval = setInterval(load, 3000); // 3s polling fallback ensures live sync
+
     return () => {
-      clearTimeout(t);
-      clearTimeout(refresh);
-      offChange();
+      offAudit();
+      offAppt();
       offReconnect();
+      clearInterval(interval);
     };
-  }, [load]);
+  }, [load, page, action, departmentId, search]);
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const resetPage = (fn) => (value) => {
@@ -91,128 +114,99 @@ export default function AdminAuditPage() {
     fn(value);
   };
 
-  // Audit table columns (TanStack Table via components/ui/DataTable). Sorting is off: the server
-  // returns one page at a time, newest first, so re-sorting a single page would mislead.
+  // Audit table columns: Citizen Name, Services, Appointment Date, Appointment Time, Action
   const auditColumns = [
     {
-      id: "at",
-      header: "Date & Time",
+      id: "citizenName",
+      accessorKey: "citizenName",
+      header: "Citizen Name",
       enableSorting: false,
-      meta: { className: "whitespace-nowrap" },
-      cell: ({ row }) => {
-        const when = formatWhen(row.original.at);
-        return (
-          <>
-            <div className="font-semibold text-slate-900">{when.date}</div>
-            <span className="text-[11px] text-slate-500">{when.time}</span>
-          </>
-        );
-      },
-    },
-    {
-      id: "actor",
-      header: "Performed By",
-      enableSorting: false,
+      meta: { className: "font-semibold text-slate-900" },
       cell: ({ row }) => (
-        <>
-          <div className="font-bold text-slate-900">{row.original.actorName || "Unknown"}</div>
-          <span className="text-[10px] text-slate-500">{ROLE_LABEL[row.original.actorRole] || row.original.actorRole}</span>
-        </>
+        <span className="font-semibold text-slate-900">
+          {row.original.citizenName || "—"}
+        </span>
       ),
     },
     {
-      id: "department",
-      header: "Department",
+      id: "services",
+      accessorKey: "serviceName",
+      header: "Services",
       enableSorting: false,
       meta: { className: "text-slate-700" },
-      cell: ({ row }) => row.original.departmentName || "—",
+      cell: ({ row }) => (
+        <span className="font-medium text-slate-800">
+          {row.original.serviceName || "—"}
+        </span>
+      ),
+    },
+    {
+      id: "appointmentDate",
+      accessorKey: "appointmentDate",
+      header: "Appointment Date",
+      enableSorting: false,
+      meta: { className: "whitespace-nowrap text-slate-700" },
+      cell: ({ row }) => (
+        <span className="text-slate-700 font-medium">
+          {displayDate(row.original.appointmentDate) || row.original.appointmentDate || "—"}
+        </span>
+      ),
+    },
+    {
+      id: "appointmentTime",
+      accessorKey: "timeSlot",
+      header: "Appointment Time",
+      enableSorting: false,
+      meta: { className: "whitespace-nowrap font-medium text-slate-600" },
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-slate-600">
+          {displayTime(row.original.timeSlot) || row.original.timeSlot || "—"}
+        </span>
+      ),
     },
     {
       id: "action",
+      accessorKey: "action",
       header: "Action",
       enableSorting: false,
       cell: ({ row }) => {
         const e = row.original;
-        const style = ACTION_STYLE[e.action] || { label: e.action, cls: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400" };
+        const style = ACTION_STYLE[e.action] || {
+          label: e.action,
+          cls: "bg-slate-100 text-slate-700 border-slate-200",
+          dot: "bg-slate-400",
+        };
         return (
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap ${style.cls}`}>
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap ${style.cls}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
             {style.label}
           </span>
         );
       },
     },
-    {
-      id: "statusChange",
-      header: "Status Change",
-      enableSorting: false,
-      meta: { className: "whitespace-nowrap text-slate-600" },
-      cell: ({ row }) => {
-        const e = row.original;
-        return (
-          <>
-            {e.fromStatus ? `${STATUS_LABEL[e.fromStatus] || e.fromStatus} → ` : "New → "}
-            <span className="font-semibold text-slate-900">{STATUS_LABEL[e.toStatus] || e.toStatus}</span>
-          </>
-        );
-      },
-    },
-    {
-      id: "appointment",
-      header: "Appointment",
-      enableSorting: false,
-      meta: { className: "whitespace-nowrap" },
-      cell: ({ row }) => {
-        const e = row.original;
-        return (
-          <>
-            <div className="font-mono font-semibold text-blue-900 text-[11px]">{e.referenceNumber}</div>
-            <span className="text-[10px] text-slate-500">
-              {displayDate(e.appointmentDate)} · {displayTime(e.timeSlot)}
-            </span>
-          </>
-        );
-      },
-    },
-    {
-      id: "citizen",
-      header: "Citizen",
-      enableSorting: false,
-      meta: { className: "text-slate-800" },
-      cell: ({ row }) => row.original.citizenName,
-    },
-    {
-      id: "service",
-      header: "Service",
-      enableSorting: false,
-      meta: { className: "text-slate-700" },
-      cell: ({ row }) => row.original.serviceName,
-    },
-    {
-      id: "reason",
-      header: "Reason / Notes",
-      enableSorting: false,
-      meta: { className: "text-slate-600" },
-      cell: ({ row }) =>
-        row.original.reason ? (
-          <p className="max-w-[220px] break-words line-clamp-3 text-[11px]" title={row.original.reason}>
-            {row.original.reason}
-          </p>
-        ) : (
-          <span className="text-[11px] text-slate-400">—</span>
-        ),
-    },
   ];
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="text-center">
-        <h2 className="text-xl font-bold text-slate-900">Audit Trail</h2>
-        <p className="text-xs text-slate-500 mt-1">
-          Every appointment decision with who made it and when: approvals and rejections by department
-          officers, bookings and cancellations by citizens.
-        </p>
+      <div className="relative flex items-center w-full min-h-[48px]">
+        <div className="w-full text-center">
+          <h1 className="text-lg font-extrabold text-slate-800 tracking-tight">
+            Audit Logs
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Every appointment decision: approvals, rejections, and completed services from the desk queue
+          </p>
+        </div>
+        <div className="absolute right-0 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span>WebSocket Live</span>
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
@@ -223,7 +217,7 @@ export default function AdminAuditPage() {
             type="text"
             value={search}
             onChange={(e) => resetPage(setSearch)(e.target.value)}
-            placeholder="Search officer, citizen, reference, service..."
+            placeholder="Search by citizen name, service..."
             className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
           />
         </div>
@@ -266,13 +260,13 @@ export default function AdminAuditPage() {
           columns={auditColumns}
           getRowId={(e) => e.id}
           pageSize={null}
-          minWidth="1100px"
+          minWidth="750px"
           emptyState={
             <div className="text-slate-400">
               <ShieldCheck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="font-semibold text-slate-700">{loading ? "Loading…" : "No audit entries yet"}</p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Approvals, rejections, bookings and cancellations will be recorded here as they happen.
+                Approved, reject, and complete service decisions will be recorded here as they happen.
               </p>
             </div>
           }

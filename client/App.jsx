@@ -49,6 +49,12 @@ export default function App() {
   const loadDepartments = useStore((state) => state.loadDepartments);
   useEffect(() => {
     loadDepartments().catch(() => {});
+    const offCatalog = subscribe("catalog.changed", () => loadDepartments().catch(() => {}));
+    const offReconnect = subscribe("reconnected", () => loadDepartments().catch(() => {}));
+    return () => {
+      offCatalog();
+      offReconnect();
+    };
   }, [loadDepartments]);
 
   // A session restored from the token only knows the officer's department id: show its real
@@ -117,7 +123,7 @@ export default function App() {
 
       {/* Admin Portal */}
       <Route path="/admin" element={<AdminLayout />}>
-        <Route index element={<AdminDashboardPage />} />
+        <Route index element={<Navigate to="account-provision" replace />} />
         <Route path="appointments" element={<AdminAppointmentsPage />} />
         <Route path="departments" element={<AdminDepartmentsPage />} />
         <Route path="services" element={<AdminServicesPage />} />

@@ -47,7 +47,7 @@ export function createApp() {
   const realtimeService = createRealtimeService({ allowedOrigins, logger });
   const events = createEventService({ realtimeService, logger });
   const authService = createAuthService({ jwtSecret: config.jwtSecret, logger, events });
-  const auditService = createAuditService({ logger });
+  const auditService = createAuditService({ logger, events });
   const appointmentService = createAppointmentService({ events, audit: auditService });
 
   // Controllers
@@ -65,7 +65,7 @@ export function createApp() {
       scheduleManagementService: createScheduleManagementService({ events }),
     }),
     appointment: createAppointmentController(appointmentService),
-    queue: createQueueController(createQueueService({ events })),
+    queue: createQueueController(createQueueService({ events, audit: auditService })),
     report: createReportController(createReportService({ appointmentService })),
     audit: createAuditController(auditService),
   };

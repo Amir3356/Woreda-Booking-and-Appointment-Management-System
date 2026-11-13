@@ -4,13 +4,15 @@ import { fromRow } from "../models/auditLog.model.js";
 import { containsPattern } from "../utils/pagination.js";
 
 export async function create(e) {
-  await query(
+  const [row] = await rows(
     `INSERT INTO audit_logs (id, at, action, from_status, to_status, actor_id, actor_name, actor_role, appointment_id,
        reference_number, citizen_name, department_id, department_name, service_name, appointment_date, time_slot, reason)
-     VALUES ($1, now(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+     VALUES ($1, now(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+     RETURNING *`,
     [e.id, e.action, e.fromStatus, e.toStatus, e.actorId, e.actorName, e.actorRole, e.appointmentId, e.referenceNumber,
       e.citizenName, e.departmentId, e.departmentName, e.serviceName, e.appointmentDate, e.timeSlot, e.reason],
   );
+  return fromRow(row);
 }
 
 /** Newest first; filters: action, departmentId, search (officer, citizen, reference, service, department). */

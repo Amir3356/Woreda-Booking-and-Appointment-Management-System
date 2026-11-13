@@ -50,7 +50,11 @@ export async function findWaiting(departmentId, queueDate) {
      WHERE q.department_id = $1 AND q.queue_date = $2 AND q.status = 'WAITING'
      ORDER BY a.date ASC,
               GREATEST(
-                CASE WHEN a.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN a.time_slot::time ELSE q.checked_in_time END,
+                CASE
+                  WHEN a.time_slot ~* '^\\s*(1[3-9]|2[0-3]):[0-5][0-9]' THEN (regexp_replace(a.time_slot, '\\s*[ap]m', '', 'i'))::time
+                  WHEN a.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN a.time_slot::time
+                  ELSE q.checked_in_time
+                END,
                 q.checked_in_time
               ) ASC,
               q.checked_in_time ASC,
@@ -75,7 +79,11 @@ export async function claimNextWaiting(departmentId, queueDate, { counterNumber,
        WHERE q.department_id = $1 AND q.queue_date = $2 AND q.status = 'WAITING'
        ORDER BY a.date ASC,
                 GREATEST(
-                  CASE WHEN a.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN a.time_slot::time ELSE q.checked_in_time END,
+                  CASE
+                    WHEN a.time_slot ~* '^\\s*(1[3-9]|2[0-3]):[0-5][0-9]' THEN (regexp_replace(a.time_slot, '\\s*[ap]m', '', 'i'))::time
+                    WHEN a.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN a.time_slot::time
+                    ELSE q.checked_in_time
+                  END,
                   q.checked_in_time
                 ) ASC,
                 q.checked_in_time ASC,

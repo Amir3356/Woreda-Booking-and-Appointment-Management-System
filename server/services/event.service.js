@@ -21,6 +21,8 @@ export function createEventService({ realtimeService, logger }) {
           realtimeService.broadcast({ type: "citizens.changed", event: type, entityId, citizen: _data });
         } else if (type.startsWith("staff.")) {
           realtimeService.broadcast({ type: "staff.changed", event: type, entityId });
+        } else if (type.startsWith("audit.")) {
+          realtimeService.broadcast({ type: "audit.changed", event: type, entityId, auditEntry: _data });
         }
         logger.debug({ event: type, entityId, pages: realtimeService.count() }, "change pushed to pages");
       } catch (err) {

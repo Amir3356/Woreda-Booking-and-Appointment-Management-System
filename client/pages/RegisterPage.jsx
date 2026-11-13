@@ -19,10 +19,6 @@ export default function RegisterPage() {
     phone: "+251 9",
     email: "",
     nationalId: "",
-    location: "Addis Ababa",
-    woreda: "Woreda 03",
-    kebele: "Kebele 03",
-    houseNumber: "",
     password: "",
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -77,10 +73,6 @@ export default function RegisterPage() {
         email: emailClean || null,
         password: form.password,
         nationalId: form.nationalId?.trim() || undefined,
-        location: form.location?.trim() || "Addis Ababa",
-        woreda: form.woreda?.trim() || "Woreda 03",
-        kebele: form.kebele?.trim() || "Kebele 03",
-        houseNumber: form.houseNumber?.trim() || undefined,
       });
 
       if (res.data?.token && res.data?.user) {
@@ -92,9 +84,6 @@ export default function RegisterPage() {
         id: res.data?.user?.id || `cit-${Date.now()}`,
         fullName: fullNameClean,
         phone: phoneClean,
-        locations: form.location?.trim() || "Addis Ababa, Bole Sub-City",
-        woreda: form.woreda?.trim() || "Woreda 03",
-        kebele: form.kebele?.trim() || "Kebele 03",
         nationalId: form.nationalId?.trim() || res.data?.user?.nationalId || `ET-CIT-${Math.floor(1000 + Math.random() * 9000)}`,
         status: "VERIFIED",
       });
@@ -198,40 +187,9 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Residential Kebele
-                  </label>
-                  <select
-                    value={form.kebele}
-                    onChange={(e) => setForm({ ...form, kebele: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg text-xs bg-white"
-                  >
-                    <option>Kebele 01</option>
-                    <option>Kebele 02</option>
-                    <option>Kebele 03</option>
-                    <option>Kebele 04</option>
-                    <option>Kebele 05</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    House Number
-                  </label>
-                  <input
-                    type="text"
-                    value={form.houseNumber}
-                    onChange={(e) => setForm({ ...form, houseNumber: e.target.value })}
-                    placeholder="e.g. 104"
-                    className="w-full px-3 py-2 border rounded-lg text-xs"
-                  />
-                </div>
-              </div>
-
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  National / Kebele ID Number (Optional)
+                  National ID Number (Optional)
                 </label>
                 <input
                   type="text"

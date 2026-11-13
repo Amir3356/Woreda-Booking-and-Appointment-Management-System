@@ -14,10 +14,10 @@ export const registerSchema = z.object({
   // At least 8 characters and one digit, punctuation mark or symbol.
   password: z.string({ error: PASSWORD }).min(8, { error: PASSWORD }).regex(/[\p{Nd}\p{P}\p{S}]/u, { error: PASSWORD }),
   nationalId: optionalText, // optional; the sign-up form does not ask for it
-  // Where the citizen lives: stored together as the account's address.
-  location: requiredText("Location is required (e.g. Addis Ababa, Bole Sub-City)."),
-  woreda: requiredText("Woreda is required."),
-  kebele: requiredText("Kebele is required."),
+  // Address fields are optional
+  location: optionalText,
+  woreda: optionalText,
+  kebele: optionalText,
   houseNumber: optionalText,
 });
 

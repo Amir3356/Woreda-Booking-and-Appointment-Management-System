@@ -59,73 +59,9 @@ const ADMIN_CREDENTIALS = {
 };
 
 /**
- * Canonical Department Officers provisioned for municipal administration.
+ * Canonical Department Officers (none pre-seeded; accounts are provisioned via Admin Portal).
  */
-export const CANONICAL_OFFICER_CREDENTIALS = [
-  {
-    fullName: "W/ro Tigist Mulugeta",
-    email: "tigist.kbl@woreda.gov.et",
-    passwords: ["Password@123", "password123", "Password123", "password", "Password", "123456", "admin123"],
-    password: "Password@123",
-    role: "OFFICER",
-    departmentId: "dept-1",
-    departmentName: "Kebele Administration & Vital Events",
-  },
-  {
-    fullName: "Ato Yared Assefa",
-    email: "yared.lnd@woreda.gov.et",
-    passwords: ["Password@123", "password123", "Password123", "password", "Password", "123456", "admin123"],
-    password: "Password@123",
-    role: "OFFICER",
-    departmentId: "dept-2",
-    departmentName: "Land Administration & Urban Development",
-  },
-  {
-    fullName: "Ato Solomon Haile",
-    email: "solomon.trd@woreda.gov.et",
-    passwords: ["Password@123", "password123", "Password123", "password", "Password", "123456", "admin123"],
-    password: "Password@123",
-    role: "OFFICER",
-    departmentId: "dept-3",
-    departmentName: "Trade, Industry & Enterprise Development",
-  },
-  {
-    fullName: "W/ro Hana Bekele",
-    email: "hana.tax@woreda.gov.et",
-    passwords: ["Password@123", "password123", "Password123", "password", "Password", "123456", "admin123"],
-    password: "Password@123",
-    role: "OFFICER",
-    departmentId: "dept-4",
-    departmentName: "Revenues & Tax Assessment",
-  },
-  {
-    fullName: "Ato Mesfin Girma",
-    email: "mesfin.soc@woreda.gov.et",
-    passwords: ["Password@123", "password123", "Password123", "password", "Password", "123456", "admin123"],
-    password: "Password@123",
-    role: "OFFICER",
-    departmentId: "dept-5",
-    departmentName: "Social Affairs & Labor Welfare",
-  },
-  {
-    fullName: "W/ro Selamawit Desta",
-    email: "selam.health@woreda.gov.et",
-    passwords: ["Password@123", "password123", "Password123", "password", "Password", "123456", "admin123"],
-    password: "Password@123",
-    role: "OFFICER",
-    departmentId: "dept-6",
-    departmentName: "Public Health & Environmental Sanitation",
-  },
-  {
-    fullName: "Ato Berhanu Kebede",
-    email: "berhanu.audit@woreda.gov.et",
-    passwords: ["Password@123", "password123", "Password123", "password", "Password", "123456", "admin123"],
-    password: "Password@123",
-    role: "OFFICER",
-    departmentId: "dept-7",
-    departmentName: "Code Enforcement & Municipal Audit",
-  },
-];
+export const CANONICAL_OFFICER_CREDENTIALS = [];
 
 const STANDARD_OFFICER_PASSWORDS = [
   "Password@123",
@@ -196,20 +132,6 @@ export function verifyCredentials(identifier, password, usersList = [], provisio
       if (STANDARD_OFFICER_PASSWORDS.includes(cleanPass)) {
         return true;
       }
-    }
-  }
-
-  // 4. Fallback check for canonical municipal officers
-  const canonical = CANONICAL_OFFICER_CREDENTIALS.find((o) =>
-    matchIdentifier(cleanInput, o.email)
-  );
-  if (canonical) {
-    if (
-      canonical.passwords.includes(cleanPass) ||
-      cleanPass === canonical.password ||
-      STANDARD_OFFICER_PASSWORDS.includes(cleanPass)
-    ) {
-      return true;
     }
   }
 
@@ -363,34 +285,6 @@ export function resolveUserSession(
       departmentId: normalizedUser.departmentId,
       departmentName: normalizedUser.departmentName,
       user: normalizedUser,
-    };
-  }
-
-  // 4. Fallback check for canonical municipal officers
-  const canonical = CANONICAL_OFFICER_CREDENTIALS.find((o) =>
-    matchIdentifier(inputStr, o.email)
-  );
-  if (canonical) {
-    const matchedDept =
-      departmentsList.find((d) => d.id === canonical.departmentId) || departmentsList[0];
-    return {
-      role: "OFFICER",
-      portalPath: "/officer/appointments",
-      departmentId: canonical.departmentId,
-      departmentName: matchedDept?.name || canonical.departmentName,
-      user: {
-        id: `usr-officer-${canonical.departmentId}`,
-        fullName: canonical.fullName,
-        email: canonical.email,
-        phone: "+251911000000",
-        nationalId: `ET-OFF-${canonical.departmentId.toUpperCase()}`,
-        role: "OFFICER",
-        departmentId: canonical.departmentId,
-        departmentName: matchedDept?.name || canonical.departmentName,
-        address: "Kebele 03, Woreda Center",
-        isActive: true,
-        isProvisioned: true,
-      },
     };
   }
 

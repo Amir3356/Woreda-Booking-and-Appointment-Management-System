@@ -1,5 +1,5 @@
 // Table "audit_logs": one row per appointment decision or change, with who did it and when.
-export const ACTIONS = Object.freeze(["BOOKED", "APPROVED", "REJECTED", "CANCELLED", "RESCHEDULED"]);
+export const ACTIONS = Object.freeze(["BOOKED", "APPROVED", "REJECTED", "CANCELLED", "RESCHEDULED", "COMPLETED"]);
 
 export function fromRow(r) {
   return {

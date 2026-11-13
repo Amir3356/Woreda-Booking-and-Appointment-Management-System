@@ -74,6 +74,8 @@ export function createStaffService({ events } = {}) {
             id: u.id,
             fullName: u.fullName,
             phone: u.phone,
+            email: u.email,
+            nationalId: u.nationalId,
             locations: parsed.location,
             woreda: parsed.woreda,
             kebele: parsed.kebele,

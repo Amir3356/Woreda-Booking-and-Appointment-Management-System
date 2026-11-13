@@ -30,6 +30,7 @@ import {
   X,
   AlertCircle,
   Users,
+  Info,
 } from "lucide-react";
 
 function isoToDmy(iso) {
@@ -163,7 +164,7 @@ function CitizenDateDmyInput({
         onBlur={handleBlur}
         aria-label={ariaLabel}
         maxLength={10}
-        className="w-full pl-10 pr-11 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed tabular-nums tracking-wide"
+        className="w-full pl-10 pr-11 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0b2545]/20 focus:border-[#0b2545] cursor-pointer shadow-2xs disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed tabular-nums tracking-wide"
       />
       <button
         type="button"
@@ -171,7 +172,7 @@ function CitizenDateDmyInput({
         onClick={openPicker}
         title="Open calendar picker"
         aria-label="Open calendar picker"
-        className="absolute right-2.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer disabled:pointer-events-none disabled:text-slate-300"
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer disabled:pointer-events-none disabled:text-slate-300"
       >
         <Calendar className="w-4 h-4" aria-hidden="true" />
       </button>
@@ -699,9 +700,6 @@ export default function CitizenBookAppointmentPage() {
             {apt.departmentName && (
               <div className="text-[11px] text-slate-500 mt-0.5">{apt.departmentName}</div>
             )}
-            {apt.referenceNumber && (
-              <div className="text-[10px] text-slate-400 font-mono mt-0.5">Ref: {apt.referenceNumber}</div>
-            )}
           </div>
         );
       },
@@ -1058,39 +1056,55 @@ export default function CitizenBookAppointmentPage() {
         <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setSelectedSlot(null)}>
           <div className="modal-panel modal-panel--form modal-panel--wide" role="dialog" aria-modal="true" aria-labelledby="booking-modal-title">
             {/* Modal Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shadow-2xs">
+            <div className="flex items-start justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-[#0b2545]/10 text-[#0b2545] border border-[#0b2545]/15 flex items-center justify-center shrink-0">
                   <Calendar className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 id="booking-modal-title" className="font-extrabold text-slate-900 text-base">Book Municipal Appointment</h3>
-                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 id="booking-modal-title" className="font-extrabold text-slate-900 text-base tracking-tight">
+                      Book Municipal Appointment
+                    </h3>
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />
                       {selectedSlot.availabilityText || "Slots Available"}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Select a service and slot, then confirm your visit details
+                    Select a service and slot, then review queue order before confirming
                   </p>
                 </div>
               </div>
-              <button type="button" onClick={() => setSelectedSlot(null)} className="modal-close" aria-label="Close">
+              <button
+                type="button"
+                onClick={() => setSelectedSlot(null)}
+                className="modal-close"
+                aria-label="Close"
+              >
                 <X aria-hidden="true" />
               </button>
             </div>
 
-            <form onSubmit={handleConfirmBooking} className="mt-6 space-y-6">
+            <form onSubmit={handleConfirmBooking} className="mt-5 space-y-5">
               {/* Service & Appointment Slot Selection */}
-              <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-5">
-                {/* Service Dropdown (services from Admin > Services Management) */}
+              <div className="bg-slate-50/70 p-5 rounded-2xl border border-slate-200/90 space-y-4 shadow-2xs">
+                {/* Service Dropdown */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">
-                    Service *
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="citizen-service-select" className="block text-xs font-bold text-slate-700">
+                      Service <span className="text-rose-600 font-bold">*</span>
+                    </label>
+                    {selectedService?.estimatedDurationMinutes && (
+                      <span className="text-[11px] font-semibold text-slate-500">
+                        ~{selectedService.estimatedDurationMinutes} mins estimated
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
                     <FileText className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <select
+                      id="citizen-service-select"
                       value={selectedSlot.serviceId}
                       onChange={(e) => handleServiceChange(e.target.value)}
                       onFocus={() => {
@@ -1100,7 +1114,7 @@ export default function CitizenBookAppointmentPage() {
                       }}
                       required
                       disabled={allServices.length === 0}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0b2545]/20 focus:border-[#0b2545] cursor-pointer shadow-2xs disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                     >
                       <option value="" disabled>
                         {allServices.length === 0
@@ -1116,32 +1130,30 @@ export default function CitizenBookAppointmentPage() {
                   </div>
                 </div>
 
-                {/* Appointment Date and Appointment Time, each with its own label */}
-                <div className="pt-1">
-                  <div className="space-y-4">
-                    {/* Date Selection: only dates inside the service's schedule */}
-                    <div>
-                      <label htmlFor="citizen-appointment-date" className="block text-xs font-bold text-slate-700 mb-2">
-                        Appointment Date *
-                      </label>
-                      <CitizenDateDmyInput
-                        id="citizen-appointment-date"
-                        required
-                        min={dateRange?.min || todayIso}
-                        max={dateRange?.max || undefined}
-                        disabled={!selectedService || !dateRange}
-                        value={selectedSlot.date || ""}
-                        onChange={handleDateChange}
-                        ariaLabel="Appointment date (Date/Month/Year)"
-                      />
-                    </div>
+                {/* Appointment Date and Time in clean responsive 2-column grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label htmlFor="citizen-appointment-date" className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Appointment Date <span className="text-rose-600 font-bold">*</span>
+                    </label>
+                    <CitizenDateDmyInput
+                      id="citizen-appointment-date"
+                      required
+                      min={dateRange?.min || todayIso}
+                      max={dateRange?.max || undefined}
+                      disabled={!selectedService || !dateRange}
+                      value={selectedSlot.date || ""}
+                      onChange={handleDateChange}
+                      ariaLabel="Appointment date (Date/Month/Year)"
+                    />
+                  </div>
 
-                    {/* Time: a native time input, the same control as Admin > Working Hours > Lunch Break */}
-                    <div>
-                      <label htmlFor="citizen-appointment-time" className="block text-xs font-bold text-slate-700 mb-2">
-                        Appointment Time *
-                      </label>
-                      <div className="relative">
+                  <div>
+                    <label htmlFor="citizen-appointment-time" className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Appointment Time <span className="text-rose-600 font-bold">*</span>
+                    </label>
+                    <div className="relative">
+                      <Clock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
                         type="time"
                         required
@@ -1151,143 +1163,174 @@ export default function CitizenBookAppointmentPage() {
                         id="citizen-appointment-time"
                         aria-label="Appointment time"
                         aria-invalid={Boolean(timeNotice)}
-                        className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 cursor-pointer shadow-2xs disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0b2545]/20 focus:border-[#0b2545] cursor-pointer shadow-2xs disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                       />
-                      </div>
                     </div>
-
-                    {/* Available / Booked Slot Selection Pills */}
-                    {daySlots.length > 0 && !timeInputDisabled && (
-                      <div>
-                        <span className="block text-[11px] font-bold text-slate-600 mb-1.5">
-                          Time Slots for This Day ({availability.data?.slotIntervalMinutes || scheduleForDate?.slotIntervalMinutes || 30} mins each):
-                        </span>
-                        <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1.5 border border-slate-200 rounded-xl bg-white shadow-2xs">
-                          {daySlots
-                            .filter((sl) => !sl.lunchBreak)
-                            .map((sl) => {
-                              const isAvail = sl.status === "Available";
-                              const isSelected = selectedSlot.time === sl.timeSlot;
-                              const aheadForSlot = getPeopleAheadCount(sl.timeSlot);
-                              return (
-                                <button
-                                  key={sl.timeSlot}
-                                  type="button"
-                                  disabled={!isAvail}
-                                  onClick={() => setSelectedSlot((prev) => ({ ...prev, time: sl.timeSlot }))}
-                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1.5 ${
-                                    !isAvail
-                                      ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 opacity-60"
-                                      : isSelected
-                                      ? "bg-emerald-600 text-white shadow-xs border border-emerald-600"
-                                      : "bg-slate-50 hover:bg-emerald-50 text-slate-700 border border-slate-200 hover:border-emerald-300 cursor-pointer"
-                                  }`}
-                                  title={
-                                    !isAvail
-                                      ? `${displayTime(sl.timeSlot)} (Already booked)`
-                                      : `${displayTime(sl.timeSlot)} (${
-                                          aheadForSlot === 0
-                                            ? "0 ahead · 1st to be served"
-                                            : `${aheadForSlot} ${aheadForSlot === 1 ? "person" : "people"} scheduled before this time`
-                                        })`
-                                  }
-                                >
-                                  <span>{displayTime(sl.timeSlot)}</span>
-                                  {!isAvail ? (
-                                    <span className="text-[10px] text-slate-400 font-normal">
-                                      (Booked)
-                                    </span>
-                                  ) : (
-                                    <span
-                                      className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                                        isSelected
-                                          ? "bg-emerald-700 text-white"
-                                          : aheadForSlot === 0
-                                          ? "bg-emerald-100 text-emerald-800"
-                                          : "bg-slate-200/80 text-slate-700"
-                                      }`}
-                                    >
-                                      {aheadForSlot === 0 ? "1st" : `${aheadForSlot} ahead`}
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                        </div>
-                      </div>
-                    )}
                   </div>
+                </div>
 
-                  {/* Queue Preview Card: Displays how many people are already scheduled before this appointment time and service bookings */}
-                  {selectedSlot.date && selectedSlot.time && !timeNotice && !timeInputDisabled && (
-                    <div className="p-4 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50/90 via-sky-50/80 to-indigo-50/80 text-slate-800 shadow-2xs mt-3">
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
-                            selectedPeopleAhead === 0
-                              ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
-                              : "bg-blue-100 text-blue-700 border border-blue-300"
-                          }`}
-                        >
-                          <Users className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="text-xs font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
-                              Queue Position & Service Booking Status
-                            </span>
-                            <span
-                              className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border shadow-2xs ${
-                                selectedPeopleAhead === 0
-                                  ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                  : "bg-blue-100 text-blue-800 border-blue-300"
+                {/* Available / Booked Slot Selection Pills */}
+                {daySlots.length > 0 && !timeInputDisabled && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700">
+                        Available Time Slots
+                      </span>
+                      <span className="text-[11px] font-semibold text-slate-500">
+                        {availability.data?.slotIntervalMinutes || scheduleForDate?.slotIntervalMinutes || 30} mins per slot
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 border border-slate-200/90 rounded-xl bg-white shadow-2xs">
+                      {daySlots
+                        .filter((sl) => !sl.lunchBreak)
+                        .map((sl) => {
+                          const isAvail = sl.status === "Available";
+                          const isSelected = selectedSlot.time === sl.timeSlot;
+                          const aheadForSlot = getPeopleAheadCount(sl.timeSlot);
+                          return (
+                            <button
+                              key={sl.timeSlot}
+                              type="button"
+                              disabled={!isAvail}
+                              onClick={() => setSelectedSlot((prev) => ({ ...prev, time: sl.timeSlot }))}
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1.5 ${
+                                !isAvail
+                                  ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200/70 opacity-60"
+                                  : isSelected
+                                  ? "bg-[#0b2545] text-white shadow-xs border border-[#0b2545]"
+                                  : "bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200 hover:border-slate-300 cursor-pointer"
                               }`}
+                              title={
+                                !isAvail
+                                  ? `${displayTime(sl.timeSlot)} (Already booked)`
+                                  : `${displayTime(sl.timeSlot)} (${
+                                      aheadForSlot === 0
+                                        ? "0 ahead · 1st to be served"
+                                        : `${aheadForSlot} ${aheadForSlot === 1 ? "person" : "people"} scheduled before this time`
+                                    })`
+                              }
                             >
-                              {selectedPeopleAhead === 0
-                                ? "Estimated Serving Order: 1st in Queue"
-                                : `Estimated Serving Order: #${selectedPeopleAhead + 1} in Queue`}
+                              <span>{displayTime(sl.timeSlot)}</span>
+                              {!isAvail ? (
+                                <span className="text-[10px] text-slate-400 font-normal">
+                                  (Booked)
+                                </span>
+                              ) : (
+                                <span
+                                  className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                    isSelected
+                                      ? "bg-white/20 text-white"
+                                      : aheadForSlot === 0
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                      : "bg-slate-200/80 text-slate-700"
+                                  }`}
+                                >
+                                  {aheadForSlot === 0 ? "1st" : `${aheadForSlot} ahead`}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Queue Preview Card: Displays live queue serving order & same service bookings */}
+                {selectedSlot.date && selectedSlot.time && !timeNotice && !timeInputDisabled && (
+                  <div className="p-4 rounded-xl border border-slate-200 bg-white text-slate-900 shadow-2xs mt-3">
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
+                          selectedPeopleAhead === 0
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                            : "bg-[#0b2545]/10 text-[#0b2545] border border-[#0b2545]/15"
+                        }`}
+                      >
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <span className="text-xs font-bold text-slate-900 tracking-tight block">
+                              Queue Serving Order & Flow
                             </span>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              Live estimated order based on scheduled appointment time
+                            </p>
+                          </div>
+                          <span
+                            className={`text-xs font-bold px-3 py-1 rounded-full border shadow-2xs inline-flex items-center gap-1.5 ${
+                              selectedPeopleAhead === 0
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : "bg-slate-100 text-slate-800 border-slate-200"
+                            }`}
+                          >
+                            {selectedPeopleAhead === 0 ? (
+                              <>
+                                <CheckCircle className="w-3.5 h-3.5 text-emerald-700" />
+                                <span>Estimated Order: 1st in Queue</span>
+                              </>
+                            ) : (
+                              <>
+                                <Users className="w-3.5 h-3.5 text-slate-600" />
+                                <span>Estimated Order: #{selectedPeopleAhead + 1} in Queue</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+
+                        {/* 2 Key Metrics Grid: Service Bookings & Scheduled Ahead */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3 pt-3 border-t border-slate-100">
+                          <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                            <span className="text-[11px] font-semibold text-slate-600 block">
+                              Same-Day Service Bookings
+                            </span>
+                            <div className="mt-1 flex items-baseline gap-1.5">
+                              <strong className="text-[#0b2545] font-black text-lg">{sameServiceBookedCount}</strong>
+                              <span className="text-xs text-slate-700">
+                                {sameServiceBookedCount === 1 ? "other citizen booked" : "other citizens booked"}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              For {displayDate(selectedSlot.date)}
+                            </p>
                           </div>
 
-                          {/* 2 Key Metrics Grid: Service Bookings & Scheduled Ahead */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2.5 pt-2 border-t border-blue-200/60">
-                            <div className="p-2.5 rounded-xl bg-white/85 border border-blue-100 shadow-2xs">
-                              <span className="text-[11px] font-semibold text-slate-500 block">
-                                Already Booked for This Service ({displayDate(selectedSlot.date)})
-                              </span>
-                              <p className="text-xs font-bold text-slate-900 mt-0.5">
-                                <strong className="text-blue-900 font-black text-sm">{sameServiceBookedCount}</strong>{" "}
-                                {sameServiceBookedCount === 1 ? "other citizen has" : "other citizens have"} booked this service on this day
-                              </p>
-                            </div>
-
-                            <div className="p-2.5 rounded-xl bg-white/85 border border-blue-100 shadow-2xs">
-                              <span className="text-[11px] font-semibold text-slate-500 block">
-                                Scheduled to Be Served Before You ({displayTime(selectedSlot.time)})
-                              </span>
-                              <p className="text-xs font-bold text-slate-900 mt-0.5">
-                                {selectedPeopleAhead === 0 ? (
-                                  <span className="text-emerald-700 font-bold">
-                                    0 people ahead · You will be served 1st!
+                          <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                            <span className="text-[11px] font-semibold text-slate-600 block">
+                              Queue Preceding Your Slot
+                            </span>
+                            <div className="mt-1 flex items-baseline gap-1.5">
+                              {selectedPeopleAhead === 0 ? (
+                                <span className="text-emerald-800 font-bold text-xs flex items-center gap-1">
+                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                                  0 people ahead · You will be served 1st!
+                                </span>
+                              ) : (
+                                <>
+                                  <strong className="text-[#0b2545] font-black text-lg">{selectedPeopleAhead}</strong>
+                                  <span className="text-xs text-slate-700">
+                                    {selectedPeopleAhead === 1 ? "person ahead" : "people ahead"}
                                   </span>
-                                ) : (
-                                  <span>
-                                    <strong className="text-indigo-900 font-black text-sm">{selectedPeopleAhead}</strong>{" "}
-                                    {selectedPeopleAhead === 1 ? "person is" : "people are"} scheduled before this time
-                                  </span>
-                                )}
-                              </p>
+                                </>
+                              )}
                             </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              Scheduled before {displayTime(selectedSlot.time)}
+                            </p>
                           </div>
+                        </div>
 
-                          <p className="text-[11px] text-slate-600 mt-2 leading-relaxed">
-                            Citizens are served in order of scheduled appointment time (earliest appointment served first).{" "}
+                        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-start gap-2 text-[11px] leading-relaxed">
+                          <Info className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+                          <p className="text-slate-600">
+                            Citizens are served in order of scheduled appointment time.{" "}
                             {selectedPeopleAhead > 0 ? (
-                              <span className="text-blue-700 font-semibold">
-                                Choosing an earlier available time slot will move you ahead in the serving queue.
+                              <span className="text-slate-900 font-semibold">
+                                Choosing an earlier available slot will move your desk serving order forward.
                               </span>
                             ) : (
-                              <span className="text-emerald-700 font-semibold">
+                              <span className="text-emerald-800 font-semibold">
                                 You selected the earliest available slot — you will be first in line when desk service begins.
                               </span>
                             )}
@@ -1295,86 +1338,96 @@ export default function CitizenBookAppointmentPage() {
                         </div>
                       </div>
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {timeNotice && (
-                    <p role="alert" className="flex items-start gap-1.5 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
-                      <span>{timeNotice}</span>
-                    </p>
-                  )}
+                {timeNotice && (
+                  <div role="alert" className="flex items-start gap-2 text-xs font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                    <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                    <span>{timeNotice}</span>
+                  </div>
+                )}
 
-                  {/* What the Admin's schedule allows for this service */}
-                  {scheduleForDate && (
-                    <p className="text-[11px] text-slate-500 mt-2">
-                      Open {formatWorkingDays(scheduleForDate.workingDays)}, {displayTime(scheduleForDate.openingTime)} –{" "}
-                      {displayTime(scheduleForDate.closingTime)}
-                      {` · ${availability.data?.slotIntervalMinutes || scheduleForDate.slotIntervalMinutes || 30} min intervals`}
-                      {scheduleForDate.lunchStart && scheduleForDate.lunchEnd
-                        ? ` · lunch break ${displayTime(scheduleForDate.lunchStart)} – ${displayTime(scheduleForDate.lunchEnd)} (no appointments)`
-                        : ""}
-                      {dateRange?.max ? ` · bookable until ${displayDate(dateRange.max)}` : ""}
-                      {availability.data?.dailyCapacity ? (
-                        <>
-                          {" · "}
-                          <span className={placesLeft(availability.data) > 0 ? "font-semibold text-emerald-700" : "font-semibold text-rose-700"}>
-                            {placesLeft(availability.data) === 0
-                              ? "Fully booked"
-                              : `${placesLeft(availability.data)} ${placesLeft(availability.data) === 1 ? "appointment" : "appointments"} available on this day`}
-                          </span>
-                        </>
-                      ) : null}
-                    </p>
-                  )}
-                  {dateNotice && (
-                    <p role="alert" className="flex items-start gap-1.5 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
-                      <span>{dateNotice}</span>
-                    </p>
-                  )}
-                  {selectedService && dateRange && bookableDates.serviceId === selectedSlot?.serviceId && bookableDates.dates.length === 0 && (
-                    <p className="text-[11px] text-slate-500 mt-2">No dates are open for booking in the next 60 days.</p>
-                  )}
-                </div>
+                {/* What the schedule allows for this service */}
+                {scheduleForDate && (
+                  <div className="p-3 rounded-xl bg-slate-100/70 border border-slate-200/60 text-xs text-slate-600 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="font-semibold text-slate-700">
+                      Hours: {formatWorkingDays(scheduleForDate.workingDays)}, {displayTime(scheduleForDate.openingTime)} – {displayTime(scheduleForDate.closingTime)}
+                    </span>
+                    <span>·</span>
+                    <span>{availability.data?.slotIntervalMinutes || scheduleForDate.slotIntervalMinutes || 30} min intervals</span>
+                    {scheduleForDate.lunchStart && scheduleForDate.lunchEnd && (
+                      <>
+                        <span>·</span>
+                        <span>Lunch: {displayTime(scheduleForDate.lunchStart)} – {displayTime(scheduleForDate.lunchEnd)}</span>
+                      </>
+                    )}
+                    {dateRange?.max && (
+                      <>
+                        <span>·</span>
+                        <span>Bookable until {displayDate(dateRange.max)}</span>
+                      </>
+                    )}
+                    {availability.data?.dailyCapacity ? (
+                      <>
+                        <span>·</span>
+                        <span className={placesLeft(availability.data) > 0 ? "font-bold text-emerald-800" : "font-bold text-rose-800"}>
+                          {placesLeft(availability.data) === 0
+                            ? "Fully booked"
+                            : `${placesLeft(availability.data)} ${placesLeft(availability.data) === 1 ? "appointment" : "appointments"} available on this day`}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                )}
+                {dateNotice && (
+                  <div role="alert" className="flex items-start gap-2 text-xs font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                    <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                    <span>{dateNotice}</span>
+                  </div>
+                )}
+                {selectedService && dateRange && bookableDates.serviceId === selectedSlot?.serviceId && bookableDates.dates.length === 0 && (
+                  <p className="text-xs text-slate-500">No dates are open for booking in the next 60 days.</p>
+                )}
               </div>
 
               {/* Message to the office (optional) */}
-              <div className="space-y-4 pt-2 border-t border-slate-100">
-
-                {/* Message (Optional) */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-2">
-                    Message (Optional)
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={citizenNotes}
-                    onChange={(e) => setCitizenNotes(e.target.value)}
-                    placeholder="Write your message or any notes regarding your visit..."
-                    className="w-full p-3 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 focus:outline-none bg-white shadow-2xs"
-                  />
-                </div>
+              <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                <label htmlFor="citizen-notes" className="block text-xs font-bold text-slate-700">
+                  Additional Notes (Optional)
+                </label>
+                <p className="text-[11px] text-slate-500">
+                  Provide any context, special requirements, or reference documents for the desk officer.
+                </p>
+                <textarea
+                  id="citizen-notes"
+                  rows={3}
+                  value={citizenNotes}
+                  onChange={(e) => setCitizenNotes(e.target.value)}
+                  placeholder="Write your message or any notes regarding your visit..."
+                  className="w-full p-3 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-[#0b2545]/20 focus:border-[#0b2545] focus:outline-none bg-white shadow-2xs text-slate-800 placeholder:text-slate-400 resize-none transition-all"
+                />
               </div>
 
               {bookingError && (
-                <p role="alert" className="flex items-start gap-1.5 text-xs font-semibold text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{bookingError}</span>
-                </p>
+                <div role="alert" className="flex items-start gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-800 shadow-2xs">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span className="flex-1">{bookingError}</span>
+                </div>
               )}
 
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
                 {selectedSlot.date && selectedSlot.time && canConfirm ? (
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs text-blue-900 font-semibold shadow-2xs">
-                    <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs text-slate-700 font-semibold shadow-2xs">
+                    <Users className="w-3.5 h-3.5 text-slate-600 shrink-0" />
                     <span>
                       Service Bookings: <strong className="text-slate-900 font-extrabold">{sameServiceBookedCount}</strong> · Ahead in Queue:{" "}
                       <strong className="text-slate-900 font-extrabold">
                         {selectedPeopleAhead} {selectedPeopleAhead === 1 ? "person" : "people"}
                       </strong>{" "}
                       · Estimated Serving Order:{" "}
-                      <strong className="text-blue-700 font-extrabold">
+                      <strong className="text-[#0b2545] font-extrabold">
                         {selectedPeopleAhead === 0 ? "1st" : `#${selectedPeopleAhead + 1}`}
                       </strong>
                     </span>
@@ -1382,7 +1435,7 @@ export default function CitizenBookAppointmentPage() {
                 ) : (
                   <div />
                 )}
-                <div className="flex items-center gap-3 ml-auto">
+                <div className="flex items-center gap-2.5 ml-auto">
                   <button
                     type="button"
                     onClick={() => setSelectedSlot(null)}
@@ -1393,10 +1446,19 @@ export default function CitizenBookAppointmentPage() {
                   <button
                     type="submit"
                     disabled={!canConfirm || submitting}
-                    className="modal-btn modal-btn--success"
+                    className="modal-btn modal-btn--primary"
                   >
-                    <CheckCircle className="w-4 h-4" />
-                    <span>{submitting ? "Booking…" : "Confirm Booking"}</span>
+                    {submitting ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block mr-1" />
+                        <span>Confirming…</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4 mr-1" />
+                        <span>Confirm Booking</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

@@ -53,9 +53,6 @@ export default function AuthPage() {
   // Sign Up Form State (Citizen only)
   const [signUpFullName, setSignUpFullName] = useState("");
   const [signUpPhone, setSignUpPhone] = useState(""); // digits after the fixed +251 prefix
-  const [signUpLocation, setSignUpLocation] = useState("");
-  const [signUpWoreda, setSignUpWoreda] = useState("");
-  const [signUpKebele, setSignUpKebele] = useState("");
   const [signUpPassword, setSignUpPassword] = useState("");
   const [signUpConfirmPassword, setSignUpConfirmPassword] = useState("");
   const [showSignUpConfirm, setShowSignUpConfirm] = useState(false);
@@ -148,18 +145,6 @@ export default function AuthPage() {
       setError("Please enter an Ethiopian mobile number, e.g. +251 911 234 567 or 0911 234 567.");
       return;
     }
-    if (!signUpLocation.trim()) {
-      setError("Please enter your location (e.g. Addis Ababa, Bole Sub-City).");
-      return;
-    }
-    if (!signUpWoreda.trim()) {
-      setError("Please enter your woreda.");
-      return;
-    }
-    if (!signUpKebele.trim()) {
-      setError("Please enter your kebele.");
-      return;
-    }
     if (signUpPassword.length < 8 || !/[\p{Nd}\p{P}\p{S}]/u.test(signUpPassword)) {
       setError("Password must be at least 8 characters and include a number or symbol.");
       return;
@@ -174,9 +159,6 @@ export default function AuthPage() {
       const { data } = await http.post("/auth/register", {
         fullName: fullNameClean,
         phone: phoneClean,
-        location: signUpLocation.trim(),
-        woreda: signUpWoreda.trim(),
-        kebele: signUpKebele.trim(),
         password: signUpPassword,
       });
       setCurrentUser({ ...data.user, role: "CITIZEN", departmentName: null }, data.token);
@@ -205,26 +187,6 @@ export default function AuthPage() {
     setError("");
     setSuccessMsg("");
   };
-
-  /** Text field with a leading icon. */
-  const textField = (id, label, Icon, value, setValue, placeholder, autoComplete) => (
-    <div className="auth-field">
-      <label htmlFor={id} className="auth-label">{label}</label>
-      <div className="auth-input-wrapper">
-        {Icon && <Icon className="auth-input-icon" aria-hidden="true" />}
-        <input
-          id={id}
-          type="text"
-          required
-          autoComplete={autoComplete}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={placeholder}
-          className={Icon ? "auth-input" : "auth-input auth-input--plain"}
-        />
-      </div>
-    </div>
-  );
 
   /** Password field with a show/hide toggle. */
   const passwordField = (id, value, setValue, shown, setShown, autoComplete, label = "Password", placeholder = null) => (
@@ -407,12 +369,6 @@ export default function AuthPage() {
                     />
                   </div>
                 </div>
-                </div>
-
-                <div className="auth-field-row auth-field-row--3">
-                  {textField("signup-location", "Location", null, signUpLocation, setSignUpLocation, "Addis Ababa", "address-level1")}
-                  {textField("signup-woreda", "Woreda", null, signUpWoreda, setSignUpWoreda, "Woreda 03", "address-level2")}
-                  {textField("signup-kebele", "Kebele", null, signUpKebele, setSignUpKebele, "Kebele 05", "address-level3")}
                 </div>
 
                 <div className="auth-field-row">
