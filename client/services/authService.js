@@ -276,9 +276,17 @@ export function resolveUserSession(
       departmentsList.find(
         (d) =>
           d.id === matchedProvisioned.departmentId ||
-          d.name === matchedProvisioned.role ||
-          d.name === matchedProvisioned.departmentName
-      ) || departmentsList[0];
+          (d.name && matchedProvisioned.role && (
+            d.name.trim().toLowerCase() === matchedProvisioned.role.trim().toLowerCase() ||
+            d.name.trim().toLowerCase().startsWith(matchedProvisioned.role.trim().toLowerCase()) ||
+            matchedProvisioned.role.trim().toLowerCase().startsWith(d.name.trim().toLowerCase())
+          )) ||
+          (d.name && matchedProvisioned.departmentName && (
+            d.name.trim().toLowerCase() === matchedProvisioned.departmentName.trim().toLowerCase() ||
+            d.name.trim().toLowerCase().startsWith(matchedProvisioned.departmentName.trim().toLowerCase()) ||
+            matchedProvisioned.departmentName.trim().toLowerCase().startsWith(d.name.trim().toLowerCase())
+          ))
+      ) || null;
 
     const cleanEmail =
       matchedProvisioned.email?.trim() ||
@@ -560,27 +568,31 @@ export function getUserFromJwtCookie(
   const claims = parseJwtToken(token);
   if (!claims || !claims.sub) return null;
 
-  // Check by email or phone in claims
-  const identifier = claims.email || claims.phone;
-  if (identifier) {
-    const session = resolveUserSession(identifier, usersList, departmentsList, provisionedAccounts);
-    if (session?.user) {
-      return session.user;
-    }
-  }
-
+  // Authoritative match from backend JWT claims:
   const matchedDept = claims.dept
     ? (departmentsList || []).find((d) => d.id === claims.dept)
     : null;
 
+  // Check by email or phone in claims for additional profile details if present
+  const identifier = claims.email || claims.phone;
+  let sessionUser = null;
+  if (identifier) {
+    const session = resolveUserSession(identifier, usersList, departmentsList, provisionedAccounts);
+    if (session?.user) {
+      sessionUser = session.user;
+    }
+  }
+
   return {
     id: claims.sub,
-    fullName: claims.name,
-    phone: claims.phone || (claims.role === "ADMIN" ? "+251911223344" : "+251911334455"),
-    email: claims.email,
-    role: claims.role,
-    departmentId: claims.dept || null,
-    departmentName: claims.dept ? (matchedDept?.name || "Municipal Department") : null,
+    fullName: claims.name || sessionUser?.fullName || "User",
+    phone: claims.phone || sessionUser?.phone || (claims.role === "ADMIN" ? "+251911223344" : "+251911334455"),
+    email: claims.email || sessionUser?.email,
+    role: claims.role || sessionUser?.role,
+    departmentId: claims.dept || sessionUser?.departmentId || null,
+    departmentName: claims.dept
+      ? (matchedDept?.name || sessionUser?.departmentName || "Municipal Department")
+      : (sessionUser?.departmentName || null),
     isActive: true,
   };
 }

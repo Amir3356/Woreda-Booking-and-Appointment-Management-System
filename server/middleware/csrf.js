@@ -63,8 +63,10 @@ export function csrfProtection({ allowedOrigins = [], isProduction = false, auth
     const isAuthRoute =
       req.path === "/auth/login" ||
       req.path === "/auth/register" ||
+      req.path === "/auth/logout" ||
       req.path.endsWith("/auth/login") ||
-      req.path.endsWith("/auth/register");
+      req.path.endsWith("/auth/register") ||
+      req.path.endsWith("/auth/logout");
 
     if (hasAuthCookie && !isAuthRoute) {
       const clientToken = req.get(CSRF_HEADER_NAME) || req.get("x-xsrf-token");

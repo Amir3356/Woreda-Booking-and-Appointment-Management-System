@@ -100,7 +100,7 @@ export function defineAbilityFor(caller) {
   } else {
     // Public / Anonymous visitors:
     can(Actions.READ, [Subjects.DEPARTMENT, Subjects.SERVICE, Subjects.SCHEDULE]);
-    can(Actions.CREATE, Subjects.AUTH); // register, login
+    can([Actions.CREATE, Actions.DELETE], Subjects.AUTH); // register, login, logout
   }
 
   return build();

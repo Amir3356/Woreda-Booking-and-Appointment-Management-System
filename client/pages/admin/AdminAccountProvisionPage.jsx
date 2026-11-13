@@ -230,8 +230,13 @@ export default function AccountProvisionPage() {
     const isAdminAccount = acc.roleCode === "ADMIN" || acc.role === "Admin" || acc.role === "Central Administrator";
     const matchedDept =
       !isAdminAccount
-        ? (departments || []).find((d) => d.id === acc.departmentId || d.name === acc.departmentName || d.name === acc.role) ||
-          (departments || [])[0]
+        ? (departments || []).find(
+            (d) =>
+              d.id === acc.departmentId ||
+              (d.name && acc.departmentName && d.name.trim().toLowerCase() === acc.departmentName.trim().toLowerCase()) ||
+              (d.name && acc.role && d.name.trim().toLowerCase() === acc.role.trim().toLowerCase()) ||
+              (d.name && acc.role && (d.name.toLowerCase().startsWith(acc.role.toLowerCase().slice(0, 10)) || acc.role.toLowerCase().startsWith(d.name.toLowerCase().slice(0, 10))))
+          ) || null
         : null;
     let phoneVal = acc.phone ? normalizeEthiopianPhone(acc.phone) : "+2519";
     if (!phoneVal.startsWith("+2519")) {
@@ -281,7 +286,7 @@ export default function AccountProvisionPage() {
     const matchedDept = !isAdminSelected
       ? (departments || []).find((d) => d.name === form.role || d.id === form.departmentId)
       : null;
-    const departmentId = isAdminSelected ? null : (matchedDept ? matchedDept.id : form.departmentId || departments[0]?.id || null);
+    const departmentId = isAdminSelected ? null : (matchedDept ? matchedDept.id : form.departmentId || null);
     const roleLabelName = isAdminSelected ? "Admin" : (matchedDept ? matchedDept.name : form.role);
     const apiRole = isAdminSelected ? "ADMIN" : "OFFICER";
 

@@ -12,6 +12,6 @@ export function createAuthRoutes(c) {
   router.post("/register", validate({ body: registerSchema }), c.register);
   router.post("/login", validate({ body: loginSchema }), c.login);
   router.get("/me", verifyJwtToken, checkAbility(Actions.READ, Subjects.AUTH), c.me);
-  router.post("/logout", verifyJwtToken, checkAbility(Actions.DELETE, Subjects.AUTH), c.logout);
+  router.post("/logout", c.logout);
   return router;
 }

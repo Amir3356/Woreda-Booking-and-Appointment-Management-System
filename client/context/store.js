@@ -63,14 +63,17 @@ export const useStore = create(
           setJwtCookie(token);
           tokenStorage.set(token);
         } else {
-          // Revokes a token issued by auth-service (real admin login). Browser-made tokens are
-          // rejected by the server with 401, which is ignored. The request reads the token
-          // before it is cleared below.
+          // Revokes a token issued by auth-service (real admin login).
           http.post("/auth/logout").catch(() => {});
           clearJwtCookie();
           tokenStorage.clear();
         }
-        set({ currentUser: user });
+        set({
+          currentUser: user,
+          appointments: [],
+          queue: user ? get().queue : [],
+          appointmentError: null,
+        });
         get().addAuditLog({
           userName: user?.fullName || "Anonymous",
           userRole: user?.role || "GUEST",
@@ -497,7 +500,12 @@ export const useStore = create(
         // Several reloads can overlap (a burst of bookings); only the newest one may write the
         // list, otherwise an older, shorter answer arriving last would hide new appointments.
         const seq = ++appointmentLoadSeq;
-        const role = get().currentUser?.role;
+        const currentUser = get().currentUser;
+        const role = currentUser?.role;
+        if (!currentUser || !role) {
+          set({ appointments: [] });
+          return [];
+        }
         let list = [];
         try {
           if (role === "CITIZEN") {
@@ -580,7 +588,10 @@ export const useStore = create(
                     ? err.details.map((d) => d.issue).join(" ")
                     : "Could not save the change: the server is unreachable.";
           set({ appointmentError: { id, status, message } });
-          await get().loadAppointments().catch(() => {});
+          const role = get().currentUser?.role;
+          if (role === "CITIZEN" || role === "OFFICER" || role === "ADMIN") {
+            await get().loadAppointments().catch(() => {});
+          }
           return false;
         }
       },

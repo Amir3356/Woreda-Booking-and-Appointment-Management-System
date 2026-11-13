@@ -26,7 +26,9 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   const router = useRouter();
   const { currentUser, appointments, setCurrentUser } = useStore();
 
-  const pendingAppointmentsCount = appointments.filter((a) => a.status === "PENDING").length;
+  const pendingAppointmentsCount = appointments.filter(
+    (a) => (!currentUser?.departmentId || a.departmentId === currentUser.departmentId) && a.status === "PENDING"
+  ).length;
 
   // Navigation, grouped into labelled sections per role.
   const sectionsByRole = {

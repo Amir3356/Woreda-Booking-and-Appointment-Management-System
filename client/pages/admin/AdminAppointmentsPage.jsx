@@ -252,11 +252,6 @@ export default function AdminAppointmentsPage() {
                       {/* Appointment Number (is a Unique appointment reference) */}
                       <td className="px-5 py-3.5 font-mono font-bold text-slate-900">
                         <div className="text-blue-900 hover:text-blue-700">{apt.referenceNumber}</div>
-                        {apt.tokenNumber && (
-                          <span className="text-[10px] text-emerald-700 font-bold block">
-                            Token: {apt.tokenNumber}
-                          </span>
-                        )}
                       </td>
 
                       {/* Citizen Name */}

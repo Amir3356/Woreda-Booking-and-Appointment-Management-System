@@ -719,13 +719,13 @@ function BookingContent() {
                       </div>
 
                       <p className="text-[11px] text-slate-600 mt-2 leading-relaxed">
-                        Citizens are served in order of scheduled appointment time (earliest appointment served first).
+                        Citizens are served in order of scheduled appointment time (earliest appointment served first).{" "}
                         {selectedPeopleAhead > 0 ? (
-                          <span className="text-blue-700 font-semibold ml-1">
+                          <span className="text-blue-700 font-semibold">
                             Choosing an earlier available time slot allows you to be served sooner in the queue.
                           </span>
                         ) : (
-                          <span className="text-emerald-700 font-semibold ml-1">
+                          <span className="text-emerald-700 font-semibold">
                             You selected the earliest available slot — you will be first in line when desk service begins.
                           </span>
                         )}
