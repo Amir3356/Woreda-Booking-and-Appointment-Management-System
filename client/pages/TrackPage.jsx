@@ -1,4 +1,5 @@
 import { useState, useEffect, Suspense } from "react";
+import { toast } from "sonner";
 import { useSearchParams } from "@/hooks";
 import Navbar from "@/layout/Navbar";
 import Footer from "@/layout/Footer";
@@ -63,11 +64,16 @@ function TrackContent() {
     }
   };
 
-  const handleRescheduleSubmit = () => {
+  const handleRescheduleSubmit = async () => {
     if (!newDate) return;
-    rescheduleAppointment(result.id, newDate, newTime, "Rescheduled by citizen online");
-    setResult({ ...result, date: newDate, timeSlot: newTime, status: "APPROVED" });
-    setRescheduleModalOpen(false);
+    try {
+      await rescheduleAppointment(result.id, newDate, newTime, "Rescheduled by citizen online");
+      setResult({ ...result, date: newDate, timeSlot: newTime, status: "APPROVED" });
+      setRescheduleModalOpen(false);
+      toast.success("Appointment rescheduled successfully!");
+    } catch (err) {
+      toast.error(err?.message || "This appointment time is already booked for this service. Please choose another available time.");
+    }
   };
 
   const service = result ? services.find((s) => s.id === result.serviceId) : null;

@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { useStore } from "@/context";
+import { queueApi } from "@/api";
 import StatusBadge from "@/components/ui/StatusBadge";
 import AppointmentSlip from "@/features/appointments/AppointmentSlip";
-import { formatDate } from "@/utils";
+import { formatDate, describeError } from "@/utils";
 import {
   Calendar,
+  Check,
   Search,
   UserCheck,
 } from "lucide-react";
@@ -20,10 +23,11 @@ export default function AdminAppointmentsPage() {
   } = useStore();
 
   const [timeFilter, setTimeFilter] = useState("TODAY");
-  const [statusFilter, setStatusFilter] = useState("PENDING");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [deptFilter, setDeptFilter] = useState("ALL");
   const [search, setSearch] = useState("");
   const [selectedSlipApt, setSelectedSlipApt] = useState(null);
+  const [completingId, setCompletingId] = useState(null);
 
   const effectiveAppointments = appointments || [];
 
@@ -83,15 +87,39 @@ export default function AdminAppointmentsPage() {
     setRejectReason("");
   };
 
-  const handleConfirmReschedule = () => {
+  const handleConfirmReschedule = async () => {
     if (!rescheduleTarget || !newDate) return;
-    rescheduleAppointment(
-      rescheduleTarget.id,
-      newDate,
-      newTime,
-      "Administrative desk rescheduling"
-    );
-    setRescheduleTarget(null);
+    try {
+      await rescheduleAppointment(
+        rescheduleTarget.id,
+        newDate,
+        newTime,
+        "Administrative desk rescheduling"
+      );
+      toast.success(`Rescheduled ${rescheduleTarget.referenceNumber} successfully.`);
+      setRescheduleTarget(null);
+    } catch (err) {
+      toast.error(err?.message || "This appointment time is already booked for this service. Please choose another available time.");
+    }
+  };
+
+  const handleCompleteService = async (e, apt) => {
+    if (e) e.stopPropagation();
+    if (completingId) return;
+    setCompletingId(apt.id);
+    try {
+      await queueApi.finalize(apt.id, "COMPLETED").catch(() => {});
+      await updateAppointmentStatus(apt.id, "COMPLETED");
+      toast.success(`Service for ${apt.citizenName || "citizen"} marked as completed.`, { duration: 5000 });
+      await useStore.getState().loadAppointments().catch(() => {});
+      if (selectedSlipApt?.id === apt.id) {
+        setSelectedSlipApt({ ...selectedSlipApt, status: "COMPLETED" });
+      }
+    } catch (err) {
+      toast.error(describeError(err, "complete service"), { duration: 5000 });
+    } finally {
+      setCompletingId(null);
+    }
   };
 
   const formatRequestDateTime = (dateString) => {
@@ -174,9 +202,11 @@ export default function AdminAppointmentsPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
           >
+            <option value="ALL">All Statuses</option>
             <option value="PENDING">Pending</option>
-            <option value="REJECTED">Reject</option>
             <option value="APPROVED">Approved</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="REJECTED">Reject</option>
           </select>
         </div>
       </div>
@@ -195,12 +225,13 @@ export default function AdminAppointmentsPage() {
                 <th className="px-5 py-3.5">Request Date&Time</th>
                 <th className="px-5 py-3.5">Status</th>
                 <th className="px-5 py-3.5">Responsible Officer</th>
+                <th className="px-5 py-3.5 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center text-slate-400">
+                  <td colSpan={9} className="px-5 py-10 text-center text-slate-400">
                     No appointments found matching your filter criteria.
                   </td>
                 </tr>
@@ -263,6 +294,29 @@ export default function AdminAppointmentsPage() {
                           <span className="font-medium text-slate-900">{responsibleOfficer}</span>
                         </div>
                       </td>
+
+                      {/* Action */}
+                      <td className="px-5 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        {apt.status === "COMPLETED" ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200">
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Completed</span>
+                          </span>
+                        ) : apt.status === "REJECTED" || apt.status === "CANCELLED" ? (
+                          <span className="text-slate-400 text-xs">—</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => handleCompleteService(e, apt)}
+                            disabled={completingId === apt.id}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                            title="Complete citizen service"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Complete Service</span>
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })
@@ -276,12 +330,26 @@ export default function AdminAppointmentsPage() {
       {selectedSlipApt && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
           <div className="relative max-w-2xl w-full">
-            <button
-              onClick={() => setSelectedSlipApt(null)}
-              className="absolute -top-10 right-0 text-white font-bold text-xs bg-slate-800 px-3 py-1.5 rounded-lg no-print"
-            >
-              ✕ Close
-            </button>
+            <div className="flex items-center justify-between mb-2">
+              {selectedSlipApt.status !== "COMPLETED" && selectedSlipApt.status !== "CANCELLED" && selectedSlipApt.status !== "REJECTED" && (
+                <button
+                  type="button"
+                  onClick={(e) => handleCompleteService(e, selectedSlipApt)}
+                  disabled={completingId === selectedSlipApt.id}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer disabled:opacity-60"
+                  title="Mark service as completed"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Complete Service</span>
+                </button>
+              )}
+              <button
+                onClick={() => setSelectedSlipApt(null)}
+                className="ml-auto text-white font-bold text-xs bg-slate-800 px-3 py-1.5 rounded-lg no-print hover:bg-slate-700 cursor-pointer"
+              >
+                ✕ Close
+              </button>
+            </div>
             <AppointmentSlip
               appointment={selectedSlipApt}
               service={services.find((s) => s.id === selectedSlipApt.serviceId)}

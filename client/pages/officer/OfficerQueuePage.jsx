@@ -5,164 +5,160 @@ import { toast } from "sonner";
 import { useStore } from "@/context";
 import { queueApi } from "@/api";
 import { subscribe } from "@/api/realtime";
-import { describeError } from "@/utils";
+import { describeError, displayTime } from "@/utils";
 import { DataTable } from "@/components/ui";
 import { Check } from "lucide-react";
 
-// Benchmark mock queue items for Woreda department counter when live queue is empty
-const MOCK_QUEUE_ROWS = [
-  {
-    id: "mock-tok-01",
-    tokenNumber: "LND-01",
-    citizenName: "Abebe Bikila",
-    serviceName: "Landholding Rights Verification & Mapping",
-    checkedInTime: "08:50 AM",
-    calledTime: "09:05 AM",
-    counterNumber: 1,
-    status: "COMPLETED",
-    position: 1,
-  },
-  {
-    id: "mock-tok-02",
-    tokenNumber: "LND-02",
-    citizenName: "Tirunesh Dibaba",
-    serviceName: "Landholding Rights Verification & Mapping",
-    checkedInTime: "09:12 AM",
-    calledTime: "09:20 AM",
-    counterNumber: 1,
-    status: "COMPLETED",
-    position: 2,
-  },
-  {
-    id: "mock-tok-03",
-    tokenNumber: "LND-03",
-    citizenName: "Haile Gebrselassie",
-    serviceName: "Title Deed Transfer & Registration",
-    checkedInTime: "09:25 AM",
-    calledTime: null,
-    counterNumber: null,
-    status: "WAITING",
-    position: 3,
-  },
-  {
-    id: "mock-tok-04",
-    tokenNumber: "LND-04",
-    citizenName: "Derartu Tulu",
-    serviceName: "Cadastral Survey & Boundary Verification",
-    checkedInTime: "09:40 AM",
-    calledTime: null,
-    counterNumber: null,
-    status: "WAITING",
-    position: 4,
-  },
-  {
-    id: "mock-tok-05",
-    tokenNumber: "LND-05",
-    citizenName: "Kenenisa Bekele",
-    serviceName: "Lease Contract Certification",
-    checkedInTime: "10:05 AM",
-    calledTime: null,
-    counterNumber: null,
-    status: "WAITING",
-    position: 5,
-  },
-  {
-    id: "mock-tok-06",
-    tokenNumber: "LND-06",
-    citizenName: "Fatuma Roba",
-    serviceName: "Vital Records Archival Search",
-    checkedInTime: "10:15 AM",
-    calledTime: null,
-    counterNumber: null,
-    status: "WAITING",
-    position: 6,
-  },
-];
-
 export default function OfficerQueuePage() {
   const currentUser = useStore((s) => s.currentUser);
+  const appointments = useStore((s) => s.appointments);
+  const loadAppointments = useStore((s) => s.loadAppointments);
+  const updateAppointmentStatus = useStore((s) => s.updateAppointmentStatus);
+
   const counterNumber = currentUser?.counterNumber || 1;
 
   const [board, setBoard] = useState({ nowServing: null, waitingList: [] });
-  const [mockRows, setMockRows] = useState(MOCK_QUEUE_ROWS);
   const [busy, setBusy] = useState(false);
 
   const loadBoard = useCallback(async () => {
     try {
       const { data } = await queueApi.board();
       setBoard({ nowServing: data?.nowServing || null, waitingList: data?.waitingList || [] });
-    } catch (err) {
-      toast.error(describeError(err, "load the queue"), { duration: 6000 });
+    } catch {
+      // Keep existing board if server has temporary error
     }
   }, []);
 
   useEffect(() => {
     loadBoard();
+    loadAppointments?.().catch(() => {});
     let timer = null;
     const soon = () => {
       clearTimeout(timer);
-      timer = setTimeout(loadBoard, 300);
+      timer = setTimeout(() => {
+        loadBoard();
+        loadAppointments?.().catch(() => {});
+      }, 300);
     };
     const offs = [subscribe("appointments.changed", soon), subscribe("reconnected", soon)];
     return () => {
       clearTimeout(timer);
       offs.forEach((off) => off());
     };
-  }, [loadBoard]);
+  }, [loadBoard, loadAppointments]);
 
-  const hasServerData = Boolean(board.nowServing || (board.waitingList && board.waitingList.length > 0));
+  // Department's appointments that are active or completed (excludes rejected and cancelled)
+  const deptAppointments = (appointments || []).filter(
+    (a) =>
+      Boolean(currentUser?.departmentId) &&
+      a.departmentId === currentUser.departmentId &&
+      a.status !== "REJECTED" &&
+      a.status !== "CANCELLED"
+  );
 
-  const serverRows = [
-    ...(board.nowServing
-      ? [
-          {
-            id: board.nowServing.id,
-            tokenNumber: board.nowServing.tokenNumber,
-            citizenName: board.nowServing.citizenName,
-            serviceName: board.nowServing.serviceName,
-            counterNumber: board.nowServing.counterNumber || counterNumber,
-            checkedInTime: board.nowServing.calledTime || "09:00 AM",
-            status: "WAITING",
-            position: 1,
-          },
-        ]
-      : []),
-    ...(board.waitingList || []).map((item, index) => ({
+  // Map server board items if present
+  const boardServing = board.nowServing ? [board.nowServing] : [];
+  const boardWaiting = board.waitingList || [];
+
+  const seenAppointmentIds = new Set();
+  const queueRows = [];
+
+  // 1. Process board items first if any
+  boardServing.forEach((item) => {
+    const matchingApt = deptAppointments.find(
+      (a) => a.id === item.appointmentId || a.id === item.id || a.citizenName === item.citizenName
+    );
+    if (matchingApt) seenAppointmentIds.add(matchingApt.id);
+    queueRows.push({
       id: item.id,
+      appointmentId: matchingApt?.id || item.appointmentId || item.id,
       tokenNumber: item.tokenNumber,
-      citizenName: item.citizenName,
-      serviceName: item.serviceName,
+      citizenName: item.citizenName || matchingApt?.citizenName || "—",
+      serviceName: item.serviceName || matchingApt?.serviceName || "—",
+      counterNumber: item.counterNumber || counterNumber,
+      checkedInTime: item.calledTime || "09:00 AM",
+      status: matchingApt?.status === "COMPLETED" ? "COMPLETED" : "WAITING",
+      createdAt: matchingApt?.createdAt || null,
+    });
+  });
+
+  boardWaiting.forEach((item) => {
+    const matchingApt = deptAppointments.find(
+      (a) => a.id === item.appointmentId || a.id === item.id || a.citizenName === item.citizenName
+    );
+    if (matchingApt) seenAppointmentIds.add(matchingApt.id);
+    queueRows.push({
+      id: item.id,
+      appointmentId: matchingApt?.id || item.appointmentId || item.id,
+      tokenNumber: item.tokenNumber,
+      citizenName: item.citizenName || matchingApt?.citizenName || "—",
+      serviceName: item.serviceName || matchingApt?.serviceName || "—",
       counterNumber: null,
       checkedInTime: item.checkedInTime,
-      status: "WAITING",
-      position: (board.nowServing ? 2 : 1) + index,
-    })),
-  ];
+      status: matchingApt?.status === "COMPLETED" ? "COMPLETED" : "WAITING",
+      createdAt: matchingApt?.createdAt || null,
+    });
+  });
 
-  const allRows = hasServerData ? serverRows : mockRows;
+  // 2. Include all department appointments from Appointment sidebar
+  deptAppointments.forEach((apt) => {
+    if (seenAppointmentIds.has(apt.id)) return;
+    const isCompleted = apt.status === "COMPLETED";
+    const checkedTime = apt.checkedInAt
+      ? displayTime(apt.checkedInAt)
+      : apt.timeSlot
+        ? displayTime(apt.timeSlot)
+        : "—";
+
+    queueRows.push({
+      id: apt.id,
+      appointmentId: apt.id,
+      tokenNumber: apt.tokenNumber || (apt.referenceNumber ? `WRD-${apt.referenceNumber.slice(-4)}` : "—"),
+      citizenName: apt.citizenName || "—",
+      serviceName: apt.serviceName || apt.service || "—",
+      counterNumber: counterNumber,
+      checkedInTime: checkedTime,
+      status: isCompleted ? "COMPLETED" : "WAITING",
+      createdAt: apt.createdAt,
+    });
+  });
+
+  // Sort: Waiting/In-progress first, Completed at the bottom; within groups, newest first
+  const sortedRows = [...queueRows].sort((a, b) => {
+    const aComp = a.status === "COMPLETED";
+    const bComp = b.status === "COMPLETED";
+    if (aComp !== bComp) return aComp ? 1 : -1;
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    if (timeB !== timeA) return timeB - timeA;
+    return String(b.id || "").localeCompare(String(a.id || ""), undefined, { numeric: true });
+  });
+
+  const allRows = sortedRows.map((row, idx) => ({
+    ...row,
+    position: idx + 1,
+  }));
 
   const handleFinalize = async (row, status = "COMPLETED") => {
     if (busy) return;
     setBusy(true);
     try {
-      await queueApi.finalize(row.id, status);
-      toast.success(
-        `Token ${row.tokenNumber} marked as completed.`,
-        { duration: 6000 }
-      );
-      await loadBoard();
-    } catch (err) {
-      if (!hasServerData) {
-        setMockRows((prev) =>
-          prev.map((r) => (r.id === row.id ? { ...r, status: "COMPLETED" } : r))
-        );
-        toast.success(
-          `Token ${row.tokenNumber} marked as completed.`,
-          { duration: 6000 }
-        );
-        return;
+      const targetId = row.appointmentId || row.id;
+      await queueApi.finalize(row.id, status).catch(() => {});
+      if (targetId && targetId !== row.id) {
+        await queueApi.finalize(targetId, status).catch(() => {});
       }
-      toast.error(describeError(err, "update the queue token"), { duration: 6000 });
+      if (targetId) {
+        await updateAppointmentStatus(targetId, status);
+      }
+      toast.success(
+        `Service for ${row.citizenName || "citizen"} marked as completed.`,
+        { duration: 5000 }
+      );
+      await loadBoard().catch(() => {});
+      await loadAppointments().catch(() => {});
+    } catch (err) {
+      toast.error(describeError(err, "update the service status"), { duration: 5000 });
     } finally {
       setBusy(false);
     }
@@ -255,7 +251,7 @@ export default function OfficerQueuePage() {
             type="button"
             onClick={() => handleFinalize(item, "COMPLETED")}
             disabled={busy}
-            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
             title="Complete citizen service"
           >
             <Check className="w-3 h-3" />

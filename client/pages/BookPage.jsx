@@ -214,7 +214,7 @@ function BookingContent() {
         msg = err.details.map((d) => d.issue).join(" ");
         setStep(err.details.some((d) => d.field === "date") ? 4 : 5);
       } else if (err?.status === 409) {
-        msg = "That time was just taken or the day is fully booked. Please choose another time.";
+        msg = err?.message || "This appointment time is already booked for this service. Please choose another available time.";
         setStep(5);
       } else if (err instanceof TypeError) {
         msg = "The server is unreachable. Check your connection and try again.";
@@ -578,7 +578,7 @@ function BookingContent() {
                     >
                       <p className="text-xs font-bold">{displayTime(slot.timeSlot)}</p>
                       <span className="text-[10px] text-slate-500 block mt-0.5">
-                        {slot.lunchBreak ? "Lunch break" : available ? `${slot.remainingCapacity} slots left` : "Fully Booked"}
+                        {slot.lunchBreak ? "Lunch break" : available ? "Available" : "Already Booked"}
                       </span>
                     </button>
                   );

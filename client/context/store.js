@@ -37,7 +37,7 @@ const DEFAULT_SCHEDULE_CONFIGS = {
   officeHours: { start: "08:30", end: "17:30" },
   lunchBreak: { start: "12:30", end: "13:30" },
   slotIntervalMinutes: 30,
-  maxParallelSlots: 3,
+  maxParallelSlots: 1,
   advanceBookingDays: 14,
   cancellationCutoffHours: 4,
   publicHolidays: [
@@ -520,8 +520,8 @@ export const useStore = create(
         const merged = list.map((a) => {
           const mine = local.get(a.id);
           const deskStage = ["IN_PROGRESS", "COMPLETED", "NO_SHOW"].includes(mine?.status);
-          return deskStage && a.status === "CHECKED_IN"
-            ? { ...a, status: mine.status, completedAt: mine.completedAt }
+          return deskStage && ["CHECKED_IN", "APPROVED", "PENDING", "IN_PROGRESS"].includes(a.status)
+            ? { ...a, status: mine.status, completedAt: mine.completedAt || a.completedAt }
             : a;
         });
         if (seq !== appointmentLoadSeq) return get().appointments;
@@ -625,6 +625,20 @@ export const useStore = create(
             calledTime: null,
             estimatedMinutesRemaining: 15,
           });
+        } else if (status === "COMPLETED" || status === "NO_SHOW") {
+          await queueApi.finalize(id, status).catch(() => {});
+          set((state) => ({
+            appointments: state.appointments.map((a) =>
+              a.id === id
+                ? {
+                    ...a,
+                    status,
+                    completedAt: status === "COMPLETED" ? new Date().toISOString() : a.completedAt,
+                    officerNotes: notes || a.officerNotes,
+                  }
+                : a
+            ),
+          }));
         } else {
           set((state) => ({
             appointments: state.appointments.map((a) =>
@@ -722,7 +736,7 @@ export const useStore = create(
           timeSlots: DEFAULT_TIME_SLOTS,
           serviceId,
           date,
-          maxPerSlot: get().scheduleConfigs.maxParallelSlots || 2,
+          maxPerSlot: 1,
         }),
     }),
     {

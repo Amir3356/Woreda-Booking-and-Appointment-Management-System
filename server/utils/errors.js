@@ -79,10 +79,10 @@ export class DepartmentCapacityError extends AppError {
   }
 }
 
-/** 409 when a time slot already holds its parallel-booking limit. */
+/** 409 when a time slot is already booked for the service on that date. */
 export class SlotFullError extends AppError {
-  constructor() {
-    super(409, "SLOT_FULL", "Desired time slot capacity reached maximum parallel limit.");
+  constructor(message = "This appointment time is already booked for this service. Please choose another available time.") {
+    super(409, "SLOT_FULL", message);
   }
 }
 

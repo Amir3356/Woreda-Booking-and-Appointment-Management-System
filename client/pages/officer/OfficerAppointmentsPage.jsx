@@ -67,7 +67,15 @@ export default function OfficerAppointmentsPage() {
     (a) => Boolean(currentUser?.departmentId) && a.departmentId === currentUser.departmentId
   );
 
-  const filtered = deptAppointments;
+  // When a new appointment comes in, ensure it is displayed in the first row (newest first)
+  const sortedAppointments = [...deptAppointments].sort((a, b) => {
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    if (timeB !== timeA) return timeB - timeA;
+    return String(b.id || "").localeCompare(String(a.id || ""), undefined, { numeric: true });
+  });
+
+  const filtered = sortedAppointments;
 
   // Appointment table columns (TanStack Table via components/ui/DataTable).
   const appointmentColumns = [
@@ -233,8 +241,12 @@ export default function OfficerAppointmentsPage() {
             aria-modal="true"
             aria-labelledby="reject-modal-title"
           >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <h3 id="reject-modal-title" className="font-bold text-base text-slate-900">
+            <div className="relative pb-3 border-b border-slate-100 mb-4">
+              <h3
+                id="reject-modal-title"
+                className="font-bold text-base text-slate-900 text-center"
+                style={{ textAlign: "center" }}
+              >
                 Reject Appointment
               </h3>
               <button
@@ -243,7 +255,8 @@ export default function OfficerAppointmentsPage() {
                   setRejectTarget(null);
                   setRejectReason("");
                 }}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                className="absolute right-0 top-0 text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+                aria-label="Close modal"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -251,7 +264,11 @@ export default function OfficerAppointmentsPage() {
 
             <form onSubmit={handleConfirmReject}>
               <div className="mb-4">
-                <label htmlFor="rejection-reason-input" className="block text-xs font-bold text-slate-700 mb-1.5">
+                <label
+                  htmlFor="rejection-reason-input"
+                  className="block text-xs font-bold text-slate-700 mb-1.5 text-center"
+                  style={{ textAlign: "center" }}
+                >
                   Reason for Rejection <span className="text-rose-500">*</span>
                 </label>
                 <textarea

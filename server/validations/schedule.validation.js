@@ -29,6 +29,14 @@ export const scheduleSchema = z
     // Lunch break: both or neither; no bookings in between.
     lunchStart: lunchClock("Lunch start must be HH:MM."),
     lunchEnd: lunchClock("Lunch end must be HH:MM."),
+    // Appointment slot duration / interval in minutes (defaults to 30)
+    slotIntervalMinutes: z
+      .number({ error: "Slot interval must be a number." })
+      .int({ error: "Slot interval must be a whole number of minutes." })
+      .min(5, { error: "Slot interval must be at least 5 minutes." })
+      .max(240, { error: "Slot interval cannot exceed 240 minutes." })
+      .nullish()
+      .transform((v) => v ?? 30),
     // Default for services without their own capacity; optional (kept on update, 20 on create).
     dailyCapacity: z.number({ error: "Daily capacity must be positive." }).int({ error: "Daily capacity must be a whole number." })
       .positive({ error: "Daily capacity must be positive." }).nullish().transform((v) => v ?? null),

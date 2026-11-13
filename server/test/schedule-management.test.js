@@ -230,3 +230,48 @@ test("resolveDay - a holiday is named in the closed note", () => {
   const holiday = { ...exc("PUBLIC_HOLIDAY"), title: "Religious Holiday", description: "Ethiopian Christmas" };
   assert.equal(resolveDay({ date: MONDAY, baseSchedule: weekdays, exceptions: [holiday] }).note, "Ethiopian Christmas (Religious Holiday)");
 });
+
+test("buildSlots - supports configurable slot intervals (e.g. 15 or 20 minutes)", async () => {
+  const { buildSlots, scheduleIssue } = await import("../utils/slots.js");
+  const sch15 = { ...weekdays, openingTime: "09:00", closingTime: "10:00", slotIntervalMinutes: 15 };
+  const slots15 = buildSlots(sch15, MONDAY, {}, 1);
+  assert.deepEqual(slots15.map((s) => s.timeSlot), ["09:00 AM", "09:15 AM", "09:30 AM", "09:45 AM"]);
+  assert.equal(scheduleIssue(sch15, MONDAY, "09:15 AM"), null);
+  assert.match(scheduleIssue(sch15, MONDAY, "09:10 AM").issue, /every 15 minutes/);
+
+  const sch20 = { ...weekdays, openingTime: "09:00", closingTime: "10:00", slotIntervalMinutes: 20 };
+  const slots20 = buildSlots(sch20, MONDAY, {}, 1);
+  assert.deepEqual(slots20.map((s) => s.timeSlot), ["09:00 AM", "09:20 AM", "09:40 AM"]);
+  assert.equal(scheduleIssue(sch20, MONDAY, "09:20 AM"), null);
+  assert.match(scheduleIssue(sch20, MONDAY, "09:15 AM").issue, /every 20 minutes/);
+});
+
+test("duplicate booking prevention - buildSlots enforces max 1 booking per slot", async () => {
+  const { buildSlots, perTimeCapacity } = await import("../utils/slots.js");
+  const { SlotFullError } = await import("../utils/errors.js");
+
+  const sch = { ...weekdays, openingTime: "09:00", closingTime: "11:00", dailyCapacity: 10 };
+  assert.equal(perTimeCapacity(sch), 1);
+
+  // When Citizen 1 books 09:00 AM
+  const counts = { "09:00 AM": 1 };
+  const slots = buildSlots(sch, MONDAY, counts, 1);
+  const byTime = Object.fromEntries(slots.map((s) => [s.timeSlot, s]));
+
+  // 09:00 AM is Full so no other citizen can book it
+  assert.equal(byTime["09:00 AM"].status, "Full");
+  assert.equal(byTime["09:00 AM"].remainingCapacity, 0);
+  assert.equal(byTime["09:00 AM"].bookedCount, 1);
+
+  // Other times remain Available for other citizens
+  assert.equal(byTime["09:30 AM"].status, "Available");
+  assert.equal(byTime["09:30 AM"].remainingCapacity, 1);
+  assert.equal(byTime["10:00 AM"].status, "Available");
+  assert.equal(byTime["10:00 AM"].remainingCapacity, 1);
+
+  // SlotFullError returns 409
+  const err = new SlotFullError();
+  assert.equal(err.status, 409);
+  assert.equal(err.code, "SLOT_FULL");
+  assert.match(err.message, /already booked/i);
+});

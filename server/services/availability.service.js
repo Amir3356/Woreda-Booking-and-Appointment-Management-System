@@ -2,7 +2,7 @@
 // and the citizen's list of bookable dates. Both follow the full scheduling rules: operating hours,
 // calendar exceptions and the daily capacities (per service; per department on exceptional working days).
 import { nowMinutes, parseDate, today } from "../utils/date.js";
-import { DEFAULT_MAX_PARALLEL_SLOTS, applyDailyCapacity, buildSlots, closedReason, markPast, perTimeCapacity } from "../utils/slots.js";
+import { DEFAULT_MAX_PARALLEL_SLOTS, applyDailyCapacity, buildSlots, closedReason, markPast, perTimeCapacity, slotDuration } from "../utils/slots.js";
 import { eachDate, exceptionsOn, resolveDay, serviceScheduleOn } from "../utils/calendar.js";
 import { NotFoundError } from "../utils/errors.js";
 import { effectiveDay } from "./dayRules.js";
@@ -26,7 +26,7 @@ export function createAvailabilityService() {
         departmentId ? appointments.countDepartmentDay({ departmentId, date }) : 0,
       ]);
       const schedule = rules.open ? rules.schedule : null;
-      const max = perTimeCapacity(schedule, parallel ?? DEFAULT_MAX_PARALLEL_SLOTS);
+      const max = 1; // Exactly 1 appointment per slot per service to prevent duplicate bookings
       const bookedForDay = Object.values(counts).reduce((sum, n) => sum + n, 0);
       let slots = buildSlots(schedule, day, counts, max);
       let reason = rules.open ? closedReason(schedule, day, bookedForDay) : rules.reason;
@@ -46,6 +46,7 @@ export function createAvailabilityService() {
         serviceId,
         date,
         maxParallelSlots: max,
+        slotIntervalMinutes: schedule ? slotDuration(schedule) : 30,
         closedReason: reason,
         closedNote: rules.note,
         exceptionalWorkingDay: rules.exception?.type === "WORKING_DAY",

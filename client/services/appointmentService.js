@@ -13,7 +13,7 @@ const RELEASED_STATUSES = new Set(["CANCELLED", "REJECTED"]);
  * @param {Array} params.timeSlots - List of standard time slots
  * @param {string} params.serviceId - Service identifier
  * @param {string} params.date - Date in YYYY-MM-DD format
- * @param {number} [params.maxPerSlot=3] - Maximum parallel bookings allowed per slot
+ * @param {number} [params.maxPerSlot=1] - Maximum bookings allowed per slot (defaults to 1 to prevent duplicate bookings)
  * @returns {Array<{ time: string, available: boolean, remainingCapacity: number }>}
  */
 export function calculateAvailableSlots({
@@ -21,7 +21,7 @@ export function calculateAvailableSlots({
   timeSlots = [],
   serviceId,
   date,
-  maxPerSlot = 3,
+  maxPerSlot = 1,
 }) {
   if (!date) return [];
 

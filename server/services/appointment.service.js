@@ -8,7 +8,7 @@ import {
 import { newId } from "../utils/id.js";
 import { nowMinutes, today } from "../utils/date.js";
 import { pagination } from "../utils/pagination.js";
-import { DEFAULT_MAX_PARALLEL_SLOTS, perTimeCapacity, scheduleIssue, slotMinutes } from "../utils/slots.js";
+import { scheduleIssue, slotMinutes } from "../utils/slots.js";
 import { referenceNumber, stageIndex } from "../models/appointment.model.js";
 import * as appointments from "../repositories/appointment.repository.js";
 import * as publicServices from "../repositories/publicService.repository.js";
@@ -42,14 +42,13 @@ async function reservePlace(client, { serviceId, departmentId, date, timeSlot, e
   if (date === today() && slotMinutes(timeSlot) <= nowMinutes()) {
     invalid(fields.timeSlot, "That time has already passed today. Choose a later time or another date.");
   }
-  const perTime = perTimeCapacity(schedule, (await settings.findMaxParallelSlots(client)) ?? DEFAULT_MAX_PARALLEL_SLOTS);
   const taken = await appointments.countTaken({ serviceId, date, timeSlot, excludeId }, client);
   if (taken.day >= schedule.dailyCapacity) throw new DailyCapacityError(schedule.dailyCapacity, date);
   if (day.departmentCapacity) {
     const departmentTaken = await appointments.countDepartmentDay({ departmentId, date, excludeId }, client);
     if (departmentTaken >= day.departmentCapacity) throw new DepartmentCapacityError(day.departmentCapacity, date);
   }
-  if (taken.slot >= perTime) throw new SlotFullError();
+  if (taken.slot >= 1) throw new SlotFullError();
 }
 
 /** Inserts with a fresh reference number; a collision (1 in 9000 per day) is retried. */

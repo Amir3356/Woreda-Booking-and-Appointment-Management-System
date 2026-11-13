@@ -157,7 +157,7 @@ export async function findPage({ departmentId, status, date, afterDate, search }
     `SELECT COUNT(*)::int AS total FROM appointments a ${clause}`, params,
   );
   const list = await rows(
-    `${SELECT_WITH_NAMES} ${clause} ORDER BY a.date, a.time_slot, a.id OFFSET $${params.length + 1} LIMIT $${params.length + 2}`,
+    `${SELECT_WITH_NAMES} ${clause} ORDER BY a.created_at DESC, a.id DESC OFFSET $${params.length + 1} LIMIT $${params.length + 2}`,
     [...params, (page - 1) * limit, limit],
   );
   return { items: list.map(fromRow), total };

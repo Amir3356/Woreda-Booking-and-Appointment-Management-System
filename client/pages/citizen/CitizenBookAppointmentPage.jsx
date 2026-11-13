@@ -121,7 +121,7 @@ export default function CitizenBookAppointmentPage() {
   };
 
   const [search, setSearch] = useState("");
-  const [deptFilter, setDeptFilter] = useState("ALL");
+  const [serviceFilter, setServiceFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
   // Booking Modal State
@@ -259,7 +259,8 @@ export default function CitizenBookAppointmentPage() {
       if (opening && closing && (t < opening || t >= closing)) {
         return `That time is outside the working hours (${displayTime(opening)} – ${displayTime(closing)}). Choose another time.`;
       }
-      return `Appointments start every 30 minutes from ${displayTime(opening)}. Choose a time such as ${bookableTimes
+      const interval = availability.data?.slotIntervalMinutes || scheduleForDate?.slotIntervalMinutes || 30;
+      return `Appointments start every ${interval} minutes from ${displayTime(opening)}. Choose a time such as ${bookableTimes
         .slice(0, 2)
         .map((sl) => displayTime(sl.timeSlot))
         .join(" or ")}.`;
@@ -267,7 +268,7 @@ export default function CitizenBookAppointmentPage() {
     if (slot.lunchBreak) {
       return `That time is during the lunch break (${displayTime(scheduleForDate?.lunchStart || "")} – ${displayTime(scheduleForDate?.lunchEnd || "")}). Choose another time.`;
     }
-    if (slot.status === "Full") return "That time is fully booked. Choose another time.";
+    if (slot.status === "Full") return "That appointment time is already booked for this service. Choose another available time.";
     return "That time has already passed today. Choose a later time.";
   })();
   const dateNotice = !selectedService
@@ -343,17 +344,26 @@ export default function CitizenBookAppointmentPage() {
 
   // Filter appointments by search and dropdown filters
   const filteredAppointments = citizenAppointments.filter((apt) => {
-    // 1. Department Filter
-    if (deptFilter !== "ALL") {
-      const matchDept =
-        apt.departmentId === deptFilter ||
-        (apt.departmentName && departments.find((d) => d.id === deptFilter)?.name === apt.departmentName);
-      if (!matchDept) return false;
+    // 1. Service Filter
+    if (serviceFilter !== "ALL") {
+      const matchService =
+        apt.serviceId === serviceFilter ||
+        (apt.serviceName && services.find((s) => s.id === serviceFilter)?.name === apt.serviceName) ||
+        (apt.service && services.find((s) => s.id === serviceFilter)?.name === apt.service);
+      if (!matchService) return false;
     }
 
     // 2. Status Filter
     if (statusFilter !== "ALL") {
-      if (apt.status !== statusFilter) return false;
+      const s = String(apt.status || "").toUpperCase();
+      const f = String(statusFilter).toUpperCase();
+      const match =
+        s === f ||
+        (f === "REJECT" && s === "REJECTED") ||
+        (f === "REJECTED" && s === "REJECT") ||
+        (f === "CANCEL" && s === "CANCELLED") ||
+        (f === "CANCELLED" && s === "CANCEL");
+      if (!match) return false;
     }
 
     // 3. Search Query Filter
@@ -447,7 +457,7 @@ export default function CitizenBookAppointmentPage() {
         msg = "All appointments for that day are already booked (the daily capacity is reached). Please choose another date.";
         setAvailabilityVersion((v) => v + 1);
       } else if (err?.status === 409) {
-        msg = "That time was just taken. Please choose another time.";
+        msg = err?.message || "This appointment time is already booked for this service. Please choose another available time.";
         setAvailabilityVersion((v) => v + 1);
       } else if (err?.status === 422 && err.details?.length) {
         msg = err.details.map((d) => d.issue).join(" ");
@@ -724,18 +734,18 @@ export default function CitizenBookAppointmentPage() {
 
         {/* Dropdown Filters */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Department Filter */}
+          {/* Services Filter */}
           <div className="flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <select
-              value={deptFilter}
-              onChange={(e) => setDeptFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 shadow-2xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
+              value={serviceFilter}
+              onChange={(e) => setServiceFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 shadow-2xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer max-w-[200px] truncate"
             >
-              <option value="ALL">All Departments</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
+              <option value="ALL">All Services</option>
+              {services.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
                 </option>
               ))}
             </select>
@@ -751,23 +761,19 @@ export default function CitizenBookAppointmentPage() {
             >
               <option value="ALL">All Statuses</option>
               <option value="PENDING">Pending</option>
+              <option value="CANCELLED">Cancel</option>
               <option value="APPROVED">Approved</option>
-              <option value="REJECTED">Rejected</option>
-              <option value="CHECKED_IN">Checked In</option>
-              <option value="IN_PROGRESS">In Progress</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="CANCELLED">Cancelled</option>
-              <option value="NO_SHOW">No Show</option>
+              <option value="REJECTED">Reject</option>
             </select>
           </div>
 
           {/* Reset Filters button */}
-          {(search || deptFilter !== "ALL" || statusFilter !== "ALL") && (
+          {(search || serviceFilter !== "ALL" || statusFilter !== "ALL") && (
             <button
               type="button"
               onClick={() => {
                 setSearch("");
-                setDeptFilter("ALL");
+                setServiceFilter("ALL");
                 setStatusFilter("ALL");
               }}
               className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer font-medium"
@@ -910,6 +916,50 @@ export default function CitizenBookAppointmentPage() {
                       />
                       </div>
                     </div>
+
+                    {/* Available / Booked Slot Selection Pills */}
+                    {daySlots.length > 0 && !timeInputDisabled && (
+                      <div>
+                        <span className="block text-[11px] font-bold text-slate-600 mb-1.5">
+                          Time Slots for This Day:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1.5 border border-slate-200 rounded-xl bg-white shadow-2xs">
+                          {daySlots
+                            .filter((sl) => !sl.lunchBreak)
+                            .map((sl) => {
+                              const isAvail = sl.status === "Available";
+                              const isSelected = selectedSlot.time === sl.timeSlot;
+                              return (
+                                <button
+                                  key={sl.timeSlot}
+                                  type="button"
+                                  disabled={!isAvail}
+                                  onClick={() => setSelectedSlot((prev) => ({ ...prev, time: sl.timeSlot }))}
+                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                                    !isAvail
+                                      ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 opacity-60"
+                                      : isSelected
+                                      ? "bg-emerald-600 text-white shadow-xs border border-emerald-600"
+                                      : "bg-slate-50 hover:bg-emerald-50 text-slate-700 border border-slate-200 hover:border-emerald-300 cursor-pointer"
+                                  }`}
+                                  title={
+                                    !isAvail
+                                      ? `${displayTime(sl.timeSlot)} (Already booked)`
+                                      : `${displayTime(sl.timeSlot)} (Available)`
+                                  }
+                                >
+                                  {displayTime(sl.timeSlot)}
+                                  {!isAvail && (
+                                    <span className="ml-1 text-[10px] text-slate-400 font-normal">
+                                      (Booked)
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {timeNotice && (

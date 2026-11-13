@@ -78,13 +78,19 @@ export function createQueueService({ events }) {
       const queueDate = today();
       const [tokens, todays] = await Promise.all([
         queueTokens.findForCitizen(caller.userId, queueDate),
-        appointments.findByCitizen({ citizenId: caller.userId, fromDate: queueDate, statuses: ["PENDING", "APPROVED"] }),
+        appointments.findByCitizen({
+          citizenId: caller.userId,
+          fromDate: queueDate,
+          statuses: ["PENDING", "APPROVED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED"],
+        }),
       ]);
+      const tokenApptIds = new Set(tokens.map((t) => t.appointment_id));
       return {
         date: queueDate,
         averageServiceMinutes: AVG_SERVICE_MINUTES,
         queue: tokens.map((t) => {
           const waiting = t.status === "WAITING";
+          const serving = t.status === "SERVING";
           return {
             appointmentId: t.appointment_id,
             referenceNumber: t.reference_number,
@@ -93,7 +99,7 @@ export function createQueueService({ events }) {
             timeSlot: t.time_slot,
             tokenNumber: t.token_number,
             status: t.status, // WAITING | SERVING | COMPLETED | NO_SHOW
-            position: waiting ? t.ahead + 1 : null,
+            position: waiting ? t.ahead + 1 : serving ? 1 : null,
             citizensAhead: waiting ? t.ahead : 0,
             waitingTotal: t.waiting_total,
             nowServing: t.now_serving ?? null,
@@ -103,12 +109,16 @@ export function createQueueService({ events }) {
             estimatedWaitMinutes: waiting ? t.ahead * AVG_SERVICE_MINUTES : 0,
           };
         }),
-        // Today's appointments not yet checked in (no queue token yet).
+        // Today's appointments not yet checked in (no queue token yet) or completed directly.
         notCheckedIn: todays
-          .filter((a) => a.date === queueDate)
+          .filter((a) => a.date === queueDate && !tokenApptIds.has(a.id))
           .map((a) => ({
-            appointmentId: a.id, referenceNumber: a.referenceNumber, serviceName: a.serviceName,
-            departmentName: a.departmentName, timeSlot: a.timeSlot, status: a.status,
+            appointmentId: a.id,
+            referenceNumber: a.referenceNumber,
+            serviceName: a.serviceName,
+            departmentName: a.departmentName,
+            timeSlot: a.timeSlot,
+            status: a.status,
           })),
       };
     },
@@ -153,7 +163,13 @@ export function createQueueService({ events }) {
     /** Closes a WAITING/SERVING token as COMPLETED or NO_SHOW and cascades the status to its appointment. */
     async finalize(officer, id, req) {
       const appointmentId = await transaction(async (client) => {
-        const apptId = await queueTokens.finalize(id, officer.departmentId, req.status, client);
+        let apptId = await queueTokens.finalize(id, officer.departmentId, req.status, client);
+        if (!apptId) {
+          const a = await appointments.findById(id);
+          if (a && (!officer.departmentId || a.departmentId === officer.departmentId)) {
+            apptId = a.id;
+          }
+        }
         if (!apptId) throw new NotFoundError();
         await appointments.markFinal(apptId, req.status, client);
         return apptId;

@@ -69,7 +69,7 @@ export async function claimNextWaiting(departmentId, queueDate, { counterNumber,
 export async function finalize(id, departmentId, status, client) {
   const row = await one(
     `UPDATE queue_tokens SET status = $3, updated_at = now()
-     WHERE id = $1 AND status IN ('WAITING', 'SERVING') AND ($2::text IS NULL OR department_id = $2)
+     WHERE (id = $1 OR appointment_id = $1) AND status IN ('WAITING', 'SERVING') AND ($2::text IS NULL OR department_id = $2)
      RETURNING appointment_id`,
     [id, departmentId || null, status],
     client,
@@ -85,7 +85,9 @@ export async function finalize(id, departmentId, status, client) {
  */
 export async function findForCitizen(citizenId, queueDate) {
   return rows(
-    `SELECT q.id, q.token_number, q.status, q.counter_number, q.called_time, q.checked_in_time, q.department_id,
+    `SELECT q.id, q.token_number,
+            CASE WHEN a.status = 'COMPLETED' OR q.status = 'COMPLETED' THEN 'COMPLETED' ELSE q.status END AS status,
+            q.counter_number, q.called_time, q.checked_in_time, q.department_id,
             a.id AS appointment_id, a.reference_number, a.time_slot, s.name AS service_name, d.name AS department_name,
             (SELECT COUNT(*) FROM queue_tokens w
               WHERE w.department_id = q.department_id AND w.queue_date = q.queue_date AND w.status = 'WAITING'

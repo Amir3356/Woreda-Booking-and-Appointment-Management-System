@@ -5,7 +5,14 @@
 import { DAY_NAMES, minutes, pad, parseClock, parseDate, weekdayOf } from "./date.js";
 
 const SLOT_MINUTES = 30;
-export const DEFAULT_MAX_PARALLEL_SLOTS = 3;
+export const DEFAULT_SLOT_MINUTES = 30;
+export const DEFAULT_MAX_PARALLEL_SLOTS = 1;
+
+/** Slot duration in minutes configured on the schedule (defaults to 30). */
+export function slotDuration(schedule) {
+  const n = schedule?.slotIntervalMinutes ?? schedule?.slot_interval_minutes;
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_SLOT_MINUTES;
+}
 
 /** Minutes since midnight in the client format ("09:00 AM", "13:30 PM"). */
 function slotLabel(m) {
@@ -29,19 +36,21 @@ export function slotMinutes(label) {
  */
 function isLunch(schedule, m) {
   if (!schedule?.lunchStart || !schedule?.lunchEnd) return false;
-  return m < minutes(schedule.lunchEnd) && m + SLOT_MINUTES > minutes(schedule.lunchStart);
+  const duration = slotDuration(schedule);
+  return m < minutes(schedule.lunchEnd) && m + duration > minutes(schedule.lunchStart);
 }
 
 /** "12:30–13:30" for the messages. */
 const lunchLabel = (schedule) => `${schedule.lunchStart}–${schedule.lunchEnd}`;
 
-/** Start minute of every appointment time in the working hours: opening, +30, ... while it ends by closing. */
+/** Start minute of every appointment time in the working hours: opening, +duration, ... while it ends by closing. */
 function slotStarts(schedule) {
   if (!schedule) return [];
   const open = minutes(schedule.openingTime);
   const closing = minutes(schedule.closingTime);
+  const duration = slotDuration(schedule);
   const out = [];
-  for (let m = open; m + SLOT_MINUTES <= closing; m += SLOT_MINUTES) out.push(m);
+  for (let m = open; m + duration <= closing; m += duration) out.push(m);
   return out;
 }
 
@@ -51,13 +60,11 @@ function openTimesCount(schedule) {
 }
 
 /**
- * Places per booking time: the woreda-wide maxParallelSlots, raised when the schedule's daily
- * capacity needs more (capacity 20 over 5 times -> 4 each), so the whole daily capacity can be booked.
+ * Places per booking time: exactly 1 booking is allowed per service, date, and time slot
+ * to strictly prevent duplicate bookings for the same service, date, and time.
  */
-export function perTimeCapacity(schedule, maxParallelSlots) {
-  const times = openTimesCount(schedule);
-  if (!schedule?.dailyCapacity || times === 0) return maxParallelSlots;
-  return Math.max(maxParallelSlots, Math.ceil(schedule.dailyCapacity / times));
+export function perTimeCapacity(schedule, maxParallelSlots = 1) {
+  return 1;
 }
 
 /**
@@ -68,14 +75,15 @@ export function scheduleIssue(schedule, date, timeSlot) {
   if (!(schedule.workingDays ?? []).includes(weekdayOf(date))) {
     return { field: "date", issue: `This service is closed on ${DAY_NAMES[weekdayOf(date)]}s.` };
   }
+  const duration = slotDuration(schedule);
   const start = slotMinutes(timeSlot);
   const open = parseClock(schedule.openingTime) ?? 0;
   const close = parseClock(schedule.closingTime) ?? 0;
-  if (start === null || start < open || start + SLOT_MINUTES > close) {
+  if (start === null || start < open || start + duration > close) {
     return { field: "timeSlot", issue: `That time is outside the working hours (${schedule.openingTime}–${schedule.closingTime}).` };
   }
-  if ((start - open) % SLOT_MINUTES !== 0) {
-    return { field: "timeSlot", issue: "Appointments start every 30 minutes from the opening time; choose one of the offered times." };
+  if ((start - open) % duration !== 0) {
+    return { field: "timeSlot", issue: `Appointments start every ${duration} minutes from the opening time; choose one of the offered times.` };
   }
   if (isLunch(schedule, start)) {
     return { field: "timeSlot", issue: `That time is during the lunch break (${lunchLabel(schedule)}); choose another time.` };
@@ -118,7 +126,7 @@ export function applyDailyCapacity(slots, reason) {
  * listed as Unavailable with lunchBreak: true. day: "YYYY-MM-DD" or parsed date,
  * counts: {"09:00 AM": n}, max: places per time.
  */
-export function buildSlots(schedule, day, counts, max) {
+export function buildSlots(schedule, day, counts, max = 1) {
   const d = typeof day === "string" ? parseDate(day) : day;
   if (!schedule || !(schedule.workingDays ?? []).includes(weekdayOf(d))) return [];
   const slots = [];

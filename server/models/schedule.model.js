@@ -18,6 +18,7 @@ export function fromRow(r) {
     closingTime: clock(r.closing_time),
     lunchStart: clock(r.lunch_start),
     lunchEnd: clock(r.lunch_end),
+    slotIntervalMinutes: r.slot_interval_minutes ?? 30,
     // For a booking lookup (one service): that service's own capacity, else the schedule's default.
     dailyCapacity: r.own_capacity ?? r.daily_capacity,
     // Each service's own Daily Appointment Capacity: [{ serviceId, service, dailyCapacity }].

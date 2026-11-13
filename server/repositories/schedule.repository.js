@@ -122,7 +122,7 @@ export async function findActive(serviceId, departmentId, date, client) {
 export const DEFAULT_SERVICE_CAPACITY = 20;
 
 const values = (s) => [s.departmentId, s.serviceId, s.workingDays, s.openingTime, s.closingTime, s.dailyCapacity ?? null,
-  s.effectiveStartDate, s.effectiveEndDate, s.lunchStart ?? null, s.lunchEnd ?? null];
+  s.effectiveStartDate, s.effectiveEndDate, s.lunchStart ?? null, s.lunchEnd ?? null, s.slotIntervalMinutes ?? 30];
 
 /** Replaces the per-service capacities of a schedule when a list is given (null leaves them unchanged). */
 async function replaceServiceCapacities(client, scheduleId, list) {
@@ -140,8 +140,8 @@ export function create(s) {
   return transaction(async (client) => {
     await client.query(
       `INSERT INTO schedules (id, status, department_id, service_id, working_days, opening_time, closing_time, daily_capacity,
-         effective_start_date, effective_end_date, lunch_start, lunch_end)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, ${DEFAULT_SERVICE_CAPACITY}), $9, $10, $11, $12)`,
+         effective_start_date, effective_end_date, lunch_start, lunch_end, slot_interval_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, ${DEFAULT_SERVICE_CAPACITY}), $9, $10, $11, $12, $13)`,
       [s.id, s.status ?? "ACTIVE", ...values(s)],
     );
     await replaceServiceCapacities(client, s.id, s.serviceCapacities ?? []);
@@ -154,7 +154,7 @@ export function update(id, s) {
     const { rowCount } = await client.query(
       `UPDATE schedules SET department_id = $2, service_id = $3, working_days = $4, opening_time = $5, closing_time = $6,
          daily_capacity = COALESCE($7, daily_capacity), effective_start_date = $8, effective_end_date = $9, lunch_start = $10,
-         lunch_end = $11, status = COALESCE($12, status), updated_at = now()
+         lunch_end = $11, slot_interval_minutes = COALESCE($12, slot_interval_minutes), status = COALESCE($13, status), updated_at = now()
        WHERE id = $1`,
       [id, ...values(s), s.status ?? null],
     );
