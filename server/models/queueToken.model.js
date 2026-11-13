@@ -22,6 +22,8 @@ export function fromRow(r) {
     queueDate: r.queue_date,
     citizenName: r.citizen_name ?? "",
     serviceName: r.service_name ?? "",
+    timeSlot: r.time_slot ?? null,
+    appointmentDate: r.appointment_date ?? r.date ?? null,
   };
 }
 

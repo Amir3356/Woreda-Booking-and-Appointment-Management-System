@@ -19,8 +19,25 @@ import {
   AlertCircle,
   FileCheck2,
   MapPin,
+  Users,
 } from "lucide-react";
 import Link from "@/components/ui/Link";
+
+function parseTimeToMinutes(val) {
+  if (!val) return 0;
+  if (typeof val === "string" && val.includes("T")) {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes();
+  }
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i.exec(String(val).trim());
+  if (!m) return 0;
+  let h = Number(m[1]);
+  const min = Number(m[2]);
+  const meridiem = (m[3] || "").toUpperCase();
+  if (meridiem === "PM" && h < 12) h += 12;
+  if (meridiem === "AM" && h === 12) h = 0;
+  return h * 60 + min;
+}
 
 function BookingContent() {
   const searchParams = useSearchParams();
@@ -114,6 +131,35 @@ function BookingContent() {
         : !hasFreeTime
           ? "Every appointment time on that day is taken. Choose another date."
           : "";
+
+  /**
+   * Calculates how many citizens are already scheduled to be served before the target appointment time
+   * on the selected date. Priority rule: Appointment Time -> Check-in Time (FIFO).
+   */
+  const getPeopleAheadCount = (targetTime) => {
+    if (!targetTime || !dayInfo) return 0;
+    const targetMin = parseTimeToMinutes(targetTime);
+    if (targetMin <= 0) return 0;
+
+    const deptSlotCounts = dayInfo.departmentSlotCounts;
+    if (deptSlotCounts && typeof deptSlotCounts === "object" && Object.keys(deptSlotCounts).length > 0) {
+      let count = 0;
+      for (const [timeKey, num] of Object.entries(deptSlotCounts)) {
+        if (parseTimeToMinutes(timeKey) < targetMin) {
+          count += Number(num) || 0;
+        }
+      }
+      return count;
+    }
+
+    const slots = dayInfo.slots || [];
+    return slots
+      .filter((sl) => parseTimeToMinutes(sl.timeSlot) < targetMin)
+      .reduce((sum, sl) => sum + (sl.departmentBookedCount ?? sl.bookedCount ?? (sl.status === "Full" || sl.status === "Booked" ? 1 : 0)), 0);
+  };
+
+  const sameServiceBookedCount = dayInfo?.bookedForDay ?? 0;
+  const selectedPeopleAhead = selectedTimeSlot ? getPeopleAheadCount(selectedTimeSlot) : 0;
 
   const handleNextStep = () => {
     setErrorMsg("");
@@ -562,6 +608,7 @@ function BookingContent() {
                 {daySlots.map((slot) => {
                   const available = slot.status === "Available";
                   const isSelected = selectedTimeSlot === slot.timeSlot;
+                  const aheadForSlot = getPeopleAheadCount(slot.timeSlot);
                   return (
                     <button
                       key={slot.timeSlot}
@@ -573,17 +620,120 @@ function BookingContent() {
                           ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60"
                           : isSelected
                           ? "border-blue-700 bg-blue-50 text-blue-900 font-bold shadow-xs"
-                          : "border-slate-200 bg-white hover:border-slate-300 text-slate-800"
+                          : "border-slate-200 bg-white hover:border-slate-300 text-slate-800 cursor-pointer"
                       }`}
+                      title={
+                        !available
+                          ? `${displayTime(slot.timeSlot)} (Already booked)`
+                          : `${displayTime(slot.timeSlot)} (${
+                              aheadForSlot === 0
+                                ? "0 ahead · 1st to be served"
+                                : `${aheadForSlot} ${aheadForSlot === 1 ? "person" : "people"} scheduled before this time`
+                            })`
+                      }
                     >
                       <p className="text-xs font-bold">{displayTime(slot.timeSlot)}</p>
-                      <span className="text-[10px] text-slate-500 block mt-0.5">
-                        {slot.lunchBreak ? "Lunch break" : available ? "Available" : "Already Booked"}
-                      </span>
+                      <div className="flex items-center justify-center gap-1 mt-1">
+                        <span className="text-[10px] text-slate-500">
+                          {slot.lunchBreak ? "Lunch break" : available ? "Available" : "Already Booked"}
+                        </span>
+                        {available && (
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                              isSelected
+                                ? "bg-blue-700 text-white"
+                                : aheadForSlot === 0
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {aheadForSlot === 0 ? "1st" : `${aheadForSlot} ahead`}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   );
                 })}
               </div>
+
+              {/* Queue Position & Service Booking Status Preview Card */}
+              {selectedTimeSlot && (
+                <div className="p-4 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50/90 via-sky-50/80 to-indigo-50/80 text-slate-800 shadow-2xs mt-5">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
+                        selectedPeopleAhead === 0
+                          ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
+                          : "bg-blue-100 text-blue-700 border border-blue-300"
+                      }`}
+                    >
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
+                          Queue Position & Service Booking Status
+                        </span>
+                        <span
+                          className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border shadow-2xs ${
+                            selectedPeopleAhead === 0
+                              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                              : "bg-blue-100 text-blue-800 border-blue-300"
+                          }`}
+                        >
+                          {selectedPeopleAhead === 0
+                            ? "Estimated Serving Order: 1st in Queue"
+                            : `Estimated Serving Order: #${selectedPeopleAhead + 1} in Queue`}
+                        </span>
+                      </div>
+
+                      {/* 2 Key Metrics Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2.5 pt-2 border-t border-blue-200/60">
+                        <div className="p-2.5 rounded-xl bg-white/85 border border-blue-100 shadow-2xs">
+                          <span className="text-[11px] font-semibold text-slate-500 block">
+                            Already Booked for This Service ({formatDate(selectedDate)})
+                          </span>
+                          <p className="text-xs font-bold text-slate-900 mt-0.5">
+                            <strong className="text-blue-900 font-black text-sm">{sameServiceBookedCount}</strong>{" "}
+                            {sameServiceBookedCount === 1 ? "other citizen has" : "other citizens have"} booked this service on this day
+                          </p>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-white/85 border border-blue-100 shadow-2xs">
+                          <span className="text-[11px] font-semibold text-slate-500 block">
+                            Scheduled to Be Served Before You ({displayTime(selectedTimeSlot)})
+                          </span>
+                          <p className="text-xs font-bold text-slate-900 mt-0.5">
+                            {selectedPeopleAhead === 0 ? (
+                              <span className="text-emerald-700 font-bold">
+                                0 people ahead · You will be served 1st!
+                              </span>
+                            ) : (
+                              <span>
+                                <strong className="text-indigo-900 font-black text-sm">{selectedPeopleAhead}</strong>{" "}
+                                {selectedPeopleAhead === 1 ? "person is" : "people are"} scheduled before this time
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-slate-600 mt-2 leading-relaxed">
+                        Citizens are served in order of scheduled appointment time (earliest appointment served first).
+                        {selectedPeopleAhead > 0 ? (
+                          <span className="text-blue-700 font-semibold ml-1">
+                            Choosing an earlier available time slot allows you to be served sooner in the queue.
+                          </span>
+                        ) : (
+                          <span className="text-emerald-700 font-semibold ml-1">
+                            You selected the earliest available slot — you will be first in line when desk service begins.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -691,6 +841,27 @@ function BookingContent() {
                   <div>
                     <span className="text-slate-400 block font-medium">Time Slot</span>
                     <p className="font-bold text-blue-700">{selectedTimeSlot}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-200">
+                  <div>
+                    <span className="text-slate-400 block font-medium">Estimated Serving Order</span>
+                    <p className="font-extrabold text-blue-700">
+                      {selectedPeopleAhead === 0 ? "1st in Queue" : `#${selectedPeopleAhead + 1} in Queue`}
+                    </p>
+                    <p className="text-slate-500 text-[11px]">
+                      {selectedPeopleAhead === 0
+                        ? "0 citizens scheduled ahead"
+                        : `${selectedPeopleAhead} ${selectedPeopleAhead === 1 ? "citizen" : "citizens"} scheduled ahead`}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-medium">Service Bookings on This Day</span>
+                    <p className="font-bold text-slate-800">
+                      {sameServiceBookedCount} {sameServiceBookedCount === 1 ? "citizen" : "citizens"} booked
+                    </p>
+                    <p className="text-slate-500 text-[11px]">for {selectedService?.name}</p>
                   </div>
                 </div>
 

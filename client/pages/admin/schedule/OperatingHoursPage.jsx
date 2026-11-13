@@ -1,7 +1,7 @@
 // Admin > Schedule Management > Working Hours: one set of working days, opening / closing times
 // and lunch break shared by every department of the Woreda, with a daily appointment capacity
 // and an effective period.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { scheduleApi } from "@/api";
 import { useStore } from "@/context";
@@ -18,11 +18,169 @@ import {
   X,
   Search,
   Circle,
+  Calendar,
 } from "lucide-react";
 
 const DEFAULT_CAPACITY = 20;
 const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const PAGE_SIZE = 5;
+
+function isoToDmy(iso) {
+  if (!iso || typeof iso !== "string") return "";
+  const parts = iso.split("-");
+  if (parts.length !== 3) return "";
+  const [y, m, d] = parts;
+  return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+}
+
+function dmyToIso(dmy) {
+  if (!dmy || typeof dmy !== "string") return null;
+  const parts = dmy.split("/");
+  if (parts.length !== 3) return null;
+  const [dayStr, monthStr, yearStr] = parts;
+  if (dayStr.length !== 2 || monthStr.length !== 2 || yearStr.length !== 4) return null;
+  const d = Number(dayStr);
+  const m = Number(monthStr);
+  const y = Number(yearStr);
+  if (isNaN(d) || isNaN(m) || isNaN(y)) return null;
+  if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900 || y > 2100) return null;
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) {
+    return null;
+  }
+  return `${yearStr}-${monthStr}-${dayStr}`;
+}
+
+/**
+ * Custom Date Input matching DD/MM/YYYY with calendar icon on left & picker button on right.
+ * Clicking/tapping anywhere opens the interactive date picker so manual number typing is not required.
+ */
+function ScheduleDateDmyInput({
+  id = "effectiveStartDate",
+  value,
+  onChange,
+  required = true,
+  ariaLabel = "Effective Start Date",
+}) {
+  const [text, setText] = useState(() => isoToDmy(value));
+  const pickerRef = useRef(null);
+
+  useEffect(() => {
+    setText(isoToDmy(value));
+  }, [value]);
+
+  const handleNativeChange = (e) => {
+    const iso = e.target.value;
+    if (iso) {
+      setText(isoToDmy(iso));
+      onChange(iso);
+    }
+  };
+
+  const handleTextChange = (e) => {
+    const val = e.target.value;
+    let cleaned = val.replace(/[^\d/]/g, "").slice(0, 10);
+
+    // Auto-insert slash after 2 and 5 digits when typing forward
+    if (cleaned.length === 2 && !cleaned.includes("/") && val.length > text.length) {
+      cleaned = `${cleaned}/`;
+    } else if (
+      cleaned.length === 5 &&
+      (cleaned.match(/\//g) || []).length === 1 &&
+      val.length > text.length
+    ) {
+      cleaned = `${cleaned}/`;
+    }
+
+    setText(cleaned);
+
+    const iso = dmyToIso(cleaned);
+    if (iso) {
+      onChange(iso);
+    }
+  };
+
+  const handleBlur = () => {
+    const iso = dmyToIso(text);
+    if (iso) {
+      onChange(iso);
+      setText(isoToDmy(iso));
+    } else if (value) {
+      setText(isoToDmy(value));
+    } else {
+      setText("");
+    }
+  };
+
+  const openPicker = (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    try {
+      if (pickerRef.current?.showPicker) {
+        pickerRef.current.showPicker();
+      } else {
+        pickerRef.current?.focus();
+      }
+    } catch {
+      pickerRef.current?.focus();
+    }
+  };
+
+  return (
+    <div className="relative flex items-center w-full">
+      {/* Left Icon Button - triggers calendar picker */}
+      <button
+        type="button"
+        onClick={openPicker}
+        title="Open calendar picker"
+        aria-label="Open calendar picker"
+        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer z-10"
+      >
+        <Calendar className="w-4 h-4 text-slate-500 hover:text-slate-800" aria-hidden="true" />
+      </button>
+
+      {/* Main Formatted Text Input */}
+      <input
+        id={id}
+        type="text"
+        required={required}
+        value={text}
+        placeholder="DD/MM/YYYY"
+        onChange={handleTextChange}
+        onBlur={handleBlur}
+        onClick={openPicker}
+        aria-label={ariaLabel}
+        maxLength={10}
+        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0b2545] focus:border-[#0b2545] cursor-pointer shadow-2xs tabular-nums tracking-wide placeholder:text-slate-400"
+      />
+
+      {/* Transparent native date picker layered directly over the left icon */}
+      <input
+        ref={pickerRef}
+        type="date"
+        value={value || ""}
+        onChange={handleNativeChange}
+        tabIndex={-1}
+        aria-hidden="true"
+        title="Choose date"
+        style={{
+          position: "absolute",
+          left: "0.375rem",
+          top: "50%",
+          transform: "translateY(-50%)",
+          width: "2rem",
+          height: "2rem",
+          opacity: 0,
+          cursor: "pointer",
+          zIndex: 20,
+          border: "none",
+          padding: 0,
+          margin: 0,
+        }}
+      />
+    </div>
+  );
+}
 
 
 
@@ -101,8 +259,9 @@ export default function OperatingHoursPage() {
     closingTime: "17:30",
     lunchStart: "12:30",
     lunchEnd: "13:30",
+    slotIntervalMinutes: 30,
     capacities: {}, // { serviceId: "20" }; a service not in it shows the default 20
-    effectiveStartDate: localIsoDate(),
+    effectiveStartDate: "",
     effectiveEndDate: "",
     status: "Active",
   };
@@ -125,6 +284,7 @@ export default function OperatingHoursPage() {
       closingTime: sch.closingTime || "17:30",
       lunchStart: sch.lunchStart || "",
       lunchEnd: sch.lunchEnd || "",
+      slotIntervalMinutes: sch.slotIntervalMinutes ?? 30,
       // Each service's own capacity; services without one show the schedule's default.
       capacities: Object.fromEntries(
         (storeServices || []).map((srv) => {
@@ -224,6 +384,17 @@ export default function OperatingHoursPage() {
       return;
     }
 
+    const slotInterval = Number(form.slotIntervalMinutes) || 30;
+    if (!Number.isInteger(slotInterval) || slotInterval < 5 || slotInterval > 240) {
+      toast.error("Could not save the schedule: the Appointment Slot Interval must be a whole number between 5 and 240 minutes.", { duration: 6000 });
+      return;
+    }
+
+    if (!form.effectiveStartDate) {
+      toast.error("Could not save the schedule: please select an Effective Start Date.", { duration: 6000 });
+      return;
+    }
+
     const payload = {
       departmentId: null, // the same working hours for every department of the Woreda
       serviceId: null,
@@ -232,9 +403,10 @@ export default function OperatingHoursPage() {
       closingTime: form.closingTime,
       lunchStart: hasLunch ? form.lunchStart : null,
       lunchEnd: hasLunch ? form.lunchEnd : null,
+      slotIntervalMinutes: slotInterval,
       dailyCapacity: null, // default for services added later: kept on edit, 20 on create
       serviceCapacities,
-      effectiveStartDate: form.effectiveStartDate || localIsoDate(),
+      effectiveStartDate: form.effectiveStartDate,
       effectiveEndDate: form.effectiveEndDate || null,
       status: form.status,
     };
@@ -297,6 +469,17 @@ export default function OperatingHoursPage() {
       meta: { className: "text-slate-700 whitespace-nowrap" },
       cell: ({ row }) =>
         row.original.lunchEnd ? displayTime(row.original.lunchEnd) : <span className="text-slate-400">No break</span>,
+    },
+    {
+      id: "slotInterval",
+      accessorFn: (sch) => sch.slotIntervalMinutes ?? 30,
+      header: "Slot Interval",
+      meta: { className: "text-slate-700 whitespace-nowrap" },
+      cell: ({ row }) => (
+        <span className="font-semibold text-slate-800 text-xs">
+          {row.original.slotIntervalMinutes ?? 30} mins
+        </span>
+      ),
     },
     {
       id: "capacity",
@@ -599,6 +782,30 @@ export default function OperatingHoursPage() {
                 </p>
               </div>
 
+              {/* Custom Appointment Slot Interval */}
+              <div>
+                <label htmlFor="slot-interval-minutes" className="block text-xs font-bold text-slate-700 mb-1">
+                  Appointment Slot Interval (Minutes)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    id="slot-interval-minutes"
+                    min="5"
+                    max="240"
+                    step="1"
+                    required
+                    value={form.slotIntervalMinutes}
+                    onChange={(e) => setForm({ ...form, slotIntervalMinutes: e.target.value })}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    placeholder="Enter slot interval in minutes (e.g. 30)"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Custom duration for each appointment slot in minutes (e.g. 15, 20, 30, 45, 60). Applied to all public services.
+                </p>
+              </div>
+
               {/* Daily Appointment Capacity: one per service */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1 text-center">
@@ -637,15 +844,14 @@ export default function OperatingHoursPage() {
 
               {/* Effective Start Date */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label htmlFor="effectiveStartDate" className="block text-xs font-bold text-slate-700 mb-1">
                   Effective Start Date
                 </label>
-                <input
-                  type="date"
+                <ScheduleDateDmyInput
+                  id="effectiveStartDate"
                   required
                   value={form.effectiveStartDate}
-                  onChange={(e) => setForm({ ...form, effectiveStartDate: e.target.value })}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(iso) => setForm({ ...form, effectiveStartDate: iso })}
                 />
               </div>
 

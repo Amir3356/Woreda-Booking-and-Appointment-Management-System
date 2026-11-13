@@ -4,7 +4,7 @@ import { useStore } from "@/context";
 import { DataTable } from "@/components/ui";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatDate } from "@/utils";
-import { AlertCircle, Check, X } from "lucide-react";
+import { AlertCircle, Check, X, Clock } from "lucide-react";
 
 export default function OfficerAppointmentsPage() {
   const {
@@ -138,6 +138,45 @@ export default function OfficerAppointmentsPage() {
       header: "Appointment Time",
       meta: { className: "text-blue-700 font-bold whitespace-nowrap" },
       cell: ({ row }) => row.original.timeSlot,
+    },
+    {
+      id: "requestedAt",
+      accessorFn: (apt) => apt.createdAt || "",
+      header: () => (
+        <span title="Requested at">
+          Requested at
+          <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+            Requested at
+          </span>
+        </span>
+      ),
+      sortFn: "datetime",
+      meta: { className: "whitespace-nowrap" },
+      cell: ({ row }) => {
+        const createdAt = row.original.createdAt;
+        if (!createdAt) return <span className="text-xs text-slate-400">—</span>;
+        const d = new Date(createdAt);
+        if (isNaN(d.getTime())) return <span className="text-xs text-slate-700">{createdAt}</span>;
+        const dateStr = d.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+        const timeStr = d.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        });
+        return (
+          <div className="whitespace-nowrap">
+            <div className="font-semibold text-slate-800 text-xs">{dateStr}</div>
+            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
+              <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+              <span>{timeStr}</span>
+            </div>
+          </div>
+        );
+      },
     },
     {
       id: "status",

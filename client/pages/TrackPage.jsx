@@ -132,23 +132,6 @@ function TrackContent() {
               Track Appointment
             </button>
           </form>
-
-          {/* Quick Demo Reference Suggestions */}
-          <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            <span className="font-semibold text-slate-600">Sample Records:</span>
-            {appointments.slice(0, 3).map((a) => (
-              <button
-                key={a.id}
-                onClick={() => {
-                  setQuery(a.referenceNumber);
-                  performSearch(a.referenceNumber);
-                }}
-                className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-mono text-[11px] transition-colors"
-              >
-                {a.referenceNumber}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Search Results */}

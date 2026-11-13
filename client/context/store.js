@@ -692,9 +692,40 @@ export const useStore = create(
         }
       },
       callNextCitizen: (departmentId) => {
-        const waitingItem = get().queue.find(
-          (q) => q.departmentId === departmentId && q.status === "WAITING"
+        const waitingItems = get().queue.filter(
+          (q) => (!departmentId || q.departmentId === departmentId) && q.status === "WAITING"
         );
+        if (waitingItems.length === 0) return null;
+
+        const parseMinutes = (val) => {
+          if (!val) return 0;
+          if (typeof val === "string" && val.includes("T")) {
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes();
+          }
+          const m = /^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i.exec(String(val).trim());
+          if (!m) return 0;
+          let h = Number(m[1]);
+          const min = Number(m[2]);
+          const meridiem = (m[3] || "").toUpperCase();
+          if (meridiem === "PM" && h < 12) h += 12;
+          if (meridiem === "AM" && h === 12) h = 0;
+          return h * 60 + min;
+        };
+
+        const sorted = [...waitingItems].sort((a, b) => {
+          const apptMinA = parseMinutes(a.timeSlot);
+          const apptMinB = parseMinutes(b.timeSlot);
+          const checkInMinA = parseMinutes(a.checkedInTime || a.checkedInAt || a.timeSlot);
+          const checkInMinB = parseMinutes(b.checkedInTime || b.checkedInAt || b.timeSlot);
+          const effA = Math.max(apptMinA, checkInMinA);
+          const effB = Math.max(apptMinB, checkInMinB);
+          if (effA !== effB) return effA - effB;
+          if (checkInMinA !== checkInMinB) return checkInMinA - checkInMinB;
+          return String(a.id || "").localeCompare(String(b.id || ""), undefined, { numeric: true });
+        });
+
+        const waitingItem = sorted[0];
         if (waitingItem) {
           get().updateQueueStatus(waitingItem.id, "SERVING");
           get().updateAppointmentStatus(waitingItem.appointmentId, "IN_PROGRESS");

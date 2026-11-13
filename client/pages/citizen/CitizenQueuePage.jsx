@@ -25,9 +25,10 @@ export default function CitizenQueuePage() {
 
   const [state, setState] = useState({ loading: true, data: null, error: false });
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [newlyCompleted, setNewlyCompleted] = useState([]);
   const request = useRef(0);
-  const initialLoadDone = useRef(false);
-  const knownCompletedIds = useRef(new Set());
+  const isInitialSyncDone = useRef(false);
+  const previousStatuses = useRef(new Map());
 
   const load = useCallback(async () => {
     const id = ++request.current;
@@ -92,6 +93,7 @@ export default function CitizenQueuePage() {
       position: isCompleted ? null : isServing ? 1 : t.position ?? index + 1,
       isCheckedIn: true,
       counterNumber: t.counterNumber || aptInStore?.deskNumber || null,
+      createdAt: aptInStore?.createdAt || t.createdAt || null,
     };
   });
 
@@ -112,6 +114,7 @@ export default function CitizenQueuePage() {
       citizensAhead: 0,
       counterNumber: a.counterNumber || aptInStore?.deskNumber || null,
       isCheckedIn: false,
+      createdAt: aptInStore?.createdAt || a.createdAt || null,
     };
   });
 
@@ -142,6 +145,7 @@ export default function CitizenQueuePage() {
         citizensAhead: 0,
         counterNumber: a.deskNumber || null,
         isCheckedIn: Boolean(a.checkedInAt),
+        createdAt: a.createdAt || null,
       };
     });
 
@@ -156,29 +160,51 @@ export default function CitizenQueuePage() {
     return (a.position || 999) - (b.position || 999);
   });
 
-  // Track live completion toast notifications
+  // Track live completion toast notifications:
+  // ONLY fires when an appointment transitions to COMPLETED live during this session
+  // (e.g. when the department taps "Complete Service").
+  // Baseline on initial load NEVER fires toast.
   useEffect(() => {
-    if (!allRows.length) return;
+    if (!allRows || allRows.length === 0) return;
 
-    allRows.forEach((row) => {
-      const id = row.appointmentId || row.referenceNumber;
-      if (row.status === "COMPLETED") {
-        if (!knownCompletedIds.current.has(id)) {
-          if (initialLoadDone.current) {
-            setBannerDismissed(false);
-            const deptName = row.departmentName || "Civil Registration Department";
-            toast.success("Service Completed Successfully", {
-              description: `Your service for "${row.serviceName || "appointment"}" has been marked as completed by ${deptName}.`,
-              duration: Infinity,
-              closeButton: true,
-            });
-          }
-          knownCompletedIds.current.add(id);
+    // Record baseline statuses on initial data load without showing any toast
+    if (!isInitialSyncDone.current) {
+      allRows.forEach((row) => {
+        const id = String(row.appointmentId || row.referenceNumber || row.id || "");
+        if (id) {
+          previousStatuses.current.set(id, row.status);
         }
+      });
+      isInitialSyncDone.current = true;
+      return;
+    }
+
+    // Subsequent updates: check for a live status transition to COMPLETED
+    const liveFinished = [];
+    allRows.forEach((row) => {
+      const id = String(row.appointmentId || row.referenceNumber || row.id || "");
+      if (!id) return;
+
+      const prevStatus = previousStatuses.current.get(id);
+
+      // Transition happened live from an active state to COMPLETED
+      if (prevStatus && prevStatus !== "COMPLETED" && row.status === "COMPLETED") {
+        liveFinished.push(row);
+        setBannerDismissed(false);
+        const deptName = row.departmentName || "Civil Registration Department";
+        toast.success("Service Completed Successfully", {
+          description: `Your service for "${row.serviceName || "appointment"}" has been marked as completed by ${deptName}.`,
+          duration: Infinity,
+          closeButton: true,
+        });
       }
+
+      previousStatuses.current.set(id, row.status);
     });
 
-    initialLoadDone.current = true;
+    if (liveFinished.length > 0) {
+      setNewlyCompleted((prev) => [...prev, ...liveFinished]);
+    }
   }, [allRows]);
 
   const completedRows = allRows.filter((r) => r.status === "COMPLETED");
@@ -207,23 +233,6 @@ export default function CitizenQueuePage() {
       ),
     },
     {
-      id: "tokenNumber",
-      accessorFn: (row) => row.tokenNumber || "",
-      header: "Token",
-      sortFn: "text",
-      cell: ({ row }) => {
-        const token = row.original.tokenNumber;
-        if (!token || token === "—") {
-          return <span className="text-slate-400 text-xs">—</span>;
-        }
-        return (
-          <span className="font-mono font-bold text-xs text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-            {token}
-          </span>
-        );
-      },
-    },
-    {
       id: "appointmentTime",
       accessorFn: (row) => row.timeSlot || "",
       header: "Appointment Time",
@@ -239,20 +248,41 @@ export default function CitizenQueuePage() {
       },
     },
     {
-      id: "counter",
-      accessorFn: (row) => row.counterNumber || 0,
-      header: "Counter Desk",
-      sortFn: "basic",
+      id: "requestedAt",
+      accessorFn: (row) => row.createdAt || "",
+      header: () => (
+        <span title="Requested at">
+          Requested at
+          <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+            Requested at
+          </span>
+        </span>
+      ),
+      sortFn: "datetime",
       cell: ({ row }) => {
-        const counter = row.original.counterNumber;
-        if (counter) {
-          return (
-            <span className="font-bold text-slate-800 text-xs">
-              Counter #{counter}
-            </span>
-          );
-        }
-        return <span className="text-slate-400 text-xs">—</span>;
+        const createdAt = row.original.createdAt;
+        if (!createdAt) return <span className="text-xs text-slate-400">—</span>;
+        const d = new Date(createdAt);
+        if (isNaN(d.getTime())) return <span className="text-xs text-slate-700">{createdAt}</span>;
+        const dateStr = d.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+        const timeStr = d.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        });
+        return (
+          <div className="whitespace-nowrap">
+            <div className="font-semibold text-slate-800 text-xs">{dateStr}</div>
+            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
+              <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+              <span>{timeStr}</span>
+            </div>
+          </div>
+        );
       },
     },
     {
@@ -343,8 +373,8 @@ export default function CitizenQueuePage() {
         </div>
       </header>
 
-      {/* Completed Service Notification Banner */}
-      {!bannerDismissed && completedRows.length > 0 && (
+      {/* Completed Service Notification Banner (shown only when a service was completed live in this session) */}
+      {!bannerDismissed && newlyCompleted.length > 0 && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 shadow-xs flex items-center justify-between gap-4 animate-in fade-in duration-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
@@ -357,11 +387,11 @@ export default function CitizenQueuePage() {
               <p className="text-xs text-emerald-700 mt-0.5">
                 Your service for{" "}
                 <strong>
-                  {completedRows.map((r) => r.serviceName).filter(Boolean).join(", ")}
+                  {newlyCompleted.map((r) => r.serviceName).filter(Boolean).join(", ")}
                 </strong>{" "}
                 has been marked as completed by{" "}
                 <strong>
-                  {completedRows[0]?.departmentName || "Civil Registration Department"}
+                  {newlyCompleted[0]?.departmentName || "Civil Registration Department"}
                 </strong>.
               </p>
             </div>
@@ -409,7 +439,7 @@ export default function CitizenQueuePage() {
           columns={queueColumns}
           getRowId={(row) => String(row.appointmentId || row.referenceNumber || row.id)}
           itemLabel="queue entries"
-          minWidth="840px"
+          minWidth="680px"
           emptyState={
             <div className="flex flex-col items-center gap-3 text-slate-400 py-8">
               <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">

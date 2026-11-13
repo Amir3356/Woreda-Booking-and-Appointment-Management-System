@@ -79,24 +79,6 @@ export default function OfficerVerifyPage() {
             Verify Appointment
           </button>
         </form>
-
-        {/* Quick sample chips */}
-        <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <span className="font-semibold text-slate-600">Sample Arrivals:</span>
-          {appointments.slice(0, 3).map((a) => (
-            <button
-              key={a.id}
-              onClick={() => {
-                setRefQuery(a.referenceNumber);
-                setFoundApt(a);
-                setCheckInDone(false);
-              }}
-              className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-mono text-[11px]"
-            >
-              {a.referenceNumber}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Appointment Result & Checklist */}

@@ -2,9 +2,9 @@
 // non-working days, blocked dates and exceptional working days, each with a reason and a scope
 // (all departments, one department or selected departments). Exceptions override the weekly
 // working hours; the backend applies them to every booking.
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { CalendarX2, Edit2, Plus, Trash2, X } from "lucide-react";
+import { Calendar, CalendarX2, Edit2, Plus, Trash2, X } from "lucide-react";
 import { scheduleApi } from "@/api";
 import { DataTable } from "@/components/ui";
 import { useCursorList, useEscapeKey } from "@/hooks";
@@ -21,6 +21,147 @@ const HOLIDAY_TYPE_OPTIONS = [
   "Election Day",
   "Other Special Exception",
 ];
+
+function isoToDmy(iso) {
+  if (!iso || typeof iso !== "string") return "";
+  const parts = iso.split("-");
+  if (parts.length !== 3) return "";
+  const [y, m, d] = parts;
+  return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+}
+
+function dmyToIso(dmy) {
+  if (!dmy || typeof dmy !== "string") return null;
+  const parts = dmy.split("/");
+  if (parts.length !== 3) return null;
+  const [dayStr, monthStr, yearStr] = parts;
+  if (dayStr.length !== 2 || monthStr.length !== 2 || yearStr.length !== 4) return null;
+  const d = Number(dayStr);
+  const m = Number(monthStr);
+  const y = Number(yearStr);
+  if (isNaN(d) || isNaN(m) || isNaN(y)) return null;
+  if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900 || y > 2100) return null;
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) {
+    return null;
+  }
+  return `${yearStr}-${monthStr}-${dayStr}`;
+}
+
+/**
+ * Single input matching the native date input appearance with calendar icon,
+ * but with value explicitly ordered as Date / Month / Year (DD/MM/YYYY).
+ */
+function DateDmyInput({ value, onChange, min, ariaLabel, id }) {
+  const [text, setText] = useState(() => isoToDmy(value));
+  const pickerRef = useRef(null);
+
+  useEffect(() => {
+    setText(isoToDmy(value));
+  }, [value]);
+
+  const handleNativeChange = (e) => {
+    const iso = e.target.value;
+    if (iso) {
+      setText(isoToDmy(iso));
+      onChange(iso);
+    }
+  };
+
+  const handleTextChange = (e) => {
+    const val = e.target.value;
+    let cleaned = val.replace(/[^\d/]/g, "").slice(0, 10);
+
+    // Auto-insert slash after 2 and 5 digits when typing forward
+    if (cleaned.length === 2 && !cleaned.includes("/") && val.length > text.length) {
+      cleaned = `${cleaned}/`;
+    } else if (
+      cleaned.length === 5 &&
+      (cleaned.match(/\//g) || []).length === 1 &&
+      val.length > text.length
+    ) {
+      cleaned = `${cleaned}/`;
+    }
+
+    setText(cleaned);
+
+    const iso = dmyToIso(cleaned);
+    if (iso) {
+      onChange(iso);
+    }
+  };
+
+  const handleBlur = () => {
+    const iso = dmyToIso(text);
+    if (iso) {
+      onChange(iso);
+      setText(isoToDmy(iso));
+    } else if (value) {
+      setText(isoToDmy(value));
+    }
+  };
+
+  const openPicker = () => {
+    try {
+      if (pickerRef.current?.showPicker) {
+        pickerRef.current.showPicker();
+      } else {
+        pickerRef.current?.focus();
+      }
+    } catch {
+      pickerRef.current?.focus();
+    }
+  };
+
+  return (
+    <div className="sm-date-input-wrap">
+      <input
+        id={id}
+        type="text"
+        className="sm-input"
+        value={text}
+        placeholder="DD/MM/YYYY"
+        onChange={handleTextChange}
+        onBlur={handleBlur}
+        onClick={openPicker}
+        aria-label={ariaLabel}
+        maxLength={10}
+      />
+      <button
+        type="button"
+        className="sm-date-cal-btn"
+        onClick={openPicker}
+        title="Open calendar picker"
+        aria-label="Open calendar picker"
+      >
+        <Calendar className="w-4 h-4 text-slate-500 hover:text-slate-900" aria-hidden="true" />
+      </button>
+      <input
+        ref={pickerRef}
+        type="date"
+        className="native-date-picker-hidden"
+        style={{
+          position: "absolute",
+          width: "1px",
+          height: "1px",
+          padding: 0,
+          margin: "-1px",
+          overflow: "hidden",
+          clip: "rect(0, 0, 0, 0)",
+          whiteSpace: "nowrap",
+          border: 0,
+          opacity: 0,
+          pointerEvents: "none",
+        }}
+        value={value || ""}
+        min={min}
+        onChange={handleNativeChange}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
 
 const emptyForm = (start = localIsoDate(), end = start) => ({
   type: "PUBLIC_HOLIDAY",
@@ -111,17 +252,28 @@ function ExceptionForm({ initial, editing, busy, onCancel, onSubmit }) {
           <div className="sm-row">
             <label className="sm-field">
               <span className="sm-label">Start date <span className="modal-required">*</span></span>
-              <input
-                type="date"
-                className="sm-input"
+              <DateDmyInput
+                id="exc-start-date"
                 value={form.startDate}
-                onChange={(e) => set({ startDate: e.target.value, endDate: form.endDate && form.endDate < e.target.value ? e.target.value : form.endDate })}
+                onChange={(next) =>
+                  set({
+                    startDate: next,
+                    endDate: form.endDate && form.endDate < next ? next : form.endDate,
+                  })
+                }
+                ariaLabel="Start date (Date/Month/Year)"
               />
               {errors.startDate && <span className="sm-error">{errors.startDate}</span>}
             </label>
             <label className="sm-field">
               <span className="sm-label">End date</span>
-              <input type="date" className="sm-input" min={form.startDate} value={form.endDate} onChange={(e) => set({ endDate: e.target.value })} />
+              <DateDmyInput
+                id="exc-end-date"
+                min={form.startDate}
+                value={form.endDate || form.startDate}
+                onChange={(next) => set({ endDate: next })}
+                ariaLabel="End date (Date/Month/Year)"
+              />
               {errors.endDate ? (
                 <span className="sm-error">{errors.endDate}</span>
               ) : (

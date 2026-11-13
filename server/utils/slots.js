@@ -126,13 +126,21 @@ export function applyDailyCapacity(slots, reason) {
  * listed as Unavailable with lunchBreak: true. day: "YYYY-MM-DD" or parsed date,
  * counts: {"09:00 AM": n}, max: places per time.
  */
-export function buildSlots(schedule, day, counts, max = 1) {
+export function buildSlots(schedule, day, counts, max = 1, departmentCounts = null) {
   const d = typeof day === "string" ? parseDate(day) : day;
   if (!schedule || !(schedule.workingDays ?? []).includes(weekdayOf(d))) return [];
   const slots = [];
   for (const m of slotStarts(schedule)) {
     const timeSlot = slotLabel(m);
-    const slot = { timeSlot, bookedCount: counts[timeSlot] ?? 0, remainingCapacity: 0, status: "" };
+    const bookedCount = counts[timeSlot] ?? 0;
+    const departmentBookedCount = departmentCounts ? (departmentCounts[timeSlot] ?? bookedCount) : bookedCount;
+    const slot = {
+      timeSlot,
+      bookedCount,
+      departmentBookedCount,
+      remainingCapacity: 0,
+      status: "",
+    };
     if (isLunch(schedule, m)) {
       slot.status = "Unavailable";
       slot.lunchBreak = true;

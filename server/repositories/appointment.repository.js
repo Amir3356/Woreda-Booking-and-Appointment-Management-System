@@ -111,6 +111,17 @@ export async function countBySlot(serviceId, date) {
   return Object.fromEntries(list.map((r) => [r.time_slot, r.n]));
 }
 
+/** Active bookings per time slot for a whole department on date: {"09:00 AM": n}. */
+export async function countDepartmentSlots(departmentId, date) {
+  if (!departmentId) return {};
+  const list = await rows(
+    `SELECT time_slot, COUNT(*)::int AS n FROM appointments
+     WHERE department_id = $1 AND date = $2 AND ${HOLDS_PLACE} GROUP BY time_slot`,
+    [departmentId, date],
+  );
+  return Object.fromEntries(list.map((r) => [r.time_slot, r.n]));
+}
+
 /** Latest appointment whose reference number or citizen phone equals ref. */
 export async function findLatestByReferenceOrPhone(ref) {
   return fromRow(await one(

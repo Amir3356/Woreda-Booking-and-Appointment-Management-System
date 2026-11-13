@@ -793,3 +793,66 @@
   flex-shrink: 0;
   text-align: right;
 }
+
+/* Date input with Date/Month/Year (DD/MM/YYYY) display order */
+.sm-date-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.sm-date-input-wrap .sm-input {
+  width: 100%;
+  padding-right: 2.35rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.sm-date-cal-btn {
+  position: absolute;
+  right: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.sm-date-cal-btn:hover {
+  color: #0b2545;
+  background: #f1f5f9;
+}
+
+/* Completely hide screen-reader only elements and native hidden date pickers */
+.sr-only,
+.native-date-picker-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+}
+
+/* Ensure native date picker indicator is completely transparent and interactable */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0 !important;
+  background: transparent !important;
+  cursor: pointer !important;
+}
+
+

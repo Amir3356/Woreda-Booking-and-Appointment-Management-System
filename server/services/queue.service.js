@@ -107,6 +107,7 @@ export function createQueueService({ events }) {
             checkedInTime: clock12(t.checked_in_time),
             calledTime: t.called_time ? clock12(t.called_time) : null,
             estimatedWaitMinutes: waiting ? t.ahead * AVG_SERVICE_MINUTES : 0,
+            createdAt: t.appointment_created_at,
           };
         }),
         // Today's appointments not yet checked in (no queue token yet) or completed directly.
@@ -119,6 +120,7 @@ export function createQueueService({ events }) {
             departmentName: a.departmentName,
             timeSlot: a.timeSlot,
             status: a.status,
+            createdAt: a.createdAt,
           })),
       };
     },
@@ -136,11 +138,13 @@ export function createQueueService({ events }) {
       return {
         nowServing: s
           ? { id: s.id, tokenNumber: s.tokenNumber, citizenName: s.citizenName, serviceName: s.serviceName,
-            counterNumber: s.counterNumber, calledTime: clock12(s.calledTime) }
+            counterNumber: s.counterNumber, calledTime: clock12(s.calledTime), timeSlot: s.timeSlot,
+            appointmentDate: s.appointmentDate }
           : null,
         waitingList: waiting.map((t) => ({
           id: t.id, tokenNumber: t.tokenNumber, citizenName: t.citizenName, serviceName: t.serviceName,
           checkedInTime: clock12(t.checkedInTime), estimatedMinutesRemaining: t.estimatedMinutesRemaining,
+          timeSlot: t.timeSlot, appointmentDate: t.appointmentDate,
         })),
       };
     },

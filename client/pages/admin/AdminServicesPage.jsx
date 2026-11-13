@@ -202,14 +202,7 @@ export default function AdminServicesPage() {
       sortFn: "text",
       meta: { className: "font-bold text-slate-900 max-w-xs" },
       cell: ({ row }) => (
-        <div>
-          <span className="font-bold text-slate-900">{row.original.name}</span>
-          {row.original.code && (
-            <span className="block text-[11px] font-mono text-slate-400 mt-0.5">
-              {row.original.code}
-            </span>
-          )}
-        </div>
+        <span className="font-bold text-slate-900">{row.original.name}</span>
       ),
     },
     {
@@ -300,7 +293,7 @@ export default function AdminServicesPage() {
               setSearch(e.target.value);
               setCursor(0);
             }}
-            placeholder="Search service by name or code..."
+            placeholder="Search service by name..."
             className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50/50"
           />
           {search && (

@@ -19,16 +19,17 @@ export function createAvailabilityService() {
       const service = await publicServices.findById(serviceId);
       const departmentId = service?.departmentId ?? null;
       const day = parseDate(date);
-      const [parallel, rules, counts, departmentBooked] = await Promise.all([
+      const [parallel, rules, counts, departmentBooked, departmentSlotCounts] = await Promise.all([
         settings.findMaxParallelSlots(),
         effectiveDay({ serviceId, departmentId, date }),
         appointments.countBySlot(serviceId, date),
         departmentId ? appointments.countDepartmentDay({ departmentId, date }) : 0,
+        departmentId ? appointments.countDepartmentSlots(departmentId, date) : Promise.resolve({}),
       ]);
       const schedule = rules.open ? rules.schedule : null;
       const max = 1; // Exactly 1 appointment per slot per service to prevent duplicate bookings
       const bookedForDay = Object.values(counts).reduce((sum, n) => sum + n, 0);
-      let slots = buildSlots(schedule, day, counts, max);
+      let slots = buildSlots(schedule, day, counts, max, departmentSlotCounts);
       let reason = rules.open ? closedReason(schedule, day, bookedForDay) : rules.reason;
       if (!reason && rules.departmentCapacity && departmentBooked >= rules.departmentCapacity) reason = "DEPARTMENT_CAPACITY_REACHED";
       if (date === today()) {
@@ -44,6 +45,7 @@ export function createAvailabilityService() {
       }
       return {
         serviceId,
+        departmentId,
         date,
         maxParallelSlots: max,
         slotIntervalMinutes: schedule ? slotDuration(schedule) : 30,
@@ -54,6 +56,7 @@ export function createAvailabilityService() {
         bookedForDay,
         departmentCapacity: rules.departmentCapacity,
         departmentBooked,
+        departmentSlotCounts: departmentSlotCounts || {},
         openingTime: schedule?.openingTime ?? null,
         closingTime: schedule?.closingTime ?? null,
         slots: applyDailyCapacity(slots, reason),

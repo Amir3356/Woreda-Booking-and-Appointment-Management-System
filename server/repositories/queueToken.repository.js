@@ -25,7 +25,7 @@ export async function create(t, client) {
 }
 
 const SELECT_WITH_NAMES = `
-  SELECT q.*, a.citizen_name, s.name AS service_name
+  SELECT q.*, a.citizen_name, s.name AS service_name, a.time_slot, a.date AS appointment_date
   FROM queue_tokens q
   JOIN appointments a ON a.id = q.appointment_id
   JOIN services s ON s.id = a.service_id`;
@@ -39,26 +39,49 @@ export async function findServing(departmentId, queueDate) {
   return list.map(fromRow);
 }
 
-/** WAITING tokens of a department on a day, oldest first. */
+/**
+ * WAITING tokens of a department on a day.
+ * Priority rule: Appointment Time (with Late-Arrival policy) -> Check-in Time (FIFO) -> Token ID.
+ * Effective service priority = max(appointment_time, checked_in_time).
+ */
 export async function findWaiting(departmentId, queueDate) {
   const list = await rows(
-    `${SELECT_WITH_NAMES} WHERE q.department_id = $1 AND q.queue_date = $2 AND q.status = 'WAITING' ORDER BY q.created_at, q.id`,
+    `${SELECT_WITH_NAMES}
+     WHERE q.department_id = $1 AND q.queue_date = $2 AND q.status = 'WAITING'
+     ORDER BY a.date ASC,
+              GREATEST(
+                CASE WHEN a.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN a.time_slot::time ELSE q.checked_in_time END,
+                q.checked_in_time
+              ) ASC,
+              q.checked_in_time ASC,
+              q.created_at ASC,
+              q.id ASC`,
     [departmentId, queueDate],
   );
   return list.map(fromRow);
 }
 
 /**
- * Moves the oldest WAITING token of the department/day to SERVING (FOR UPDATE SKIP LOCKED, so two
- * officers never call the same citizen); returns the token, or null when nobody is waiting.
+ * Moves the highest-priority WAITING token of the department/day to SERVING (FOR UPDATE SKIP LOCKED,
+ * so two officers never call the same citizen); returns the token, or null when nobody is waiting.
+ * Priority follows: Appointment Time -> Check-in Time (FIFO), holding late arrivals behind on-time citizens.
  */
 export async function claimNextWaiting(departmentId, queueDate, { counterNumber, officerId, calledTime }, client) {
   return fromRow(await one(
     `UPDATE queue_tokens SET status = 'SERVING', counter_number = $3, officer_id = $4, called_time = $5, updated_at = now()
      WHERE id = (
-       SELECT id FROM queue_tokens
-       WHERE department_id = $1 AND queue_date = $2 AND status = 'WAITING'
-       ORDER BY created_at, id LIMIT 1 FOR UPDATE SKIP LOCKED)
+       SELECT q.id FROM queue_tokens q
+       JOIN appointments a ON a.id = q.appointment_id
+       WHERE q.department_id = $1 AND q.queue_date = $2 AND q.status = 'WAITING'
+       ORDER BY a.date ASC,
+                GREATEST(
+                  CASE WHEN a.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN a.time_slot::time ELSE q.checked_in_time END,
+                  q.checked_in_time
+                ) ASC,
+                q.checked_in_time ASC,
+                q.created_at ASC,
+                q.id ASC
+       LIMIT 1 FOR UPDATE OF q SKIP LOCKED)
      RETURNING *`,
     [departmentId, queueDate, counterNumber, officerId, calledTime],
     client,
@@ -79,7 +102,8 @@ export async function finalize(id, departmentId, status, client) {
 
 /**
  * A citizen's queue tokens for a day, each with its live place in the department's queue:
- * ahead = WAITING tokens of the same department and day that checked in earlier,
+ * ahead = WAITING tokens of the same department and day that have higher priority:
+ *         earlier scheduled appointment or arrived earlier on-time,
  * waitingTotal = all WAITING tokens there, nowServing = the token most recently called.
  * Only counts and token numbers of other citizens are read, never their names.
  */
@@ -89,9 +113,19 @@ export async function findForCitizen(citizenId, queueDate) {
             CASE WHEN a.status = 'COMPLETED' OR q.status = 'COMPLETED' THEN 'COMPLETED' ELSE q.status END AS status,
             q.counter_number, q.called_time, q.checked_in_time, q.department_id,
             a.id AS appointment_id, a.reference_number, a.time_slot, s.name AS service_name, d.name AS department_name,
+            a.created_at AS appointment_created_at,
             (SELECT COUNT(*) FROM queue_tokens w
+              JOIN appointments wa ON wa.id = w.appointment_id
               WHERE w.department_id = q.department_id AND w.queue_date = q.queue_date AND w.status = 'WAITING'
-                AND (w.created_at, w.id) < (q.created_at, q.id))::int AS ahead,
+                AND (
+                  (wa.date,
+                   GREATEST(CASE WHEN wa.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN wa.time_slot::time ELSE w.checked_in_time END, w.checked_in_time),
+                   w.checked_in_time, w.created_at, w.id)
+                  <
+                  (a.date,
+                   GREATEST(CASE WHEN a.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN a.time_slot::time ELSE q.checked_in_time END, q.checked_in_time),
+                   q.checked_in_time, q.created_at, q.id)
+                ))::int AS ahead,
             (SELECT COUNT(*) FROM queue_tokens w
               WHERE w.department_id = q.department_id AND w.queue_date = q.queue_date AND w.status = 'WAITING')::int AS waiting_total,
             (SELECT x.token_number FROM queue_tokens x
