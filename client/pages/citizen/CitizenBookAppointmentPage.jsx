@@ -26,6 +26,7 @@ import {
   FileText,
   Search,
   Filter,
+  RotateCcw,
   CheckCircle,
   X,
   AlertCircle,
@@ -46,32 +47,31 @@ export default function CitizenBookAppointmentPage() {
     services = [],
     schedules = [],
     loadServices,
+    loadDepartments,
     loadBookableSchedules,
+    loadAppointments,
   } = useStore();
 
-  // Services come from the server catalog managed in Admin > Services Management. The list is
-  // fetched on open and again whenever the server announces a catalog change (WebSocket), so a
-  // service the Admin adds shows up here without refreshing the page.
+  // Services and bookable schedules come from the server catalog and schedule management.
+  // The citizen's booked appointments and catalog are refreshed on open and on WebSocket announcements.
   useEffect(() => {
     const refresh = () => {
-      loadServices().catch(() => {
-        // Server unreachable: keep the last list; the dropdown shows its notice if empty.
-      });
-      // Opening schedules from Admin > Schedule Management (working days, hours, capacity, dates).
+      loadServices().catch(() => {});
+      loadDepartments?.().catch(() => {});
       loadBookableSchedules().catch(() => {});
+      loadAppointments().catch(() => {});
       setAvailabilityVersion((v) => v + 1); // re-read slot availability as well
     };
     refresh();
     const offChange = subscribe("catalog.changed", refresh);
+    const offApts = subscribe("appointments.changed", refresh);
     const offReconnect = subscribe("reconnected", refresh); // changes made while disconnected
     return () => {
       offChange();
+      offApts();
       offReconnect();
     };
-  }, [loadServices, loadBookableSchedules]);
-
-  // Overview table starts clean and empty: all pre-populated real and mock slot data removed.
-  const [slots] = useState([]);
+  }, [loadServices, loadDepartments, loadBookableSchedules, loadAppointments]);
 
   /** Bookings still possible on a day: free places in its times, capped by the daily capacity. */
   const placesLeft = (data) => {
@@ -92,6 +92,10 @@ export default function CitizenBookAppointmentPage() {
     APPROVED: "Approved",
     REJECTED: "Rejected",
     CANCELLED: "Cancelled",
+    CHECKED_IN: "Checked In",
+    IN_PROGRESS: "In Progress",
+    COMPLETED: "Completed",
+    NO_SHOW: "No Show",
   };
   // Only while Pending: once a department officer approves the booking it can't be cancelled.
   const CANCELLABLE = ["PENDING"];
@@ -99,38 +103,26 @@ export default function CitizenBookAppointmentPage() {
   const [cancelError, setCancelError] = useState("");
 
   const handleCancelBooking = async (booking) => {
-    const when = `${displayDate(booking.date)} at ${displayTime(booking.timeSlot)}`;
-    if (!window.confirm(`Cancel your ${booking.serviceName} appointment on ${when}?\n\nReference: ${booking.referenceNumber}`)) {
-      return;
-    }
     setCancelError("");
     setCancellingId(booking.id);
     const ok = await updateAppointmentStatus(booking.id, "CANCELLED");
     setCancellingId(null);
     if (ok) {
       setAvailabilityVersion((v) => v + 1); // the freed time is bookable again
-      showSuccess(`Appointment ${booking.referenceNumber} has been cancelled.`);
+      showSuccess(`Appointment ${booking.referenceNumber || ""} has been cancelled.`);
+      await loadAppointments().catch(() => {});
     } else {
       setCancelError(
-        `Could not cancel ${booking.referenceNumber}: ${
+        `Could not cancel ${booking.referenceNumber || ""}: ${
           useStore.getState().appointmentError?.message || "please try again."
         }`
       );
     }
   };
-  const bookingStatusFor = (serviceId) =>
-    (appointments || [])
-      .filter(
-        (a) =>
-          a.serviceId === serviceId &&
-          a.citizenId === currentUser?.id &&
-          DECISION_STATUSES[a.status]
-      )
-      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0] || null;
 
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("ALL");
-  const [actionFilter, setActionFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   // Booking Modal State
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -341,24 +333,54 @@ export default function CitizenBookAppointmentPage() {
     }));
   };
 
-  // Filter slots
-  const filteredSlots = slots.filter((slot) => {
-    const matchesSearch =
-      slot.service.toLowerCase().includes(search.toLowerCase()) ||
-      slot.department.toLowerCase().includes(search.toLowerCase()) ||
-      slot.time.toLowerCase().includes(search.toLowerCase()) ||
-      slot.dateDisplay.toLowerCase().includes(search.toLowerCase());
-
-    const matchesDept = deptFilter === "ALL" || slot.departmentId === deptFilter;
-    const matchesAction = actionFilter === "ALL" || slot.actionValue === actionFilter;
-
-    return matchesSearch && matchesDept && matchesAction;
+  // Filter appointments for the signed-in citizen
+  const citizenAppointments = (appointments || []).filter((apt) => {
+    if (currentUser?.id && apt.citizenId && apt.citizenId !== currentUser.id) {
+      return false;
+    }
+    return true;
   });
 
-  // Calculate summaries
-  const availableCount = slots.filter((s) => s.actionValue === "Available").length;
-  const fullCount = slots.filter((s) => s.actionValue === "Full").length;
-  const unavailableCount = slots.filter((s) => s.actionValue === "Unavailable").length;
+  // Filter appointments by search and dropdown filters
+  const filteredAppointments = citizenAppointments.filter((apt) => {
+    // 1. Department Filter
+    if (deptFilter !== "ALL") {
+      const matchDept =
+        apt.departmentId === deptFilter ||
+        (apt.departmentName && departments.find((d) => d.id === deptFilter)?.name === apt.departmentName);
+      if (!matchDept) return false;
+    }
+
+    // 2. Status Filter
+    if (statusFilter !== "ALL") {
+      if (apt.status !== statusFilter) return false;
+    }
+
+    // 3. Search Query Filter
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    const service = (apt.serviceName || apt.service || "").toLowerCase();
+    const dept = (apt.departmentName || apt.department || "").toLowerCase();
+    const date = (apt.date || "").toLowerCase();
+    const dateDisp = displayDate(apt.date).toLowerCase();
+    const time = (apt.timeSlot || apt.time || "").toLowerCase();
+    const notes = (apt.citizenNotes || apt.notes || apt.message || "").toLowerCase();
+    const status = (DECISION_STATUSES[apt.status] || apt.status || "").toLowerCase();
+    const ref = (apt.referenceNumber || "").toLowerCase();
+    const reason = (apt.rejectionReason || "").toLowerCase();
+
+    return (
+      service.includes(q) ||
+      dept.includes(q) ||
+      date.includes(q) ||
+      dateDisp.includes(q) ||
+      time.includes(q) ||
+      notes.includes(q) ||
+      status.includes(q) ||
+      ref.includes(q) ||
+      reason.includes(q)
+    );
+  });
 
   const handleOpenBooking = (slot, bookable = activeServices) => {
     // A slot whose service was since deactivated opens with no service chosen.
@@ -415,6 +437,7 @@ export default function CitizenBookAppointmentPage() {
       });
       setSelectedSlot(null);
       setAvailabilityVersion((v) => v + 1); // the slot just taken
+      await loadAppointments().catch(() => {});
       showSuccess(`Appointment booked successfully! Reference number: ${apt.referenceNumber}`);
     } catch (err) {
       let msg = "Could not book the appointment: the server is unreachable. Please try again.";
@@ -438,121 +461,165 @@ export default function CitizenBookAppointmentPage() {
     }
   };
 
-  // Slot table columns (TanStack Table via components/ui/DataTable).
-  const slotColumns = [
+  // Appointments table columns: services, Appoitment Date, Appoitment Time, Mesage, Status, Action
+  const appointmentColumns = [
     {
-      id: "date",
-      accessorFn: (slot) => `${slot.date || ""} ${slot.time || ""}`,
-      header: "Appointment Date&Time",
+      id: "services",
+      accessorFn: (apt) => apt.serviceName || apt.service || "",
+      header: () => (
+        <span title="services">
+          Services
+          <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+            services
+          </span>
+        </span>
+      ),
+      sortFn: "text",
       cell: ({ row }) => {
-        const slot = row.original;
+        const apt = row.original;
         return (
-          <>
-            <div className="font-bold text-slate-900">{slot.dateDisplay}</div>
-            <div className="text-[11px] text-blue-700 font-semibold flex items-center gap-1 mt-0.5">
-              <Clock className="w-3 h-3 text-blue-600 inline" />
-              {slot.time}
-            </div>
-            {slot.workingDays && (
-              <div className="text-[10px] text-slate-500 mt-0.5">Open {slot.workingDays}</div>
+          <div>
+            <div className="font-semibold text-slate-900">{apt.serviceName || apt.service || "Municipal Service"}</div>
+            {apt.departmentName && (
+              <div className="text-[11px] text-slate-500 mt-0.5">{apt.departmentName}</div>
             )}
-          </>
+            {apt.referenceNumber && (
+              <div className="text-[10px] text-slate-400 font-mono mt-0.5">Ref: {apt.referenceNumber}</div>
+            )}
+          </div>
         );
       },
     },
     {
-      id: "department",
-      accessorFn: (slot) => slot.department || "",
-      header: "Department",
+      id: "appointmentDate",
+      accessorFn: (apt) => apt.date || "",
+      header: () => (
+        <span title="Appoitment Date">
+          Appointment Date
+          <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+            Appoitment Date
+          </span>
+        </span>
+      ),
       sortFn: "text",
-      cell: ({ row }) => <span className="font-medium text-slate-800">{row.original.department}</span>,
-    },
-    {
-      id: "service",
-      accessorFn: (slot) => slot.service || "",
-      header: "Service",
-      sortFn: "text",
-      cell: ({ row }) => <div className="font-semibold text-slate-900">{row.original.service}</div>,
-    },
-    {
-      id: "availability",
-      accessorKey: "actionValue",
-      header: "Availability",
       cell: ({ row }) => {
-        const slot = row.original;
-        if (slot.actionValue === "Available") {
-          return (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              Available
-              {slot.availabilityText?.endsWith(" left") && (
-                <span className="font-normal text-emerald-600">· {slot.availabilityText}</span>
-              )}
-            </span>
-          );
-        }
-        if (slot.actionValue === "Full") {
-          return (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-              Full
-            </span>
-          );
-        }
-        if (slot.actionValue === "Unavailable") {
-          return (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-              Unavailable
-            </span>
-          );
-        }
-        return null;
+        const apt = row.original;
+        return (
+          <div className="font-bold text-slate-900">
+            {apt.date ? displayDate(apt.date) : "—"}
+          </div>
+        );
+      },
+    },
+    {
+      id: "appointmentTime",
+      accessorFn: (apt) => apt.timeSlot || apt.time || "",
+      header: () => (
+        <span title="Appoitment Time">
+          Appointment Time
+          <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+            Appoitment Time
+          </span>
+        </span>
+      ),
+      sortFn: "text",
+      cell: ({ row }) => {
+        const apt = row.original;
+        const timeVal = apt.timeSlot || apt.time;
+        return (
+          <div className="text-[11px] text-blue-700 font-semibold flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5 text-blue-600 inline shrink-0" />
+            <span>{timeVal ? displayTime(timeVal) : "—"}</span>
+          </div>
+        );
+      },
+    },
+    {
+      id: "message",
+      accessorFn: (apt) => apt.citizenNotes || apt.notes || apt.message || "",
+      header: () => (
+        <span title="Mesage">
+          Message
+          <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+            Mesage
+          </span>
+        </span>
+      ),
+      sortFn: "text",
+      cell: ({ row }) => {
+        const notes = row.original.citizenNotes || row.original.notes || row.original.message;
+        return notes ? (
+          <p
+            className="max-w-[240px] whitespace-pre-line break-words line-clamp-2 text-xs text-slate-700 leading-snug"
+            title={notes}
+          >
+            {notes}
+          </p>
+        ) : (
+          <span className="text-xs text-slate-400">—</span>
+        );
       },
     },
     {
       id: "status",
+      accessorKey: "status",
       header: "Status",
-      enableSorting: false,
       cell: ({ row }) => {
-        const booking = bookingStatusFor(row.original.serviceId);
-        if (!booking) {
-          return <span className="text-[11px] text-slate-400">Not booked</span>;
-        }
-        const cfg = APPOINTMENT_STATUS_CONFIG[booking.status];
+        const apt = row.original;
+        const cfg = APPOINTMENT_STATUS_CONFIG[apt.status] || {
+          bg: "bg-slate-100 text-slate-700 border-slate-200",
+          dot: "bg-slate-400",
+        };
+        const statusLabel = DECISION_STATUSES[apt.status] || apt.status;
         return (
-          <div>
-            <span
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${cfg.bg}`}
-              title={`${booking.referenceNumber} · ${displayDate(booking.date)} ${displayTime(booking.timeSlot)}`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`}></span>
-              {DECISION_STATUSES[booking.status]}
-            </span>
-            {booking.status === "REJECTED" && booking.rejectionReason && (
+          <div className="space-y-1.5">
+            <div>
               <span
-                className="text-[10px] text-rose-600 block mt-0.5 truncate max-w-[160px]"
-                title={booking.rejectionReason}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${cfg.bg}`}
+                title={`${apt.referenceNumber || ""} · ${displayDate(apt.date)} ${displayTime(apt.timeSlot)}`}
               >
-                Reason: {booking.rejectionReason}
+                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`}></span>
+                {statusLabel}
               </span>
-            )}
-            {CANCELLABLE.includes(booking.status) && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCancelBooking(booking);
-                }}
-                disabled={cancellingId === booking.id}
-                className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-wait"
-                title={`Cancel appointment ${booking.referenceNumber}`}
-              >
-                <X className="w-3 h-3" />
-                {cancellingId === booking.id ? "Cancelling…" : "Cancel"}
-              </button>
+            </div>
+            {apt.status === "REJECTED" && (
+              <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs text-left max-w-[280px]">
+                <span className="font-bold text-[11px] block text-rose-900 mb-0.5">
+                  Reason for Rejection:
+                </span>
+                <p className="text-[11px] leading-relaxed break-words whitespace-pre-line text-rose-700">
+                  {apt.rejectionReason || "Documentation incomplete or slot quota exceeded."}
+                </p>
+              </div>
             )}
           </div>
+        );
+      },
+    },
+    {
+      id: "action",
+      header: "Action",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const apt = row.original;
+        const isCancellable = CANCELLABLE.includes(apt.status);
+        if (!isCancellable) {
+          return <span className="text-xs text-slate-400">—</span>;
+        }
+        return (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCancelBooking(apt);
+            }}
+            disabled={cancellingId === apt.id}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-wait transition-colors"
+            title={`Cancel appointment ${apt.referenceNumber || ""}`}
+          >
+            <X className="w-3 h-3" />
+            <span>{cancellingId === apt.id ? "Cancelling…" : "Cancel"}</span>
+          </button>
         );
       },
     },
@@ -630,61 +697,40 @@ export default function CitizenBookAppointmentPage() {
         </div>
       )}
 
-      {/* Summary Cards */}
-      <div
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "1rem",
-        }}
-      >
-        <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-xs">
-          <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            Available
-          </span>
-          <p className="text-2xl font-bold text-emerald-700 mt-1">{availableCount}</p>
-        </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-rose-200 shadow-xs">
-          <span className="text-[11px] font-semibold text-rose-700 uppercase tracking-wider flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-            Full
-          </span>
-          <p className="text-2xl font-bold text-rose-700 mt-1">{fullCount}</p>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-            Unavailable
-          </span>
-          <p className="text-2xl font-bold text-slate-600 mt-1">{unavailableCount}</p>
-        </div>
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
-        <div className="relative w-full md:w-80">
+      {/* Search Box & Dropdown Filters Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        {/* Search Input Box */}
+        <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search service, department, date..."
+            placeholder="Search service, date, time, status, reference..."
             className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-1"
+              title="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+        {/* Dropdown Filters */}
+        <div className="flex flex-wrap items-center gap-2.5">
           {/* Department Filter */}
           <div className="flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 text-slate-400" />
+            <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <select
               value={deptFilter}
               onChange={(e) => setDeptFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 shadow-2xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
             >
               <option value="ALL">All Departments</option>
               {departments.map((d) => (
@@ -695,39 +741,61 @@ export default function CitizenBookAppointmentPage() {
             </select>
           </div>
 
-          {/* Availability Filter */}
+          {/* Status Filter */}
           <div className="flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <select
-              value={actionFilter}
-              onChange={(e) => setActionFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-2xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
             >
-              <option value="ALL">All Availability</option>
-              <option value="Available">Available</option>
-              <option value="Full">Full</option>
-              <option value="Unavailable">Unavailable</option>
+              <option value="ALL">All Statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="CHECKED_IN">Checked In</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="NO_SHOW">No Show</option>
             </select>
           </div>
+
+          {/* Reset Filters button */}
+          {(search || deptFilter !== "ALL" || statusFilter !== "ALL") && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setDeptFilter("ALL");
+                setStatusFilter("ALL");
+              }}
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer font-medium"
+              title="Reset all filters"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+              <span>Reset</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Slots Table with Explicit User Column Headers */}
+      {/* Appointments Table with Header Text: services, Appoitment Date, Appoitment Time, Mesage, Status, Action */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <DataTable
-          data={filteredSlots}
-          columns={slotColumns}
-          getRowId={(slot) => slot.id}
-          itemLabel="services"
+          data={filteredAppointments}
+          columns={appointmentColumns}
+          getRowId={(apt) => apt.id}
+          itemLabel="appointments"
           emptyState={
-            <div className="flex flex-col items-center gap-3 text-slate-400">
+            <div className="flex flex-col items-center gap-3 text-slate-400 py-6">
               <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
                 <Calendar className="w-6 h-6 text-slate-400" />
               </div>
-              <div>
-                <p className="text-sm font-bold text-slate-700">No appointment slots available yet</p>
+              <div className="text-center">
+                <p className="text-sm font-bold text-slate-700">No appointments booked yet</p>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  Services appear here once the Woreda administration publishes their opening schedule.
+                  Click &quot;Book Appointment&quot; above to schedule your in-person office visit.
                 </p>
               </div>
             </div>
@@ -765,10 +833,10 @@ export default function CitizenBookAppointmentPage() {
             <form onSubmit={handleConfirmBooking} className="mt-6 space-y-6">
               {/* Service & Appointment Slot Selection */}
               <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-5">
-                {/* Public Service Dropdown (services from Admin > Services Management) */}
+                {/* Service Dropdown (services from Admin > Services Management) */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-2">
-                    Public Service *
+                    Service *
                   </label>
                   <div className="relative">
                     <FileText className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -786,8 +854,8 @@ export default function CitizenBookAppointmentPage() {
                     >
                       <option value="" disabled>
                         {allServices.length === 0
-                          ? "No public services available"
-                          : "Select a public service"}
+                          ? "No services available"
+                          : "Select a service"}
                       </option>
                       {allServices.map((s) => (
                         <option key={s.id} value={s.id} disabled={!isBookable(s)}>

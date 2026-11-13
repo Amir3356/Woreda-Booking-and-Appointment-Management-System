@@ -288,6 +288,9 @@
 .bg-rose-50, .bg-red-50 { background-color: #fff1f2 !important; }
 .bg-rose-100, .bg-red-100 { background-color: #ffe4e6 !important; }
 .bg-rose-500, .bg-red-500 { background-color: #f43f5e !important; }
+.bg-rose-600, .bg-red-600 { background-color: #e11d48 !important; }
+.bg-rose-700, .bg-red-700 { background-color: #be123c !important; }
+.hover\:bg-rose-700:hover, .hover\:bg-red-700:hover { background-color: #be123c !important; }
 .bg-purple-100 { background-color: #f3e8ff !important; }
 
 /* Borders & Rounded */

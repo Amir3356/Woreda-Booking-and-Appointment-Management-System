@@ -226,7 +226,7 @@ function TrackContent() {
                         <p className="font-bold text-slate-800 text-sm">{result.departmentName}</p>
                       </div>
                       <div>
-                        <span className="text-slate-400 block font-medium">Public Service</span>
+                        <span className="text-slate-400 block font-medium">Service</span>
                         <p className="font-bold text-slate-800 text-sm">{result.serviceName}</p>
                       </div>
                       <div>

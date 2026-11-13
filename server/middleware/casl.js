@@ -1,8 +1,6 @@
 // Express middleware integration for CASL Role-Based Access Control (RBAC).
-import { defineAbilityFor, Subjects, Actions, subject } from "../security/abilities.js";
+import { defineAbilityFor } from "../security/abilities.js";
 import { ForbiddenError, UnauthorizedError } from "../utils/errors.js";
-
-export { defineAbilityFor, Subjects, Actions, subject };
 
 /**
  * Route guard middleware that ensures the caller's CASL ability permits the specified action on the subject.

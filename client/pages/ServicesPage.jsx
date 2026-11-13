@@ -36,13 +36,13 @@ export default function ServicesPage() {
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-10">
           <span className="text-[11px] uppercase tracking-widest font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
-            Citizen Public Services
+            Services
           </span>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-2">
             Woreda Government Services Directory
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-2">
-            Explore public services, required documents, statutory fees, and book an appointment with our municipal departments.
+            Explore services, required documents, statutory fees, and book an appointment with our municipal departments.
           </p>
         </div>
 
@@ -91,11 +91,11 @@ export default function ServicesPage() {
         {filteredServices.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center max-w-xl mx-auto shadow-xs">
             <AlertCircle className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-sm font-bold text-slate-800">No Public Services Found</h3>
+            <h3 className="text-sm font-bold text-slate-800">No Services Found</h3>
             <p className="text-xs text-slate-500 mt-1">
               {searchQuery || selectedDept !== "ALL"
                 ? "No services match your search query or department filter."
-                : "No municipal public services are currently registered."}
+                : "No municipal services are currently registered."}
             </p>
           </div>
         ) : (
@@ -128,7 +128,7 @@ export default function ServicesPage() {
                       </p>
                     ) : (
                       <p className="text-xs text-slate-400 italic mb-4 leading-relaxed">
-                        Official municipal public service
+                        Official municipal service
                       </p>
                     )}
 

@@ -601,14 +601,14 @@ export default function OperatingHoursPage() {
 
               {/* Daily Appointment Capacity: one per service */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1 text-center">
                   Daily Appointment Capacity per Service
                 </label>
-                <p className="text-[11px] text-slate-500 mb-2">
+                <p className="text-[11px] text-slate-500 mb-2 text-center">
                   The most appointments each service can take per day.
                 </p>
                 {capacityServices.length === 0 ? (
-                  <p className="text-[11px] text-slate-500">No active services yet: add them in Service Management.</p>
+                  <p className="text-[11px] text-slate-500 text-center">No active services yet: add them in Service Management.</p>
                 ) : (
                   <div className="sm-capacity-list">
                     {capacityServices.map((srv) => (

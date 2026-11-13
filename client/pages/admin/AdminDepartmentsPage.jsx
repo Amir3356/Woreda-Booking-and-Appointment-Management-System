@@ -13,7 +13,6 @@ import {
   Trash2,
   X,
   Search,
-  Filter,
   RotateCcw,
   ChevronLeft,
   ChevronRight,
@@ -29,7 +28,6 @@ export default function AdminDepartmentsPage() {
     loadDepartments,
     services,
     loadServices,
-    users,
   } = useStore();
   const [saving, setSaving] = useState(false);
 
@@ -188,8 +186,6 @@ export default function AdminDepartmentsPage() {
     const suffix = cleaned.slice(5).replace(/[^\d]/g, "").slice(0, 8);
     setForm((prev) => ({ ...prev, contactPhone: `+2519${suffix}` }));
   };
-
-  const filteredDepts = departments || [];
 
   const handleOpenAdd = () => {
     loadServices().catch(() => {});

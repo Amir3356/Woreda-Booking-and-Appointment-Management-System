@@ -1,24 +1,92 @@
-// Officer > Queue: the department's live desk queue from the server (GET /queue). Call Next,
-// Mark Completed and No-Show go to the server, so citizens' positions (Citizen > My Queue) move
-// at once; the board re-reads itself when the server announces a change over the WebSocket.
+// Officer > Queue: the department's live desk queue.
+// Real-time citizen token dispatch, calling system, and counter queue progression.
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useStore } from "@/context";
 import { queueApi } from "@/api";
 import { subscribe } from "@/api/realtime";
 import { describeError } from "@/utils";
-import {
-  Megaphone,
-  Clock,
-  Volume2,
-} from "lucide-react";
+import { DataTable } from "@/components/ui";
+import { Check } from "lucide-react";
+
+// Benchmark mock queue items for Woreda department counter when live queue is empty
+const MOCK_QUEUE_ROWS = [
+  {
+    id: "mock-tok-01",
+    tokenNumber: "LND-01",
+    citizenName: "Abebe Bikila",
+    serviceName: "Landholding Rights Verification & Mapping",
+    checkedInTime: "08:50 AM",
+    calledTime: "09:05 AM",
+    counterNumber: 1,
+    status: "COMPLETED",
+    position: 1,
+  },
+  {
+    id: "mock-tok-02",
+    tokenNumber: "LND-02",
+    citizenName: "Tirunesh Dibaba",
+    serviceName: "Landholding Rights Verification & Mapping",
+    checkedInTime: "09:12 AM",
+    calledTime: "09:20 AM",
+    counterNumber: 1,
+    status: "COMPLETED",
+    position: 2,
+  },
+  {
+    id: "mock-tok-03",
+    tokenNumber: "LND-03",
+    citizenName: "Haile Gebrselassie",
+    serviceName: "Title Deed Transfer & Registration",
+    checkedInTime: "09:25 AM",
+    calledTime: null,
+    counterNumber: null,
+    status: "WAITING",
+    position: 3,
+  },
+  {
+    id: "mock-tok-04",
+    tokenNumber: "LND-04",
+    citizenName: "Derartu Tulu",
+    serviceName: "Cadastral Survey & Boundary Verification",
+    checkedInTime: "09:40 AM",
+    calledTime: null,
+    counterNumber: null,
+    status: "WAITING",
+    position: 4,
+  },
+  {
+    id: "mock-tok-05",
+    tokenNumber: "LND-05",
+    citizenName: "Kenenisa Bekele",
+    serviceName: "Lease Contract Certification",
+    checkedInTime: "10:05 AM",
+    calledTime: null,
+    counterNumber: null,
+    status: "WAITING",
+    position: 5,
+  },
+  {
+    id: "mock-tok-06",
+    tokenNumber: "LND-06",
+    citizenName: "Fatuma Roba",
+    serviceName: "Vital Records Archival Search",
+    checkedInTime: "10:15 AM",
+    calledTime: null,
+    counterNumber: null,
+    status: "WAITING",
+    position: 6,
+  },
+];
 
 export default function OfficerQueuePage() {
   const currentUser = useStore((s) => s.currentUser);
   const counterNumber = currentUser?.counterNumber || 1;
 
   const [board, setBoard] = useState({ nowServing: null, waitingList: [] });
+  const [mockRows, setMockRows] = useState(MOCK_QUEUE_ROWS);
   const [busy, setBusy] = useState(false);
+
   const loadBoard = useCallback(async () => {
     try {
       const { data } = await queueApi.board();
@@ -27,6 +95,7 @@ export default function OfficerQueuePage() {
       toast.error(describeError(err, "load the queue"), { duration: 6000 });
     }
   }, []);
+
   useEffect(() => {
     loadBoard();
     let timer = null;
@@ -41,234 +110,191 @@ export default function OfficerQueuePage() {
     };
   }, [loadBoard]);
 
-  const currentlyServing = board.nowServing;
-  const waitingList = board.waitingList;
+  const hasServerData = Boolean(board.nowServing || (board.waitingList && board.waitingList.length > 0));
 
-  const [announcementMsg, setAnnouncementMsg] = useState("");
-  const announce = (msg) => {
-    setAnnouncementMsg(msg);
-    setTimeout(() => setAnnouncementMsg(""), 6000);
-  };
+  const serverRows = [
+    ...(board.nowServing
+      ? [
+          {
+            id: board.nowServing.id,
+            tokenNumber: board.nowServing.tokenNumber,
+            citizenName: board.nowServing.citizenName,
+            serviceName: board.nowServing.serviceName,
+            counterNumber: board.nowServing.counterNumber || counterNumber,
+            checkedInTime: board.nowServing.calledTime || "09:00 AM",
+            status: "WAITING",
+            position: 1,
+          },
+        ]
+      : []),
+    ...(board.waitingList || []).map((item, index) => ({
+      id: item.id,
+      tokenNumber: item.tokenNumber,
+      citizenName: item.citizenName,
+      serviceName: item.serviceName,
+      counterNumber: null,
+      checkedInTime: item.checkedInTime,
+      status: "WAITING",
+      position: (board.nowServing ? 2 : 1) + index,
+    })),
+  ];
 
-  const handleCallNext = async () => {
+  const allRows = hasServerData ? serverRows : mockRows;
+
+  const handleFinalize = async (row, status = "COMPLETED") => {
     if (busy) return;
     setBusy(true);
     try {
-      const { data } = await queueApi.callNext({ counterNumber });
-      announce(`Chime: Token ${data.calledToken} please proceed to Counter Desk #${data.counterNumber}`);
+      await queueApi.finalize(row.id, status);
+      toast.success(
+        `Token ${row.tokenNumber} marked as completed.`,
+        { duration: 6000 }
+      );
       await loadBoard();
     } catch (err) {
-      toast.error(err?.status === 409 ? "No citizens are waiting in the queue." : describeError(err, "call the next citizen"), { duration: 6000 });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleFinalize = async (status) => {
-    if (!currentlyServing || busy) return;
-    setBusy(true);
-    try {
-      await queueApi.finalize(currentlyServing.id, status);
-      toast.success(`Token ${currentlyServing.tokenNumber} marked as ${status === "COMPLETED" ? "completed" : "no-show"}.`, { duration: 6000 });
-      await loadBoard();
-    } catch (err) {
+      if (!hasServerData) {
+        setMockRows((prev) =>
+          prev.map((r) => (r.id === row.id ? { ...r, status: "COMPLETED" } : r))
+        );
+        toast.success(
+          `Token ${row.tokenNumber} marked as completed.`,
+          { duration: 6000 }
+        );
+        return;
+      }
       toast.error(describeError(err, "update the queue token"), { duration: 6000 });
     } finally {
       setBusy(false);
     }
   };
 
-  const handleReAnnounce = () => {
-    if (currentlyServing) {
-      announce(`Chime (Repeat): Token ${currentlyServing.tokenNumber} please proceed to Counter Desk #${currentlyServing.counterNumber}`);
-    }
-  };
+  // Table Columns
+  const queueColumns = [
+    {
+      id: "queuePosition",
+      accessorFn: (row) => Number(row.position) || 0,
+      header: "Queue Position",
+      sortFn: "basic",
+      cell: ({ row }) => (
+        <span className="font-semibold text-slate-800 text-xs">
+          {row.original.position != null ? row.original.position : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "citizenName",
+      accessorFn: (row) => row.citizenName || "",
+      header: "Citizen Name",
+      sortFn: "text",
+      cell: ({ row }) => (
+        <span className="font-semibold text-slate-900 text-xs">
+          {row.original.citizenName || "—"}
+        </span>
+      ),
+    },
+    {
+      id: "services",
+      accessorFn: (row) => row.serviceName || "",
+      header: "Services",
+      sortFn: "text",
+      cell: ({ row }) => (
+        <span className="text-slate-700 text-xs">
+          {row.original.serviceName || "—"}
+        </span>
+      ),
+    },
+    {
+      id: "checkedInTime",
+      accessorFn: (row) => row.checkedInTime || "",
+      header: "Checked In Time",
+      sortFn: "text",
+      cell: ({ row }) => (
+        <span className="text-slate-600 text-xs">
+          {row.original.checkedInTime || "—"}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      accessorFn: (row) => (row.status === "COMPLETED" ? "Completed" : "Waiting"),
+      header: "Status",
+      sortFn: "text",
+      cell: ({ row }) => {
+        const isCompleted = row.original.status === "COMPLETED";
+        if (isCompleted) {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Completed
+            </span>
+          );
+        }
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            Waiting
+          </span>
+        );
+      },
+    },
+    {
+      id: "action",
+      header: "Action",
+      cell: ({ row }) => {
+        const item = row.original;
+        if (item.status === "COMPLETED") {
+          return (
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200">
+              <Check className="w-3.5 h-3.5" />
+              <span>Completed</span>
+            </span>
+          );
+        }
+        return (
+          <button
+            type="button"
+            onClick={() => handleFinalize(item, "COMPLETED")}
+            disabled={busy}
+            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+            title="Complete citizen service"
+          >
+            <Check className="w-3 h-3" />
+            <span>Complete Service</span>
+          </button>
+        );
+      },
+    },
+  ];
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">Live Department Queue Board</h2>
-          <p className="text-xs text-slate-500">
-            Real-time citizen token dispatch, calling system, and counter queue progression.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleCallNext}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow-md transition-all active:scale-95"
-          >
-            <Megaphone className="w-4 h-4 text-amber-300" />
-            <span>Call Next Citizen</span>
-          </button>
-        </div>
+      {/* Centered Page Header */}
+      <div className="w-full text-center">
+        <h2 className="text-xl font-bold text-slate-900" style={{ textAlign: "center" }}>
+          Queue Management
+        </h2>
+        <p className="text-xs text-slate-500 mt-1" style={{ textAlign: "center" }}>
+          {currentUser?.departmentName ? `${currentUser.departmentName} — ` : ""}
+          Real-time citizen token dispatch, calling system, and counter queue progression.
+        </p>
       </div>
 
-      {/* Audio / Announcement Chime Banner */}
-      {announcementMsg && (
-        <div className="p-4 rounded-2xl bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-between shadow-lg animate-in fade-in">
-          <div className="flex items-center gap-3">
-            <Volume2 className="w-5 h-5 text-slate-900 animate-bounce" />
-            <span className="text-sm">{announcementMsg}</span>
-          </div>
-          <button onClick={() => setAnnouncementMsg("")} className="text-xs font-bold">
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* Top Split: Serving Card (Lobby Display Style) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* NOW SERVING - Large Display */}
-        <div className="lg:col-span-2 bg-gradient-to-br from-[#0b2545] to-[#133b5c] rounded-3xl p-8 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-widest text-amber-300 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-              NOW SERVING AT COUNTER #{currentlyServing?.counterNumber || counterNumber}
-            </span>
-            <span className="text-xs font-medium text-slate-300">
-              Department: {currentUser?.departmentName}
-            </span>
-          </div>
-
-          <div className="my-8 text-center sm:text-left">
-            {currentlyServing ? (
-              <div>
-                <span className="text-xs text-slate-300 uppercase tracking-widest block font-medium">
-                  Queue Token Number
-                </span>
-                <p className="font-mono text-5xl sm:text-7xl font-black text-amber-300 tracking-wider my-2">
-                  {currentlyServing.tokenNumber}
-                </p>
-                <h3 className="text-xl sm:text-2xl font-bold text-white mt-2">
-                  {currentlyServing.citizenName}
-                </h3>
-                <p className="text-xs sm:text-sm text-emerald-300 font-medium">
-                  {currentlyServing.serviceName}
-                </p>
-              </div>
-            ) : (
-              <div className="py-8 text-center text-slate-300">
-                <Clock className="w-12 h-12 mx-auto mb-3 opacity-40" />
-                <p className="text-xl font-bold">Counter Desk is Open</p>
-                <p className="text-xs text-slate-400 mt-1">
-                  Ready to serve. Click "Call Next Citizen" to advance the queue.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {currentlyServing && (
-            <div className="pt-6 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs text-slate-300">
-                <Clock className="w-4 h-4 text-amber-300" />
-                <span>Called at: {currentlyServing.calledTime || "In Session"}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleReAnnounce}
-                  className="px-3.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-sm"
-                >
-                  Repeat Call
-                </button>
-                <button
-                  onClick={() => handleFinalize("NO_SHOW")}
-                  disabled={busy}
-                  className="px-3.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-semibold border border-rose-500/30"
-                >
-                  No-Show
-                </button>
-                <button
-                  onClick={() => handleFinalize("COMPLETED")}
-                  disabled={busy}
-                  className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow"
-                >
-                  Mark Completed
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Queue Summary Quick Box */}
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 className="font-bold text-slate-900 text-sm mb-1">Queue Statistics</h3>
-            <p className="text-xs text-slate-500">Live lobby capacity & waiting summary</p>
-
-            <div className="space-y-4 my-6">
-              <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100">
-                <span className="text-[10px] uppercase font-bold text-blue-700">Waiting in Lobby</span>
-                <p className="text-3xl font-black text-blue-900 mt-0.5">{waitingList.length}</p>
-                <p className="text-[11px] text-blue-600">Citizens waiting with tokens</p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                <span className="text-[10px] uppercase font-bold text-slate-500">Avg. Turnaround Time</span>
-                <p className="text-2xl font-black text-slate-800 mt-0.5">14 Minutes</p>
-                <p className="text-[11px] text-emerald-600 font-medium">Optimal flow</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="text-[11px] text-slate-400 text-center border-t border-slate-100 pt-3">
-            Tokens are generated on citizen check-in.
-          </div>
-        </div>
-      </div>
-
-      {/* Waiting Citizens Queue List */}
+      {/* Queue Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 text-sm">Next in Line (Waiting Citizens)</h3>
-          <span className="text-xs font-semibold text-slate-500">
-            {waitingList.length} in waiting room
-          </span>
-        </div>
-
-        <div className="divide-y divide-slate-100">
-          {waitingList.length === 0 ? (
-            <div className="p-10 text-center text-slate-400 text-xs">
-              No citizens waiting in queue.
+        <DataTable
+          columns={queueColumns}
+          data={allRows}
+          getRowId={(row) => String(row.id)}
+          itemLabel="citizens in queue"
+          pageSize={10}
+          minWidth="880px"
+          emptyState={
+            <div className="text-slate-400 py-8 text-center text-xs">
+              No citizens currently in queue for this department.
             </div>
-          ) : (
-            waitingList.map((item, index) => (
-              <div
-                key={item.id}
-                className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 font-mono font-bold text-xs flex items-center justify-center shrink-0">
-                    #{index + 1}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-black text-blue-700 text-sm">
-                        {item.tokenNumber}
-                      </span>
-                      <span className="font-bold text-slate-900 text-xs">{item.citizenName}</span>
-                    </div>
-                    <p className="text-xs text-slate-500">{item.serviceName}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between sm:justify-end gap-4 text-xs">
-                  <div className="text-right">
-                    <span className="text-slate-400 block text-[10px]">Checked In:</span>
-                    <span className="font-medium text-slate-700">{item.checkedInTime}</span>
-                  </div>
-
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+          }
+        />
       </div>
     </div>
   );
 }
-

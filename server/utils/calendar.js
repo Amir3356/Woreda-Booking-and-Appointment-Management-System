@@ -10,10 +10,6 @@
 import { WEEKDAYS, minutes, weekdayOf } from "./date.js";
 import { coversDepartment } from "../models/calendar.model.js";
 
-export const CLOSED_REASONS = Object.freeze([
-  "BLOCKED", "PUBLIC_HOLIDAY", "NON_WORKING_DAY", "NO_SCHEDULE", "NOT_WORKING_DAY",
-]);
-
 /** Exceptions (API shape) in force on date for the department. */
 /** "Ethiopian Christmas (Religious Holiday)" from the holiday name (description) and type (title). */
 export function exceptionLabel(e) {
@@ -69,7 +65,7 @@ export function resolveDay({ date, baseSchedule, exceptions = [] }) {
 }
 
 /** Schedules (API shape) in force on date: ACTIVE and inside their effective period. */
-export const schedulesInForce = (schedules, date) =>
+const schedulesInForce = (schedules, date) =>
   schedules.filter((s) => s.status === "ACTIVE" && s.effectiveStartDate <= date && (!s.effectiveEndDate || s.effectiveEndDate >= date));
 
 /**

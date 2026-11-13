@@ -5,7 +5,6 @@ import {
   Building2,
   FileText,
   Calendar,
-  ClipboardCheck,
   ListOrdered,
   MonitorSpeaker,
   Clock,
@@ -14,6 +13,8 @@ import {
   ShieldCheck,
   User,
   LogOut,
+  BarChart3,
+  LayoutDashboard,
 } from "lucide-react";
 import { useStore } from "@/context";
 import { EthiopianFlag } from "@/components/ui";
@@ -31,6 +32,12 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
   const sectionsByRole = {
     ADMIN: [
       {
+        label: "Overview",
+        items: [
+          { href: "/admin", label: "Geography Analysis", icon: LayoutDashboard },
+        ],
+      },
+      {
         label: "Accounts",
         items: [
           { href: "/admin/account-provision", label: "Account Provision", icon: UserCog },
@@ -46,6 +53,12 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
         ],
       },
       {
+        label: "Reports & Analytics",
+        items: [
+          { href: "/admin/reports", label: "Reports & Analytics", icon: BarChart3 },
+        ],
+      },
+      {
         label: "Audit",
         items: [{ href: "/admin/audit", label: "Audit Trail", icon: ShieldCheck }],
       },
@@ -56,11 +69,10 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
         items: [
           {
             href: "/officer/appointments",
-            label: "Appointment Management",
+            label: "Appointment",
             icon: Calendar,
             badge: pendingAppointmentsCount > 0 ? pendingAppointmentsCount : null,
           },
-          { href: "/officer/verify", label: "Verify Check-in", icon: ClipboardCheck },
           { href: "/officer/queue", label: "Queue", icon: MonitorSpeaker },
         ],
       },
@@ -69,7 +81,7 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
       {
         label: "Main Menu",
         items: [
-          { href: "/citizen/book", label: "Book Appointment", icon: Calendar },
+          { href: "/citizen/book", label: "Appointment", icon: Calendar },
           { href: "/citizen/queue", label: "My Queue", icon: ListOrdered },
         ],
       },
@@ -113,7 +125,10 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
             <ul className="sidebar-list">
               {section.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const isActive =
+                  item.href === "/admin"
+                    ? pathname === "/admin"
+                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
                   <li key={item.href}>
                     <Link

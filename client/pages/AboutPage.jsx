@@ -67,7 +67,7 @@ export default function AboutPage() {
             </div>
             <div>
               <p className="text-xl font-black text-blue-900">{services.length}</p>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Public Services</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Services</p>
             </div>
             <div>
               <p className="text-xl font-black text-blue-900">{officerCount}</p>

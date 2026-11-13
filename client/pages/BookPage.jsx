@@ -127,7 +127,7 @@ function BookingContent() {
       setStep(2);
     } else if (step === 2) {
       if (!selectedServiceId) {
-        const msg = "Please choose a public service.";
+        const msg = "Please choose a service.";
         setErrorMsg(msg);
         toast.error(msg, { duration: 6000 });
         return;
@@ -312,7 +312,7 @@ function BookingContent() {
                 </h2>
               </div>
               <p className="text-xs text-slate-500 mb-6">
-                Choose the department offering the public service you require.
+                Choose the department offering the service you require.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

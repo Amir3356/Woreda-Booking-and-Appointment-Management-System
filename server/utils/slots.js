@@ -27,7 +27,7 @@ export function slotMinutes(label) {
  * Whether an appointment starting at m (minutes) overlaps the schedule's lunch break
  * [lunchStart, lunchEnd). A schedule without a configured break has none.
  */
-export function isLunch(schedule, m) {
+function isLunch(schedule, m) {
   if (!schedule?.lunchStart || !schedule?.lunchEnd) return false;
   return m < minutes(schedule.lunchEnd) && m + SLOT_MINUTES > minutes(schedule.lunchStart);
 }
@@ -36,7 +36,7 @@ export function isLunch(schedule, m) {
 const lunchLabel = (schedule) => `${schedule.lunchStart}–${schedule.lunchEnd}`;
 
 /** Start minute of every appointment time in the working hours: opening, +30, ... while it ends by closing. */
-export function slotStarts(schedule) {
+function slotStarts(schedule) {
   if (!schedule) return [];
   const open = minutes(schedule.openingTime);
   const closing = minutes(schedule.closingTime);

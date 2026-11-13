@@ -14,6 +14,8 @@ export default function OfficerAppointmentsPage() {
   } = useStore();
 
   const [busyId, setBusyId] = useState(null);
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   // Action column: a department officer decides PENDING bookings of their own department.
   const handleApprove = async (e, apt) => {
@@ -22,24 +24,34 @@ export default function OfficerAppointmentsPage() {
     const ok = await updateAppointmentStatus(apt.id, "APPROVED");
     setBusyId(null);
     if (ok) {
-      toast.success(`Appointment ${apt.referenceNumber} approved.`, { duration: 5000 });
+      toast.success(`Appointment approved.`, { duration: 5000 });
     } else {
       const err = useStore.getState().appointmentError;
       toast.error(err?.message || "Failed to approve appointment.", { duration: 5000 });
     }
   };
-  const handleReject = async (e, apt) => {
+
+  const handleOpenReject = (e, apt) => {
     e.stopPropagation();
-    const reason = window.prompt(
-      `Reason for rejecting ${apt.citizenName}'s booking (${apt.referenceNumber}):`,
-      "Quota or invalid paperwork"
-    );
-    if (reason === null) return; // cancelled
-    setBusyId(apt.id);
-    const ok = await updateAppointmentStatus(apt.id, "REJECTED", "", reason.trim() || "Quota or invalid paperwork");
+    setRejectTarget(apt);
+    setRejectReason("");
+  };
+
+  const handleConfirmReject = async (e) => {
+    if (e) e.preventDefault();
+    if (!rejectTarget) return;
+    const reason = rejectReason.trim();
+    if (!reason) {
+      toast.error("Please enter a reason for rejecting the appointment.", { duration: 5000 });
+      return;
+    }
+    setBusyId(rejectTarget.id);
+    const ok = await updateAppointmentStatus(rejectTarget.id, "REJECTED", "", reason);
     setBusyId(null);
     if (ok) {
-      toast.success(`Appointment ${apt.referenceNumber} rejected.`, { duration: 5000 });
+      toast.success(`Appointment rejected.`, { duration: 5000 });
+      setRejectTarget(null);
+      setRejectReason("");
     } else {
       const err = useStore.getState().appointmentError;
       toast.error(err?.message || "Failed to reject appointment.", { duration: 5000 });
@@ -55,17 +67,6 @@ export default function OfficerAppointmentsPage() {
     (a) => Boolean(currentUser?.departmentId) && a.departmentId === currentUser.departmentId
   );
 
-  const formatRequestDate = (dateString) => {
-    if (!dateString) return "N/A";
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
   const filtered = deptAppointments;
 
   // Appointment table columns (TanStack Table via components/ui/DataTable).
@@ -73,7 +74,7 @@ export default function OfficerAppointmentsPage() {
     {
       id: "citizen",
       accessorKey: "citizenName",
-      header: "Citizen Details",
+      header: "Citizen Name",
       sortFn: "text",
       meta: { className: "font-medium text-slate-900" },
       cell: ({ row }) => {
@@ -81,9 +82,6 @@ export default function OfficerAppointmentsPage() {
         return (
           <>
             <div className="font-bold text-slate-900">{apt.citizenName}</div>
-            <div className="text-[11px] font-mono text-blue-900 font-semibold mt-0.5">
-              {apt.referenceNumber}
-            </div>
             <span className="text-[10px] text-slate-500 font-normal">{apt.citizenPhone}</span>
             {apt.tokenNumber && (
               <span className="text-[10px] text-emerald-700 font-bold block mt-0.5">
@@ -120,24 +118,18 @@ export default function OfficerAppointmentsPage() {
         ),
     },
     {
-      id: "scheduled",
-      // "YYYY-MM-DD HH:MM": slot labels use 24h hours ("13:30 PM"), so text order is time order.
-      accessorFn: (apt) => `${apt.date} ${apt.timeSlot}`,
-      header: "Scheduled Date & Time",
-      meta: { className: "text-slate-600" },
-      cell: ({ row }) => (
-        <>
-          <div className="font-semibold text-slate-900">{formatDate(row.original.date)}</div>
-          <span className="text-[10px] text-blue-700 font-bold">{row.original.timeSlot}</span>
-        </>
-      ),
+      id: "appointmentDate",
+      accessorKey: "date",
+      header: "Appointment Date",
+      meta: { className: "text-slate-900 font-semibold whitespace-nowrap" },
+      cell: ({ row }) => formatDate(row.original.date),
     },
     {
-      id: "booked",
-      accessorFn: (apt) => apt.createdAt || "",
-      header: "Booked Date",
-      meta: { className: "text-slate-500 font-medium" },
-      cell: ({ row }) => formatRequestDate(row.original.createdAt),
+      id: "appointmentTime",
+      accessorKey: "timeSlot",
+      header: "Appointment Time",
+      meta: { className: "text-blue-700 font-bold whitespace-nowrap" },
+      cell: ({ row }) => row.original.timeSlot,
     },
     {
       id: "status",
@@ -181,7 +173,7 @@ export default function OfficerAppointmentsPage() {
             </button>
             <button
               type="button"
-              onClick={(e) => handleReject(e, apt)}
+              onClick={(e) => handleOpenReject(e, apt)}
               disabled={busyId === apt.id}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-wait"
               title="Reject this booking"
@@ -201,33 +193,15 @@ export default function OfficerAppointmentsPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Centered Page Header with Action Badge at Right Edge */}
-      <div
-        className="relative flex items-center justify-center w-full min-h-[48px]"
-        style={{ position: "relative", minHeight: "48px", width: "100%" }}
-      >
-        <div className="w-full text-center" style={{ textAlign: "center", width: "100%" }}>
-          <h2 className="text-xl font-bold text-slate-900" style={{ textAlign: "center" }}>
-            Appointment Management
-          </h2>
-          <p className="text-xs text-slate-500 mt-1" style={{ textAlign: "center" }}>
-            {currentUser?.departmentName ? `${currentUser.departmentName} — ` : ""}
-            Review citizen bookings and scheduled appointments for your department.
-          </p>
-        </div>
-
-        <span
-          className="text-xs bg-white px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 font-bold shadow-xs shrink-0"
-          style={{
-            position: "absolute",
-            right: 0,
-            top: "50%",
-            transform: "translateY(-50%)",
-            whiteSpace: "nowrap",
-          }}
-        >
-          Assigned: {deptAppointments.length}
-        </span>
+      {/* Centered Page Header */}
+      <div className="w-full text-center">
+        <h2 className="text-xl font-bold text-slate-900" style={{ textAlign: "center" }}>
+          Appointment Management
+        </h2>
+        <p className="text-xs text-slate-500 mt-1" style={{ textAlign: "center" }}>
+          {currentUser?.departmentName ? `${currentUser.departmentName} — ` : ""}
+          Review citizen bookings and scheduled appointments for your department.
+        </p>
       </div>
 
       {/* Appointments Table */}
@@ -249,6 +223,74 @@ export default function OfficerAppointmentsPage() {
           }
         />
       </div>
+
+      {/* Rejection Modal with Reason Input Field */}
+      {rejectTarget && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div
+            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reject-modal-title"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 id="reject-modal-title" className="font-bold text-base text-slate-900">
+                Reject Appointment
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectTarget(null);
+                  setRejectReason("");
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmReject}>
+              <div className="mb-4">
+                <label htmlFor="rejection-reason-input" className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Reason for Rejection <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  id="rejection-reason-input"
+                  rows={3}
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="e.g., Incomplete documentation, quota limit reached, missing original kebele ID..."
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  autoFocus
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRejectTarget(null);
+                    setRejectReason("");
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl border border-slate-300 cursor-pointer"
+                  style={{ backgroundColor: "#ffffff", color: "#334155" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={busyId === rejectTarget.id}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs disabled:opacity-60 cursor-pointer transition-colors"
+                  style={{ backgroundColor: "#e11d48", color: "#ffffff", border: "1px solid #be123c" }}
+                >
+                  {busyId === rejectTarget.id ? "Rejecting…" : "Confirm Reject"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

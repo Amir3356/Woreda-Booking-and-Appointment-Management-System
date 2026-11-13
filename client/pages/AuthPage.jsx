@@ -276,7 +276,7 @@ export default function AuthPage() {
           <div className="auth-brand-body">
             <h1 className="auth-brand-title">Appointment &amp; Queue Management</h1>
             <p className="auth-brand-desc">
-              Book a Woreda public service online, track it with your reference number, and get
+              Book a Woreda service online, track it with your reference number, and get
               served at the desk queue — citizens, department officers and administrators in one place.
             </p>
             <ul className="auth-feature-list">

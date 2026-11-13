@@ -590,11 +590,24 @@ export const useStore = create(
         if (!apt) return;
 
         if (status === "APPROVED" || status === "REJECTED") {
+          const rejectionReason = status === "REJECTED" ? officerReason || notes || "Not specified" : "";
           await appointmentApi.updateStatus(id, {
             status,
             officerNotes: notes || "",
-            rejectionReason: status === "REJECTED" ? officerReason || notes || "Not specified" : "",
+            rejectionReason,
           });
+          set((state) => ({
+            appointments: state.appointments.map((a) =>
+              a.id === id
+                ? {
+                    ...a,
+                    status,
+                    officerNotes: notes || a.officerNotes,
+                    rejectionReason: status === "REJECTED" ? rejectionReason : a.rejectionReason,
+                  }
+                : a
+            ),
+          }));
         } else if (status === "CANCELLED") {
           await appointmentApi.cancel(id);
         } else if (status === "CHECKED_IN") {

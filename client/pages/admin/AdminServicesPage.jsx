@@ -268,7 +268,7 @@ export default function AdminServicesPage() {
         <div className="w-full text-center">
           <h2 className="text-xl font-bold text-slate-900">Service Management</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Manage Woreda public services and operating statuses.
+            Manage Woreda services and operating statuses.
           </p>
         </div>
 
@@ -386,9 +386,9 @@ export default function AdminServicesPage() {
                 </p>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
                   {loadingPage
-                    ? "Fetching public service catalog from server..."
+                    ? "Fetching service catalog from server..."
                     : cursorMetaState.totalCount === 0 && !hasActiveFilters
-                      ? "Public services and department counter designations configured by Central Administration will appear here."
+                      ? "Services and department counter designations configured by Central Administration will appear here."
                       : "Try adjusting your search keywords or resetting the service filter."}
                 </p>
               </div>
