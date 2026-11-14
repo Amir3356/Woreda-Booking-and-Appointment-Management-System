@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useStore } from "@/context";
-import { profileApi } from "@/api";
+import { profileApi, authApi } from "@/api";
 import { subscribe } from "@/api/realtime";
 
 // Layouts
@@ -96,6 +96,23 @@ export default function App() {
         .then(({ data }) => {
           const now = useStore.getState().currentUser;
           if (now?.id === currentUser.id) useStore.setState({ currentUser: { ...now, ...data, role: "CITIZEN" } });
+        })
+        .catch(() => {});
+    } else if (currentUser?.role === "OFFICER") {
+      authApi
+        .me()
+        .then(({ data }) => {
+          const now = useStore.getState().currentUser;
+          if (now?.id === currentUser.id && data) {
+            useStore.setState({
+              currentUser: {
+                ...now,
+                ...data,
+                role: "OFFICER",
+                serviceIds: Array.isArray(data.serviceIds) ? data.serviceIds : (now.serviceIds || []),
+              },
+            });
+          }
         })
         .catch(() => {});
     }

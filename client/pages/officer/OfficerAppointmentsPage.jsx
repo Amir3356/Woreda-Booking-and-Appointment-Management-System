@@ -102,10 +102,15 @@ export default function OfficerAppointmentsPage() {
   // 1. All services assigned to this Department Head by the Administrator (RBAC Scoped)
   const assignedServices = useMemo(() => {
     if (!currentUser?.departmentId) return [];
-    return (services || []).filter(
+    const deptServices = (services || []).filter(
       (s) => s.departmentId === currentUser.departmentId && s.isActive !== false
     );
-  }, [services, currentUser?.departmentId]);
+    const userAssignedIds = Array.isArray(currentUser.serviceIds) ? currentUser.serviceIds : [];
+    if (userAssignedIds.length > 0) {
+      return deptServices.filter((s) => userAssignedIds.includes(s.id));
+    }
+    return deptServices;
+  }, [services, currentUser?.departmentId, currentUser?.serviceIds]);
 
   // Reset selected service filter if the selected service was removed/unassigned
   useEffect(() => {
@@ -119,13 +124,17 @@ export default function OfficerAppointmentsPage() {
     }
   }, [assignedServices, selectedServiceFilter]);
 
-  // 2. Strict department scoping for appointments (RBAC Scoped)
+  // 2. Strict department and assigned public services scoping for appointments (RBAC Scoped)
   const effectiveAppointments = appointments || [];
   const deptAppointments = useMemo(() => {
-    return effectiveAppointments.filter(
-      (a) => Boolean(currentUser?.departmentId) && a.departmentId === currentUser.departmentId
-    );
-  }, [effectiveAppointments, currentUser?.departmentId]);
+    if (!currentUser?.departmentId) return [];
+    const allowedServiceIds = new Set(assignedServices.map((s) => s.id));
+    return effectiveAppointments.filter((a) => {
+      if (a.departmentId !== currentUser.departmentId) return false;
+      if (allowedServiceIds.size > 0 && !allowedServiceIds.has(a.serviceId)) return false;
+      return true;
+    });
+  }, [effectiveAppointments, currentUser?.departmentId, assignedServices]);
 
   // 3. Sort newest first
   const sortedAppointments = useMemo(() => {

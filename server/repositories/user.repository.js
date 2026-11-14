@@ -197,6 +197,10 @@ export async function updateStaff(id, f) {
     params.push(f.passwordHash);
     fields.push(`password_hash = $${params.length}`);
   }
+  if (f.address !== undefined) {
+    params.push(f.address);
+    fields.push(`address = $${params.length}`);
+  }
   const { rowCount } = await query(
     `UPDATE users SET ${fields.join(", ")} WHERE id = $1 AND role <> 'CITIZEN'`,
     params,

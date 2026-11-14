@@ -11,6 +11,9 @@ export function issueToken(secret, user, now = Date.now()) {
   const claims = { name: user.fullName, role: user.role };
   if (user.phone) claims.phone = user.phone;
   if (user.departmentId) claims.dept = user.departmentId;
+  if (user.serviceIds && Array.isArray(user.serviceIds) && user.serviceIds.length > 0) {
+    claims.srvs = user.serviceIds.join(",");
+  }
   Object.assign(claims, { iss: ISSUER, sub: user.id, iat, jti: randomBytes(8).toString("hex") });
   return jwt.sign(claims, secret, { algorithm: "HS256" });
 }
@@ -20,7 +23,7 @@ export function verifyToken(secret, raw) {
   try {
     const c = jwt.verify(raw, secret, { algorithms: ["HS256"], ignoreExpiration: true });
     if (typeof c !== "object" || c === null) return null;
-    for (const k of ["sub", "jti", "name", "role", "dept", "phone"]) {
+    for (const k of ["sub", "jti", "name", "role", "dept", "phone", "srvs"]) {
       if (c[k] !== undefined && typeof c[k] !== "string") return null;
     }
     return c;

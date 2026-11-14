@@ -26,6 +26,18 @@ function parseCitizenAddress(address) {
   return { kebele, woreda, location };
 }
 
+function parseStaffServices(address) {
+  if (!address) return [];
+  try {
+    const parsed = JSON.parse(address);
+    if (Array.isArray(parsed?.serviceIds)) return parsed.serviceIds;
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    return [];
+  }
+  return [];
+}
+
 export function createStaffService({ events } = {}) {
   return {
     /** Validated query in; {items, cursor} out (cursor is the paging meta). */
@@ -41,6 +53,7 @@ export function createStaffService({ events } = {}) {
           roleCode: u.role,
           departmentId: u.departmentId,
           departmentName: u.departmentName,
+          serviceIds: parseStaffServices(u.address),
           isActive: u.isActive,
           createdAt: u.createdAt,
         })),
@@ -91,17 +104,18 @@ export function createStaffService({ events } = {}) {
 
     /** req: validated body (role already "OFFICER" | "ADMIN"). Returns the new account id. */
     async provision(req) {
-      if (req.departmentId !== null && !(await departments.exists(req.departmentId))) {
+      if (req.departmentId !== null && req.departmentId !== undefined && !(await departments.exists(req.departmentId))) {
         throw new ValidationError().add("departmentId", "Department does not exist.");
       }
       const id = newId("usr");
       const phoneVal = req.phone || "";
       const emailVal = req.email || (phoneVal ? `${phoneVal.replace(/\D/g, "")}@woreda.gov.et` : "");
+      const addressVal = req.serviceIds && req.serviceIds.length > 0 ? JSON.stringify({ serviceIds: req.serviceIds }) : null;
       await users
         .create({
           id, fullName: req.fullName, email: emailVal, phone: phoneVal, passwordHash: await bcrypt.hash(req.password, BCRYPT_COST),
           nationalId: `ET-EMP-${id.slice(4)}`, role: req.role, departmentId: req.departmentId,
-          counterNumber: null, address: null, isActive: true,
+          counterNumber: null, address: addressVal, isActive: true,
         })
         .catch((err) => {
           throw isDuplicateKey(err) ? new ConflictError("phone, email or national ID already registered") : err;
@@ -112,12 +126,13 @@ export function createStaffService({ events } = {}) {
 
     /** Updates a staff account; returns updated summary. */
     async update(id, req) {
-      if (req.departmentId !== null && !(await departments.exists(req.departmentId))) {
+      if (req.departmentId !== null && req.departmentId !== undefined && !(await departments.exists(req.departmentId))) {
         throw new ValidationError().add("departmentId", "Department does not exist.");
       }
       const phoneVal = req.phone || "";
       const emailVal = req.email || (phoneVal ? `${phoneVal.replace(/\D/g, "")}@woreda.gov.et` : "");
       const passwordHash = req.password ? await bcrypt.hash(req.password, BCRYPT_COST) : null;
+      const addressVal = req.serviceIds !== undefined ? (req.serviceIds && req.serviceIds.length > 0 ? JSON.stringify({ serviceIds: req.serviceIds }) : null) : undefined;
       const updated = await users
         .updateStaff(id, {
           fullName: req.fullName,
@@ -126,6 +141,7 @@ export function createStaffService({ events } = {}) {
           passwordHash,
           role: req.role,
           departmentId: req.departmentId,
+          ...(addressVal !== undefined ? { address: addressVal } : {}),
         })
         .catch((err) => {
           throw isDuplicateKey(err) ? new ConflictError("phone or email already registered") : err;
@@ -142,6 +158,7 @@ export function createStaffService({ events } = {}) {
         roleCode: u.role,
         departmentId: u.departmentId,
         departmentName: u.departmentName,
+        serviceIds: parseStaffServices(u.address),
         isActive: u.isActive,
         createdAt: u.createdAt,
       };

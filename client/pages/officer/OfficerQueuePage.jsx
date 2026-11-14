@@ -227,15 +227,18 @@ export default function OfficerQueuePage() {
     );
   });
 
-  // Assign queue positions only to active citizens (SERVING and WAITING).
-  // Completed citizens have finished service, so their position is marked as Served / done.
-  let activeQueueCounter = 1;
+  // Assign queue positions independently per public service.
+  // Within each service, active citizens (SERVING and WAITING) are numbered starting from 1.
+  // Completed citizens are excluded from position numbering (position = null -> "Served" badge).
+  // Two citizens in DIFFERENT services can both be position "1" -- that is correct and expected.
+  const serviceCounters = new Map();
   const allRows = sortedRows.map((row) => {
     const isCompleted = row.status === "COMPLETED";
-    return {
-      ...row,
-      position: isCompleted ? null : activeQueueCounter++,
-    };
+    if (isCompleted) return { ...row, position: null };
+    const svcKey = row.serviceId || row.serviceName || "unknown";
+    const next = (serviceCounters.get(svcKey) ?? 0) + 1;
+    serviceCounters.set(svcKey, next);
+    return { ...row, position: next };
   });
 
   const allServices = services || [];

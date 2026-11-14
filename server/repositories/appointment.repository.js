@@ -151,7 +151,7 @@ export async function findByCitizen({ citizenId, fromDate, statuses, search }) {
 }
 
 /** One page of the registry plus the total. date: exact date; afterDate: later dates; search: name, reference or phone. */
-export async function findPage({ departmentId, status, date, afterDate, search }, { page, limit }) {
+export async function findPage({ departmentId, serviceId, serviceIds, status, date, afterDate, search }, { page, limit }) {
   const params = [];
   const where = [];
   const add = (sql, value) => {
@@ -159,6 +159,8 @@ export async function findPage({ departmentId, status, date, afterDate, search }
     where.push(sql.replaceAll("?", `$${params.length}`));
   };
   if (departmentId) add("a.department_id = ?", departmentId);
+  if (serviceId) add("a.service_id = ?", serviceId);
+  if (serviceIds && serviceIds.length > 0) add("a.service_id = ANY(?)", serviceIds);
   if (status) add("a.status = ?", status);
   if (date !== undefined) add("a.date = ?", date);
   else if (afterDate !== undefined) add("a.date > ?", afterDate);

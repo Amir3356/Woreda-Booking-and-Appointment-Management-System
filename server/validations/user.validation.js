@@ -27,6 +27,7 @@ export const provisionSchema = z
       .enum(["Department Officer", "Central Administrator", "Admin", "OFFICER", "ADMIN"], { error: ROLE })
       .transform((r) => (r === "Department Officer" || r === "OFFICER" ? "OFFICER" : "ADMIN")),
     departmentId: z.string().trim().nullish().transform((v) => (v ? v : null)),
+    serviceIds: z.array(z.string()).optional(),
   })
   .refine((s) => s.role !== "OFFICER" || s.departmentId !== null, {
     error: "Officers must be assigned to a department.",
@@ -49,6 +50,7 @@ export const updateStaffSchema = z
       .enum(["Department Officer", "Central Administrator", "Admin", "OFFICER", "ADMIN"], { error: ROLE })
       .transform((r) => (r === "Department Officer" || r === "OFFICER" ? "OFFICER" : "ADMIN")),
     departmentId: z.string().trim().nullish().transform((v) => (v ? v : null)),
+    serviceIds: z.array(z.string()).optional(),
   })
   .refine((s) => s.role !== "OFFICER" || s.departmentId !== null, {
     error: "Officers must be assigned to a department.",

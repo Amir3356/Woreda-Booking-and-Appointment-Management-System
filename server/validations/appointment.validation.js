@@ -44,6 +44,7 @@ export const registryQuery = z.object({
   timeframe: queryUpper,
   status: queryUpper,
   departmentId: queryText,
+  serviceId: queryText,
   search: queryText,
   ...pageQuery,
 });

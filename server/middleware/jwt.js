@@ -12,6 +12,7 @@ export const ANONYMOUS = Object.freeze({
   role: "",
   name: "",
   departmentId: "",
+  serviceIds: Object.freeze([]),
   tokenId: "",
   authenticated: false,
 });
@@ -103,6 +104,7 @@ export function createJwtMiddleware({
       role: claims.role || "",
       name: claims.name || "",
       departmentId: claims.dept || "",
+      serviceIds: claims.srvs ? claims.srvs.split(",").filter(Boolean) : [],
       tokenId: claims.jti || "",
       authenticated: true,
     };

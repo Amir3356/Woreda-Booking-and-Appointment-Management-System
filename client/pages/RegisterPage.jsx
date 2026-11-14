@@ -88,10 +88,7 @@ export default function RegisterPage() {
         status: "VERIFIED",
       });
 
-      setSuccess(true);
-      setTimeout(() => {
-        router.push("/citizen/book");
-      }, 1200);
+      router.push("/citizen/book");
     } catch (err) {
       setLoading(false);
       if (err?.status === 409) {

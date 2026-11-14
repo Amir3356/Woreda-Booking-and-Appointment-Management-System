@@ -32,6 +32,16 @@ export function toJSON(u) {
   if (u.departmentName != null) out.departmentName = u.departmentName;
   if (u.counterNumber != null) out.counterNumber = u.counterNumber;
   if (u.address != null) out.address = u.address;
+  if (u.role === "OFFICER" && u.address) {
+    try {
+      const parsed = JSON.parse(u.address);
+      if (Array.isArray(parsed?.serviceIds)) out.serviceIds = parsed.serviceIds;
+      else if (Array.isArray(parsed)) out.serviceIds = parsed;
+    } catch {}
+  }
+  if (u.role === "OFFICER" && !out.serviceIds) {
+    out.serviceIds = [];
+  }
   out.isActive = Boolean(u.isActive);
   out.createdAt = u.createdAt;
   out.updatedAt = u.updatedAt;

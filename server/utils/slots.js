@@ -108,11 +108,18 @@ const labelMinutes = (label) => {
   return h * 60 + m;
 };
 
-/** Today only: a time that has already started becomes Unavailable. */
+/** Today only: a time that has already started cannot be booked. Preserves Full status if booked for this service. */
 export function markPast(slots, nowMin) {
-  return slots.map((s) =>
-    s.status !== "Unavailable" && labelMinutes(s.timeSlot) <= nowMin ? { ...s, status: "Unavailable", remainingCapacity: 0 } : s,
-  );
+  return slots.map((s) => {
+    if (labelMinutes(s.timeSlot) > nowMin) return s;
+    const isBooked = s.status === "Full" || (s.bookedCount && s.bookedCount > 0);
+    return {
+      ...s,
+      status: isBooked ? "Full" : "Unavailable",
+      isPast: true,
+      remainingCapacity: 0,
+    };
+  });
 }
 
 /** Once the day's bookings reach the service's or the department's daily capacity, every open slot is Full. */

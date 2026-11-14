@@ -14,7 +14,6 @@ import {
   ArrowRight,
   ShieldCheck,
   AlertCircle,
-  CheckCircle2,
   CircleCheck,
 } from "lucide-react";
 
@@ -59,14 +58,12 @@ export default function AuthPage() {
   const [showSignUpPassword, setShowSignUpPassword] = useState(false);
 
   const [error, setError] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
   // Handle Sign In
   const handleSignIn = async (e) => {
     e.preventDefault();
     setError("");
-    setSuccessMsg("");
 
     const inputIdentifier = signInIdentifier.trim();
     const passwordClean = signInPassword.trim();
@@ -132,7 +129,6 @@ export default function AuthPage() {
   const handleSignUp = async (e) => {
     e.preventDefault();
     setError("");
-    setSuccessMsg("");
 
     const fullNameClean = signUpFullName.trim();
     const phoneClean = normalizeEthiopianPhone(signUpPhone);
@@ -162,11 +158,14 @@ export default function AuthPage() {
         password: signUpPassword,
       });
       setCurrentUser({ ...data.user, role: "CITIZEN", departmentName: null }, data.token);
-      setSuccessMsg("Citizen account registered successfully! Redirecting...");
-      setTimeout(() => {
-        setLoading(false);
-        router.push("/citizen/book");
-      }, 500);
+      useStore.getState().addRegisteredCitizen?.({
+        id: data.user?.id || `cit-${Date.now()}`,
+        fullName: fullNameClean,
+        phone: phoneClean,
+        nationalId: data.user?.nationalId || `ET-CIT-${Math.floor(1000 + Math.random() * 9000)}`,
+        status: "VERIFIED",
+      });
+      router.push("/citizen/book");
     } catch (err) {
       setLoading(false);
       if (err?.status === 409) {
@@ -185,7 +184,6 @@ export default function AuthPage() {
   const switchMode = (next) => {
     setMode(next);
     setError("");
-    setSuccessMsg("");
   };
 
   /** Password field with a show/hide toggle. */
@@ -276,12 +274,6 @@ export default function AuthPage() {
               <div className="auth-alert auth-alert--error" role="alert">
                 <AlertCircle aria-hidden="true" />
                 <span>{error}</span>
-              </div>
-            )}
-            {successMsg && (
-              <div className="auth-alert auth-alert--success" role="status">
-                <CheckCircle2 aria-hidden="true" />
-                <span>{successMsg}</span>
               </div>
             )}
 

@@ -58,11 +58,18 @@ export function defineAbilityFor(caller) {
     // Can read and export reports
     can([Actions.READ, Actions.EXPORT], Subjects.REPORT);
 
-    // Can read, review, reschedule, and cancel appointments within their department
+    // Can read, review, reschedule, and cancel appointments within their department and authorized public services
     if (caller.departmentId) {
-      can([Actions.READ, Actions.REVIEW, Actions.CANCEL, Actions.RESCHEDULE], Subjects.APPOINTMENT, {
-        departmentId: caller.departmentId,
-      });
+      if (caller.serviceIds && caller.serviceIds.length > 0) {
+        can([Actions.READ, Actions.REVIEW, Actions.CANCEL, Actions.RESCHEDULE], Subjects.APPOINTMENT, {
+          departmentId: caller.departmentId,
+          serviceId: { $in: caller.serviceIds },
+        });
+      } else {
+        can([Actions.READ, Actions.REVIEW, Actions.CANCEL, Actions.RESCHEDULE], Subjects.APPOINTMENT, {
+          departmentId: caller.departmentId,
+        });
+      }
       can(Actions.MANAGE, Subjects.QUEUE, { departmentId: caller.departmentId });
     } else {
       // Officer without explicit department assignment has fallback access

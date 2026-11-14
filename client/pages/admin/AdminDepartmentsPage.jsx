@@ -267,14 +267,9 @@ export default function AdminDepartmentsPage() {
             <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-800 font-mono font-bold text-xs flex items-center justify-center shrink-0 border border-blue-100">
               {dept.code}
             </span>
-            <div>
-              <span className="font-bold text-slate-900 block text-xs">
-                {dept.name}
-              </span>
-              <span className="text-[10px] text-slate-400 font-normal">
-                Code: {dept.code}
-              </span>
-            </div>
+            <span className="font-bold text-slate-900 text-xs">
+              {dept.name}
+            </span>
           </div>
         );
       },

@@ -477,6 +477,10 @@ export function getUserFromJwtCookie(
     }
   }
 
+  const serviceIds = claims.srvs
+    ? (typeof claims.srvs === "string" ? claims.srvs.split(",").filter(Boolean) : (Array.isArray(claims.srvs) ? claims.srvs : []))
+    : (Array.isArray(sessionUser?.serviceIds) ? sessionUser.serviceIds : []);
+
   return {
     id: claims.sub,
     fullName: claims.name || sessionUser?.fullName || "User",
@@ -487,6 +491,7 @@ export function getUserFromJwtCookie(
     departmentName: claims.dept
       ? (matchedDept?.name || sessionUser?.departmentName || "Municipal Department")
       : (sessionUser?.departmentName || null),
+    serviceIds,
     isActive: true,
   };
 }

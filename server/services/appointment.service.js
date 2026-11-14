@@ -68,15 +68,37 @@ async function insertWithReference(client, fields) {
 
 /** audit: { record(caller, action, appointment, opts) }, events: { publish(type, id, data) } */
 export function createAppointmentService({ events, audit }) {
-  /** Fetches an appointment and enforces ownership (citizen) / department (officer) scoping. */
+  async function getOfficerAssignedServices(caller) {
+    if (caller.role !== "OFFICER") return null;
+    let serviceIds = caller.serviceIds;
+    if (!serviceIds || serviceIds.length === 0) {
+      const u = await users.findById(caller.userId);
+      if (u?.address) {
+        try {
+          const parsed = JSON.parse(u.address);
+          if (Array.isArray(parsed?.serviceIds)) serviceIds = parsed.serviceIds;
+          else if (Array.isArray(parsed)) serviceIds = parsed;
+        } catch {}
+      }
+    }
+    return serviceIds && serviceIds.length > 0 ? serviceIds : null;
+  }
+
+  /** Fetches an appointment and enforces ownership (citizen) / department & assigned service (officer) scoping. */
   async function load(caller, id) {
     const a = await appointments.findById(id);
     if (!a) throw new NotFoundError();
+    if (caller.role === "OFFICER") {
+      if (a.departmentId !== caller.departmentId) throw new ForbiddenError();
+      const assigned = await getOfficerAssignedServices(caller);
+      if (assigned && !assigned.includes(a.serviceId)) {
+        throw new ForbiddenError();
+      }
+    }
     if (caller?.ability) {
       if (!caller.ability.can("read", subject("Appointment", a))) throw new ForbiddenError();
     } else {
       if (caller.role === "CITIZEN" && a.citizenId !== caller.userId) throw new ForbiddenError();
-      if (caller.role === "OFFICER" && a.departmentId !== caller.departmentId) throw new ForbiddenError();
     }
     return a;
   }
@@ -143,10 +165,13 @@ export function createAppointmentService({ events, audit }) {
       return appointments.findByCitizen(filter);
     },
 
-    /** A page of the registry; officers only see their own department. f: validated registry query. */
-    list(caller, f) {
+    /** A page of the registry; officers only see their own department and assigned services. f: validated registry query. */
+    async list(caller, f) {
+      const assigned = await getOfficerAssignedServices(caller);
       const filter = {
         departmentId: caller.role === "OFFICER" ? caller.departmentId : f.departmentId,
+        serviceId: f.serviceId,
+        serviceIds: caller.role === "OFFICER" && assigned ? assigned : undefined,
         status: f.status,
         search: f.search,
       };

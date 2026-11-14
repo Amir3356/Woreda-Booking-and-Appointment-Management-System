@@ -132,19 +132,32 @@ function BookingContent() {
           ? "Every appointment time on that day is taken. Choose another date."
           : "";
 
+  const formatQueuePosition = (pos) => {
+    if (pos === 1) return "1st";
+    if (pos === 2) return "2nd";
+    if (pos === 3) return "3rd";
+    const mod10 = pos % 10;
+    const mod100 = pos % 100;
+    if (mod10 === 1 && mod100 !== 11) return `${pos}st`;
+    if (mod10 === 2 && mod100 !== 12) return `${pos}nd`;
+    if (mod10 === 3 && mod100 !== 13) return `${pos}rd`;
+    return `${pos}th`;
+  };
+
   /**
    * Calculates how many citizens are already scheduled to be served before the target appointment time
-   * on the selected date. Priority rule: Appointment Time -> Check-in Time (FIFO).
+   * for this specific public service on the selected date. Priority rule: Appointment Time -> Check-in Time (FIFO).
    */
   const getPeopleAheadCount = (targetTime) => {
     if (!targetTime || !dayInfo) return 0;
     const targetMin = parseTimeToMinutes(targetTime);
     if (targetMin <= 0) return 0;
 
-    const deptSlotCounts = dayInfo.departmentSlotCounts;
-    if (deptSlotCounts && typeof deptSlotCounts === "object" && Object.keys(deptSlotCounts).length > 0) {
+    // 1. Service-specific slot counts (confirmed appointments for this public service before target time)
+    const serviceSlotCounts = dayInfo.serviceSlotCounts;
+    if (serviceSlotCounts && typeof serviceSlotCounts === "object" && Object.keys(serviceSlotCounts).length > 0) {
       let count = 0;
-      for (const [timeKey, num] of Object.entries(deptSlotCounts)) {
+      for (const [timeKey, num] of Object.entries(serviceSlotCounts)) {
         if (parseTimeToMinutes(timeKey) < targetMin) {
           count += Number(num) || 0;
         }
@@ -152,10 +165,11 @@ function BookingContent() {
       return count;
     }
 
+    // 2. Fallback to slots list (service-specific bookedCount)
     const slots = dayInfo.slots || [];
     return slots
       .filter((sl) => parseTimeToMinutes(sl.timeSlot) < targetMin)
-      .reduce((sum, sl) => sum + (sl.departmentBookedCount ?? sl.bookedCount ?? (sl.status === "Full" || sl.status === "Booked" ? 1 : 0)), 0);
+      .reduce((sum, sl) => sum + (Number(sl.bookedCount) || 0), 0);
   };
 
   const sameServiceBookedCount = dayInfo?.bookedForDay ?? 0;
@@ -606,7 +620,9 @@ function BookingContent() {
               )}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {daySlots.map((slot) => {
-                  const available = slot.status === "Available";
+                  const isBooked = slot.status === "Full" || (Number(slot.bookedCount) || 0) >= (dayInfo?.maxParallelSlots || 1);
+                  const isPast = !isBooked && (Boolean(slot.isPast) || slot.status === "Unavailable");
+                  const available = slot.status === "Available" && !isBooked && !isPast;
                   const isSelected = selectedTimeSlot === slot.timeSlot;
                   const aheadForSlot = getPeopleAheadCount(slot.timeSlot);
                   return (
@@ -623,19 +639,27 @@ function BookingContent() {
                           : "border-slate-200 bg-white hover:border-slate-300 text-slate-800 cursor-pointer"
                       }`}
                       title={
-                        !available
-                          ? `${displayTime(slot.timeSlot)} (Already booked)`
+                        isBooked
+                          ? `${displayTime(slot.timeSlot)} (Already booked for this service)`
+                          : isPast
+                          ? `${displayTime(slot.timeSlot)} (Time has passed today)`
                           : `${displayTime(slot.timeSlot)} (${
                               aheadForSlot === 0
                                 ? "0 ahead · 1st to be served"
-                                : `${aheadForSlot} ${aheadForSlot === 1 ? "person" : "people"} scheduled before this time`
+                                : `${aheadForSlot} ${aheadForSlot === 1 ? "person" : "people"} scheduled before this time (Queue Position: ${aheadForSlot + 1})`
                             })`
                       }
                     >
                       <p className="text-xs font-bold">{displayTime(slot.timeSlot)}</p>
                       <div className="flex items-center justify-center gap-1 mt-1">
                         <span className="text-[10px] text-slate-500">
-                          {slot.lunchBreak ? "Lunch break" : available ? "Available" : "Already Booked"}
+                          {slot.lunchBreak
+                            ? "Lunch break"
+                            : isBooked
+                            ? "Already Booked"
+                            : isPast
+                            ? "Time Passed"
+                            : "Available"}
                         </span>
                         {available && (
                           <span
@@ -647,7 +671,7 @@ function BookingContent() {
                                 : "bg-slate-100 text-slate-600"
                             }`}
                           >
-                            {aheadForSlot === 0 ? "1st" : `${aheadForSlot} ahead`}
+                            {aheadForSlot === 0 ? "1st" : formatQueuePosition(aheadForSlot + 1)}
                           </span>
                         )}
                       </div>
@@ -683,7 +707,7 @@ function BookingContent() {
                         >
                           {selectedPeopleAhead === 0
                             ? "Estimated Serving Order: 1st in Queue"
-                            : `Estimated Serving Order: #${selectedPeopleAhead + 1} in Queue`}
+                            : `Estimated Serving Order: #${selectedPeopleAhead + 1} in Queue (Position ${selectedPeopleAhead + 1})`}
                         </span>
                       </div>
 

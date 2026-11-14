@@ -223,6 +223,7 @@ export const useStore = create(
           passwordHash: acc.passwordHash || null,
           role: acc.role || "Department Officer",
           departmentId: acc.departmentId || null,
+          serviceIds: acc.serviceIds || [],
           isProvisioned: true,
           isActive: true,
           createdAt: new Date().toISOString(),

@@ -36,7 +36,7 @@ export function createAvailabilityService() {
         // Times that have already started today cannot be booked; when none is left the day is over.
         const hadOpen = slots.some((s) => s.status !== "Unavailable");
         slots = markPast(slots, nowMinutes());
-        if (!reason && hadOpen && slots.every((s) => s.status === "Unavailable")) reason = "DAY_OVER";
+        if (!reason && hadOpen && slots.every((s) => s.status !== "Available")) reason = "DAY_OVER";
       }
       // Appointments belong to a department: a service not yet assigned to one cannot be booked.
       if (service && !departmentId) {
@@ -57,6 +57,7 @@ export function createAvailabilityService() {
         departmentCapacity: rules.departmentCapacity,
         departmentBooked,
         departmentSlotCounts: departmentSlotCounts || {},
+        serviceSlotCounts: counts || {},
         openingTime: schedule?.openingTime ?? null,
         closingTime: schedule?.closingTime ?? null,
         slots: applyDailyCapacity(slots, reason),

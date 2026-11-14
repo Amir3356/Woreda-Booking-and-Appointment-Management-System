@@ -109,10 +109,12 @@ export async function finalize(id, departmentId, status, client) {
 }
 
 /**
- * A citizen's queue tokens for a day, each with its live place in the department's queue:
- * ahead = WAITING tokens of the same department and day that have higher priority:
- *         earlier scheduled appointment or arrived earlier on-time,
- * waitingTotal = all WAITING tokens there, nowServing = the token most recently called.
+ * A citizen's queue tokens for a day, each with its live place in the SERVICE-specific queue:
+ * ahead = WAITING tokens for the SAME SERVICE and day that have higher priority:
+ *         earlier scheduled appointment or arrived earlier on-time.
+ * waitingTotal = all WAITING tokens for the same service, nowServing = the token most recently
+ * called for the same service.  Positions are independent per public service so that a booking
+ * on one service never affects another service's queue count.
  * Only counts and token numbers of other citizens are read, never their names.
  */
 export async function findForCitizen(citizenId, queueDate) {
@@ -120,11 +122,13 @@ export async function findForCitizen(citizenId, queueDate) {
     `SELECT q.id, q.token_number,
             CASE WHEN a.status = 'COMPLETED' OR q.status = 'COMPLETED' THEN 'COMPLETED' ELSE q.status END AS status,
             q.counter_number, q.called_time, q.checked_in_time, q.department_id,
-            a.id AS appointment_id, a.reference_number, a.time_slot, s.name AS service_name, d.name AS department_name,
+            a.id AS appointment_id, a.reference_number, a.time_slot,
+            s.id AS service_id, s.name AS service_name, d.name AS department_name,
             a.created_at AS appointment_created_at,
             (SELECT COUNT(*) FROM queue_tokens w
               JOIN appointments wa ON wa.id = w.appointment_id
               WHERE w.department_id = q.department_id AND w.queue_date = q.queue_date AND w.status = 'WAITING'
+                AND wa.service_id = a.service_id
                 AND (
                   (wa.date,
                    GREATEST(CASE WHEN wa.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN wa.time_slot::time ELSE w.checked_in_time END, w.checked_in_time),
@@ -135,9 +139,13 @@ export async function findForCitizen(citizenId, queueDate) {
                    q.checked_in_time, q.created_at, q.id)
                 ))::int AS ahead,
             (SELECT COUNT(*) FROM queue_tokens w
-              WHERE w.department_id = q.department_id AND w.queue_date = q.queue_date AND w.status = 'WAITING')::int AS waiting_total,
+              JOIN appointments wa ON wa.id = w.appointment_id
+              WHERE w.department_id = q.department_id AND w.queue_date = q.queue_date AND w.status = 'WAITING'
+                AND wa.service_id = a.service_id)::int AS waiting_total,
             (SELECT x.token_number FROM queue_tokens x
+              JOIN appointments xa ON xa.id = x.appointment_id
               WHERE x.department_id = q.department_id AND x.queue_date = q.queue_date AND x.status = 'SERVING'
+                AND xa.service_id = a.service_id
               ORDER BY x.called_time DESC NULLS LAST, x.updated_at DESC LIMIT 1) AS now_serving
      FROM queue_tokens q
      JOIN appointments a ON a.id = q.appointment_id
