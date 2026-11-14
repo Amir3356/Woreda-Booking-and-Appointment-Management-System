@@ -38,8 +38,8 @@ export const scheduleSchema = z
       .nullish()
       .transform((v) => v ?? 30),
     // Default for services without their own capacity; optional (kept on update, 20 on create).
-    dailyCapacity: z.number({ error: "Daily capacity must be positive." }).int({ error: "Daily capacity must be a whole number." })
-      .positive({ error: "Daily capacity must be positive." }).nullish().transform((v) => v ?? null),
+    dailyCapacity: z.number({ error: "Daily capacity must be a non-negative number." }).int({ error: "Daily capacity must be a whole number." })
+      .min(0, { error: "Daily capacity cannot be negative." }).nullish().transform((v) => v ?? null),
     // Each service's own Daily Appointment Capacity. Absent on update = unchanged.
     serviceCapacities: z
       .array(
@@ -47,7 +47,7 @@ export const scheduleSchema = z
           serviceId: z.string({ error: "Service is required." }).trim().min(1, { error: "Service is required." }),
           dailyCapacity: z.number({ error: "Daily Appointment Capacity must be a whole number." })
             .int({ error: "Daily Appointment Capacity must be a whole number." })
-            .positive({ error: "Daily Appointment Capacity must be at least 1." })
+            .min(0, { error: "Daily Appointment Capacity cannot be negative." })
             .max(10000, { error: "Daily Appointment Capacity is too large." }),
         }),
         { error: "Service capacities must be a list." },

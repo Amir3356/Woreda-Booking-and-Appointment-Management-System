@@ -100,7 +100,16 @@ export default function AccountProvisionPage() {
       });
       if (seq !== fetchSeqRef.current) return;
       if (res && Array.isArray(res.data)) {
-        setPagedAccounts(res.data);
+        // Strictly exclude central Admin account and credentials from the staff provisioning list
+        const staffOnly = res.data.filter((acc) => {
+          if (acc.id === "usr-admin") return false;
+          if (acc.roleCode === "ADMIN" || acc.role === "Admin" || acc.role === "Central Administrator") return false;
+          if (currentUser?.id && acc.id === currentUser.id) return false;
+          if (currentUser?.email && acc.email && acc.email.toLowerCase() === currentUser.email.toLowerCase()) return false;
+          if (currentUser?.phone && acc.phone && acc.phone === currentUser.phone) return false;
+          return true;
+        });
+        setPagedAccounts(staffOnly);
         if (res.meta?.cursor) {
           setCursorMetaState(res.meta.cursor);
           if (cursor > 0 && res.meta.cursor.totalCount <= cursor) {
@@ -333,6 +342,7 @@ export default function AccountProvisionPage() {
           serviceIds: form.serviceIds,
         });
         updateProvisionedAccount(editingAccount.phone || editingAccount.email, {
+          id: editingAccount.id,
           role: departmentName || "Department Officer",
           departmentId: form.departmentId,
           serviceIds: form.serviceIds,

@@ -19,6 +19,7 @@ export function createScheduleRoutes(c) {
 
   // Public: the citizen booking page reads these before sign-in.
   router.get("/active", c.listBookable);
+  router.get("/daily-status", c.dailyServiceStatus);
   router.get("/availability", validate({ query: availabilityQuery }), c.availability);
   router.get("/bookable-dates", validate({ query: bookableDatesQuery }), c.bookableDates);
 

@@ -28,6 +28,9 @@ function formatCitizenFromEvent(raw) {
 }
 
 export default function AdminCitizenManagementPage() {
+  const { currentUser } = useStore();
+  const isOfficer = currentUser?.role === "OFFICER";
+
   // Search state
   const [search, setSearch] = useState("");
 
@@ -83,13 +86,13 @@ export default function AdminCitizenManagementPage() {
     fetchPagedCitizens();
   }, [fetchPagedCitizens]);
 
-  // Real-time WebSocket subscription: updates table immediately when a citizen registers without refresh or polling
+  // Real-time WebSocket subscription: updates table immediately when a citizen registers or books
   useEffect(() => {
     let active = true;
 
     const unsubCitizens = subscribe("citizens.changed", (msg) => {
       if (!active) return;
-      if (msg?.citizen && cursor === 0) {
+      if (!isOfficer && msg?.citizen && cursor === 0) {
         const formatted = formatCitizenFromEvent(msg.citizen);
         const q = search.trim().toLowerCase();
         const matchesSearch =
@@ -112,6 +115,14 @@ export default function AdminCitizenManagementPage() {
       fetchPagedCitizens();
     });
 
+    const unsubAppointments = subscribe("appointments.changed", () => {
+      if (active) fetchPagedCitizens();
+    });
+
+    const unsubStaff = subscribe("staff.changed", () => {
+      if (active) fetchPagedCitizens();
+    });
+
     const unsubReconnect = subscribe("reconnected", () => {
       if (active) fetchPagedCitizens();
     });
@@ -119,9 +130,11 @@ export default function AdminCitizenManagementPage() {
     return () => {
       active = false;
       unsubCitizens();
+      unsubAppointments();
+      unsubStaff();
       unsubReconnect();
     };
-  }, [cursor, search, fetchPagedCitizens]);
+  }, [cursor, search, isOfficer, fetchPagedCitizens]);
 
   // Active page data from real server pagination
   const displayedCitizens = serverCitizens;
@@ -138,7 +151,7 @@ export default function AdminCitizenManagementPage() {
   const rangeStart = activeCursorMeta.totalCount === 0 ? 0 : (activeCursorMeta.current || 0) + 1;
   const rangeEnd = Math.min(activeCursorMeta.totalCount || 0, (activeCursorMeta.current || 0) + displayedCitizens.length);
 
-  // Table columns definition: Full Legal Name, Phone Number, National ID, Registered Date, Status
+  // Table columns definition: Full Legal Name, Phone Number, Registered Date, Status
   const citizenColumns = [
     {
       id: "fullName",
@@ -162,17 +175,6 @@ export default function AdminCitizenManagementPage() {
         <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
           <EthiopianFlag className="w-4 h-3 shrink-0 shadow-2xs" />
           <span>{row.original.phone}</span>
-        </span>
-      ),
-    },
-    {
-      id: "nationalId",
-      accessorKey: "nationalId",
-      header: "National ID",
-      sortFn: "text",
-      cell: ({ row }) => (
-        <span className="font-mono text-xs text-slate-600">
-          {row.original.nationalId || "—"}
         </span>
       ),
     },
@@ -218,7 +220,9 @@ export default function AdminCitizenManagementPage() {
             Citizen Management
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Directory of registered municipal citizens and contact details
+            {isOfficer
+              ? `Citizens who booked appointments for ${currentUser?.departmentName || "your assigned services"}`
+              : "Directory of registered municipal citizens and contact details"}
           </p>
         </div>
         <div className="absolute right-0 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-2">
@@ -231,7 +235,7 @@ export default function AdminCitizenManagementPage() {
           </div>
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">
             <Users className="w-3.5 h-3.5 text-[#0b2545]" />
-            <span>{totalRegisteredCount} Registered</span>
+            <span>{totalRegisteredCount} {isOfficer ? "Booked" : "Registered"}</span>
           </div>
         </div>
       </div>
@@ -248,7 +252,7 @@ export default function AdminCitizenManagementPage() {
               setSearch(e.target.value);
               setCursor(0);
             }}
-            placeholder="Search by name, phone, national ID..."
+            placeholder="Search by name, phone..."
             className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-[#0b2545] focus:outline-none bg-slate-50/50"
           />
           {search && (
@@ -298,12 +302,16 @@ export default function AdminCitizenManagementPage() {
               <div>
                 <p className="text-sm font-bold text-slate-700">
                   {totalRegisteredCount === 0
-                    ? "No citizens registered yet"
+                    ? isOfficer
+                      ? "No citizens have booked appointments for your assigned services yet"
+                      : "No citizens registered yet"
                     : "No matching citizens found"}
                 </p>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto text-center">
                   {totalRegisteredCount === 0
-                    ? "Citizen records will appear here as citizens register in the system."
+                    ? isOfficer
+                      ? "Citizen records will appear here automatically once a citizen books an appointment for your assigned public services."
+                      : "Citizen records will appear here as citizens register in the system."
                     : "Try adjusting your search query to find citizens."}
                 </p>
               </div>

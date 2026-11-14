@@ -101,6 +101,16 @@ export async function countOutstanding({ from, to, departmentIds }) {
   );
 }
 
+/** Active bookings per service on date: {"<serviceId>": n}. */
+export async function countActiveByService(date) {
+  const list = await rows(
+    `SELECT service_id, COUNT(*)::int AS n FROM appointments
+     WHERE date = $1 AND ${HOLDS_PLACE} GROUP BY service_id`,
+    [date],
+  );
+  return Object.fromEntries(list.map((r) => [r.service_id, r.n]));
+}
+
 /** Active bookings per time slot for a service on date: {"09:00 AM": n}. */
 export async function countBySlot(serviceId, date) {
   const list = await rows(
@@ -160,7 +170,13 @@ export async function findPage({ departmentId, serviceId, serviceIds, status, da
   };
   if (departmentId) add("a.department_id = ?", departmentId);
   if (serviceId) add("a.service_id = ?", serviceId);
-  if (serviceIds && serviceIds.length > 0) add("a.service_id = ANY(?)", serviceIds);
+  if (serviceIds !== undefined) {
+    if (serviceIds.length === 0) {
+      where.push("1 = 0");
+    } else {
+      add("a.service_id = ANY(?)", serviceIds);
+    }
+  }
   if (status) add("a.status = ?", status);
   if (date !== undefined) add("a.date = ?", date);
   else if (afterDate !== undefined) add("a.date > ?", afterDate);
@@ -247,4 +263,27 @@ export async function countOutcomes({ from, to, departmentId }) {
      WHERE date >= $1 AND date < $2 AND ($3::text IS NULL OR department_id = $3)`,
     [from, to, departmentId || null],
   );
+}
+
+/** All active appointments for a date eligible for the queue (APPROVED, CHECKED_IN, IN_PROGRESS).
+ * Note: PENDING appointments are awaiting Department Head approval and are excluded until approved. */
+export async function findActiveQueueForDate(date, departmentId = null) {
+  const params = [date];
+  const where = [
+    "a.date = $1",
+    "a.status IN ('APPROVED', 'CHECKED_IN', 'IN_PROGRESS')",
+  ];
+  if (departmentId) {
+    params.push(departmentId);
+    where.push(`a.department_id = $${params.length}`);
+  }
+  const list = await rows(
+    `SELECT a.*, d.name AS department_name, s.name AS service_name
+     FROM appointments a
+     LEFT JOIN departments d ON d.id = a.department_id
+     LEFT JOIN services s ON s.id = a.service_id
+     WHERE ${where.join(" AND ")}`,
+    params,
+  );
+  return list.map(fromRow);
 }

@@ -8,7 +8,7 @@ export function createStaffController(staffService) {
       okWithCursor(res, "Accounts retrieved successfully.", items, cursor);
     },
     async listCitizens(req, res) {
-      const { items, cursor, totalRegistered, filters } = await staffService.listCitizens(req.validatedQuery);
+      const { items, cursor, totalRegistered, filters } = await staffService.listCitizens(req.caller, req.validatedQuery);
       okWithCursor(res, "Citizens retrieved successfully.", items, cursor, { totalRegistered, filters });
     },
     async provision(req, res) {

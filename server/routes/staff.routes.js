@@ -8,8 +8,9 @@ import { citizenListQuery, provisionSchema, staffListQuery, updateStaffSchema } 
 export function createStaffRoutes(c) {
   const router = Router();
   const canManageStaff = checkAbility(Actions.MANAGE, Subjects.STAFF);
+  const canReadStaff = checkAbility(Actions.READ, Subjects.STAFF);
   router.get("/", canManageStaff, validate({ query: staffListQuery }), c.list);
-  router.get("/citizens", canManageStaff, validate({ query: citizenListQuery }), c.listCitizens);
+  router.get("/citizens", canReadStaff, validate({ query: citizenListQuery }), c.listCitizens);
   router.post("/provision", canManageStaff, validate({ body: provisionSchema }), c.provision);
   router.put("/:id", canManageStaff, validate({ body: updateStaffSchema }), c.update);
   router.patch("/:id/status", canManageStaff, c.toggleStatus);

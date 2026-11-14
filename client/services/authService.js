@@ -228,6 +228,7 @@ export function resolveUserSession(
         ? (matchedDept?.name || matchedProvisioned.role || "Unassigned Department")
         : "Woreda Central Administration",
       address: matchedProvisioned.address || "Kebele 03, Woreda Center",
+      serviceIds: Array.isArray(matchedProvisioned.serviceIds) ? matchedProvisioned.serviceIds : [],
       isActive: matchedProvisioned.isActive !== false,
       isProvisioned: true,
     };
@@ -275,6 +276,7 @@ export function resolveUserSession(
         : isAdmin
         ? "Woreda Central Administration"
         : null,
+      serviceIds: Array.isArray(matchedUser.serviceIds) ? matchedUser.serviceIds : [],
       isActive: matchedUser.isActive !== false,
       isProvisioned: true,
     };
@@ -361,6 +363,9 @@ export function createJwtToken(user, _expiresInSeconds = 31536000) {
     iss: "woreda-auth-service",
     iat: now,
   };
+  if (user.serviceIds && Array.isArray(user.serviceIds) && user.serviceIds.length > 0) {
+    payload.srvs = user.serviceIds.join(",");
+  }
 
   const encodedHeader = base64UrlEncode(JSON.stringify(header));
   const encodedPayload = base64UrlEncode(JSON.stringify(payload));

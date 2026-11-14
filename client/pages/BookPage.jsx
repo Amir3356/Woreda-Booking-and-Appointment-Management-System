@@ -59,7 +59,7 @@ function BookingContent() {
 
   const [citizenName, setCitizenName] = useState(currentUser?.fullName || "");
   const [citizenPhone, setCitizenPhone] = useState(currentUser?.phone || "+251 9");
-  const [citizenAddress, setCitizenAddress] = useState(currentUser?.address || "Kebele 03");
+  const [citizenAddress, setCitizenAddress] = useState(currentUser?.address || "");
   const [citizenNotes, setCitizenNotes] = useState("");
   const [agreementChecked, setAgreementChecked] = useState(false);
 

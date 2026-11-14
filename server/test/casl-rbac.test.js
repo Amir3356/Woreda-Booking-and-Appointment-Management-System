@@ -29,6 +29,7 @@ test("CASL Abilities - OFFICER permissions (with department scope)", () => {
   assert.equal(ability.can(Actions.READ_REGISTRY, Subjects.APPOINTMENT), true);
   assert.equal(ability.can(Actions.READ, Subjects.REPORT), true);
   assert.equal(ability.can(Actions.EXPORT, Subjects.REPORT), true);
+  assert.equal(ability.can(Actions.READ, Subjects.STAFF), true);
 
   // Scoped to own department
   const ownApt = { id: "a1", departmentId: "dept-urban", citizenId: "c1" };
@@ -45,6 +46,33 @@ test("CASL Abilities - OFFICER permissions (with department scope)", () => {
   assert.equal(ability.can(Actions.UPDATE, Subjects.SETTING), false);
   assert.equal(ability.can(Actions.READ, Subjects.AUDIT), false);
   assert.equal(ability.can(Actions.CREATE, Subjects.DEPARTMENT), false);
+});
+
+test("CASL Abilities - OFFICER permissions (with assigned public services scope)", () => {
+  const officerCaller = {
+    userId: "off-civil",
+    role: "OFFICER",
+    departmentId: "dept-civil",
+    serviceIds: ["srv-birth", "srv-marriage"],
+    authenticated: true,
+  };
+  const ability = defineAbilityFor(officerCaller);
+
+  // Assigned public services in own department
+  const birthApt = { id: "a1", departmentId: "dept-civil", serviceId: "srv-birth" };
+  const marriageApt = { id: "a2", departmentId: "dept-civil", serviceId: "srv-marriage" };
+  // Unassigned public service in own department
+  const deathApt = { id: "a3", departmentId: "dept-civil", serviceId: "srv-death" };
+  // Service in another department
+  const healthApt = { id: "a4", departmentId: "dept-health", serviceId: "srv-clinic" };
+
+  assert.equal(ability.can(Actions.READ, subject(Subjects.APPOINTMENT, birthApt)), true);
+  assert.equal(ability.can(Actions.READ, subject(Subjects.APPOINTMENT, marriageApt)), true);
+  assert.equal(ability.can(Actions.READ, subject(Subjects.APPOINTMENT, deathApt)), false);
+  assert.equal(ability.can(Actions.READ, subject(Subjects.APPOINTMENT, healthApt)), false);
+
+  assert.equal(ability.can(Actions.REVIEW, subject(Subjects.APPOINTMENT, birthApt)), true);
+  assert.equal(ability.can(Actions.REVIEW, subject(Subjects.APPOINTMENT, deathApt)), false);
 });
 
 test("CASL Abilities - CITIZEN permissions (with ownership scope)", () => {

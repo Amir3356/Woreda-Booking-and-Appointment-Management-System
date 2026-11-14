@@ -20,7 +20,7 @@ export function createEventService({ realtimeService, logger }) {
         } else if (type.startsWith("citizen.")) {
           realtimeService.broadcast({ type: "citizens.changed", event: type, entityId, citizen: _data });
         } else if (type.startsWith("staff.")) {
-          realtimeService.broadcast({ type: "staff.changed", event: type, entityId });
+          realtimeService.broadcast({ type: "staff.changed", event: type, entityId, staff: _data });
         } else if (type.startsWith("audit.")) {
           realtimeService.broadcast({ type: "audit.changed", event: type, entityId, auditEntry: _data });
         }

@@ -1,5 +1,5 @@
 // Data access for "departments" (with officer and service counts).
-import { one, query, rows } from "../config/database.js";
+import { one, query, rows, transaction } from "../config/database.js";
 import { fromRow } from "../models/department.model.js";
 
 const SELECT_WITH_COUNTS = `
@@ -118,10 +118,28 @@ export async function toggleActive(id) {
   return row ? row.is_active : null;
 }
 
-/** Returns false when no department has this id. Officers are detached by the foreign key (ON DELETE SET NULL). */
+/** Returns false when no department has this id. Preserves services (unassigns department_id), cleans up department appointments, and detaches officers. */
 export async function remove(id) {
-  const { rowCount } = await query("DELETE FROM departments WHERE id = $1", [id]);
-  return rowCount > 0;
+  return transaction(async (client) => {
+    // 1. Preserve public services in Service Management by detaching department_id (do NOT delete services)
+    await client.query("UPDATE services SET department_id = NULL WHERE department_id = $1", [id]);
+
+    // 2. Remove queue tokens for appointments of this department
+    await client.query("DELETE FROM queue_tokens WHERE department_id = $1", [id]);
+
+    // 3. Remove appointments belonging to this department
+    await client.query("DELETE FROM appointments WHERE department_id = $1", [id]);
+
+    // 4. Remove schedules tied to this department
+    await client.query("DELETE FROM schedules WHERE department_id = $1", [id]);
+
+    // 5. Detach officers assigned to this department
+    await client.query("UPDATE users SET department_id = NULL WHERE department_id = $1", [id]);
+
+    // 6. Delete the department itself
+    const { rowCount } = await client.query("DELETE FROM departments WHERE id = $1", [id]);
+    return rowCount > 0;
+  });
 }
 
 /** The department's code, or null when the department does not exist. */

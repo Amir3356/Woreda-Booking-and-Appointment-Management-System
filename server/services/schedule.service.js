@@ -8,6 +8,7 @@ import { statusLabel } from "../models/schedule.model.js";
 import * as schedules from "../repositories/schedule.repository.js";
 import * as departments from "../repositories/department.repository.js";
 import * as publicServices from "../repositories/publicService.repository.js";
+import * as appointments from "../repositories/appointment.repository.js";
 
 const labelled = (s) => ({ ...s, status: statusLabel(s.status) });
 
@@ -55,9 +56,20 @@ export function createScheduleService({ events }) {
       return (await schedules.findBookable(today())).map(labelled);
     },
 
+    /** Public: active bookings per service on date (default today). */
+    async dailyServiceCounts(date = today()) {
+      return appointments.countActiveByService(date);
+    },
+
     /** fields: validated body (validations/schedule.validation.js). */
     async create(fields) {
       await checkReferences(fields);
+      const existing = await schedules.findAll();
+      if (existing.length > 0) {
+        const v = new ValidationError();
+        v.add("schedule", "A working schedule already exists. You cannot create another schedule; please edit the existing one.");
+        v.throwIfAny();
+      }
       const id = newId("SCH");
       await schedules.create({ id, ...fields, status: fields.status ?? "ACTIVE" });
       const created = await get(id);

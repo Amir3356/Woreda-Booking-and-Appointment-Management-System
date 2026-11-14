@@ -12,7 +12,11 @@ export const authApi = {
     if (res.data?.token) tokenStorage.set(res.data.token);
     return res;
   },
-  me: () => http.get("/auth/me"),
+  async me() {
+    const res = await http.get("/auth/me");
+    if (res.data?.token) tokenStorage.set(res.data.token);
+    return res;
+  },
   csrf: () => http.get("/auth/csrf"),
   async logout() {
     try {

@@ -9,8 +9,8 @@ export default function CitizenProfilePage() {
     fullName: currentUser?.fullName || "",
     phone: currentUser?.phone || "",
     email: currentUser?.email || "",
-    nationalId: currentUser?.nationalId || "ET-CIT-5582",
-    address: currentUser?.address || "Kebele 04, House No. 412",
+    nationalId: currentUser?.nationalId || "",
+    address: currentUser?.address || "",
   });
   const [saved, setSaved] = useState(false);
 

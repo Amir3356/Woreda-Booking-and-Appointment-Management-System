@@ -39,6 +39,54 @@ async function issueToken(a, officerId) {
   }
 }
 
+function parseTimeToMinutes(val) {
+  if (!val) return 0;
+  if (typeof val === "string" && val.includes("T")) {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes();
+  }
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i.exec(String(val).trim());
+  if (!m) return 0;
+  let h = Number(m[1]);
+  const min = Number(m[2]);
+  const meridiem = (m[3] || "").toUpperCase();
+  if (meridiem === "PM" && h < 12) h += 12;
+  if (meridiem === "AM" && h === 12) h = 0;
+  return h * 60 + min;
+}
+
+function compareQueuePriority(a, b) {
+  const apptA = parseTimeToMinutes(a.timeSlot || a.time_slot);
+  const apptB = parseTimeToMinutes(b.timeSlot || b.time_slot);
+  const checkInA = a.checkedInAt ? parseTimeToMinutes(a.checkedInAt) : (a.checkedInTime ? parseTimeToMinutes(a.checkedInTime) : apptA);
+  const checkInB = b.checkedInAt ? parseTimeToMinutes(b.checkedInAt) : (b.checkedInTime ? parseTimeToMinutes(b.checkedInTime) : apptB);
+
+  const effA = Math.max(apptA, checkInA);
+  const effB = Math.max(apptB, checkInB);
+
+  // 1. Earlier scheduled appointment time served first
+  if (effA !== effB) return effA - effB;
+
+  // 2. Earlier check-in time FIFO tie-breaker
+  if (a.checkedInAt && b.checkedInAt) {
+    const cA = new Date(a.checkedInAt).getTime();
+    const cB = new Date(b.checkedInAt).getTime();
+    if (cA !== cB) return cA - cB;
+  } else if (a.checkedInAt || b.checkedInAt) {
+    return a.checkedInAt ? -1 : 1;
+  }
+
+  // 3. Booking creation time tie-breaker
+  if (a.createdAt && b.createdAt) {
+    const crA = new Date(a.createdAt).getTime();
+    const crB = new Date(b.createdAt).getTime();
+    if (crA !== crB) return crA - crB;
+  }
+
+  // 4. Deterministic tie-breaker
+  return String(a.id || "").localeCompare(String(b.id || ""));
+}
+
 export function createQueueService({ events, audit } = {}) {
   return {
     /** Verifies an APPROVED appointment at the desk and issues today's next queue token. */
@@ -76,21 +124,95 @@ export function createQueueService({ events, audit } = {}) {
      */
     async mine(caller) {
       const queueDate = today();
-      const [tokens, todays] = await Promise.all([
+      const [tokens, todays, activeAppointments] = await Promise.all([
         queueTokens.findForCitizen(caller.userId, queueDate),
         appointments.findByCitizen({
           citizenId: caller.userId,
           fromDate: queueDate,
-          statuses: ["PENDING", "APPROVED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED"],
+          statuses: ["PENDING", "APPROVED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED", "CANCELLED"],
         }),
+        appointments.findActiveQueueForDate(queueDate),
       ]);
+
+      const todaysForCitizen = todays.filter((a) => a.date === queueDate);
       const tokenApptIds = new Set(tokens.map((t) => t.appointment_id));
+
+      // Group active appointments by serving desk / public service queue group to calculate queue positions
+      const queueGroups = new Map();
+      activeAppointments.forEach((apt) => {
+        const key = apt.serviceId || apt.serviceName || apt.departmentId || "all";
+        if (!queueGroups.has(key)) queueGroups.set(key, []);
+        queueGroups.get(key).push(apt);
+      });
+
+      const positionMap = new Map();
+      queueGroups.forEach((list) => {
+        const sorted = [...list].sort(compareQueuePriority);
+        sorted.forEach((apt, idx) => {
+          positionMap.set(apt.id, {
+            position: idx + 1,
+            citizensAhead: idx,
+            citizensBehind: Math.max(0, sorted.length - 1 - idx),
+            totalInQueue: sorted.length,
+          });
+        });
+      });
+
+      // Construct live queue for the service desks / queue groups the citizen has bookings in today
+      const citizenQueueKeys = new Set(
+        todaysForCitizen.map((a) => a.serviceId || a.serviceName || a.departmentId || "all")
+      );
+      let departmentQueue = [];
+      if (citizenQueueKeys.size > 0) {
+        const relevantActive = activeAppointments.filter((apt) =>
+          citizenQueueKeys.has(apt.serviceId || apt.serviceName || apt.departmentId || "all")
+        );
+        // Include the citizen's own today's pending or cancelled appointments so they see their status
+        const mySpecial = todaysForCitizen.filter((a) => a.status === "PENDING" || a.status === "CANCELLED");
+        const allList = [...relevantActive];
+        mySpecial.forEach((p) => {
+          if (!allList.some((x) => x.id === p.id)) allList.push(p);
+        });
+        const sortedActive = [...allList].sort(compareQueuePriority);
+        departmentQueue = sortedActive.map((apt) => {
+          const isPending = apt.status === "PENDING";
+          const isCancelled = apt.status === "CANCELLED";
+          const isCompleted = apt.status === "COMPLETED";
+          const posData = positionMap.get(apt.id);
+          const isYou = Boolean(
+            apt.citizenId === caller.userId ||
+            (caller.phone && apt.citizenPhone === caller.phone)
+          );
+          const status = (apt.status === "IN_PROGRESS" || apt.status === "SERVING") ? "SERVING" : apt.status;
+          return {
+            appointmentId: apt.id,
+            referenceNumber: apt.referenceNumber,
+            citizenName: isYou ? `${apt.citizenName || "You"} (You)` : (apt.citizenName || "Citizen"),
+            serviceName: apt.serviceName,
+            departmentName: apt.departmentName,
+            timeSlot: apt.timeSlot,
+            status,
+            position: (isPending || isCancelled || isCompleted) ? null : (posData ? posData.position : 1),
+            citizensAhead: (isPending || isCancelled || isCompleted) ? null : (posData ? posData.citizensAhead : 0),
+            citizensBehind: (isPending || isCancelled || isCompleted) ? null : (posData ? posData.citizensBehind : 0),
+            totalInQueue: posData ? posData.totalInQueue : 0,
+            createdAt: apt.createdAt,
+            isYou,
+          };
+        });
+      }
+
       return {
         date: queueDate,
         averageServiceMinutes: AVG_SERVICE_MINUTES,
         queue: tokens.map((t) => {
           const waiting = t.status === "WAITING";
           const serving = t.status === "SERVING";
+          const isCompleted = t.status === "COMPLETED";
+          const posData = positionMap.get(t.appointment_id);
+          const computedPosition = isCompleted ? null : serving ? 1 : (posData ? posData.position : (t.ahead + 1));
+          const computedAhead = isCompleted ? 0 : serving ? 0 : (posData ? posData.citizensAhead : t.ahead);
+          const computedBehind = isCompleted ? 0 : (posData ? posData.citizensBehind : 0);
           return {
             appointmentId: t.appointment_id,
             referenceNumber: t.reference_number,
@@ -99,29 +221,47 @@ export function createQueueService({ events, audit } = {}) {
             timeSlot: t.time_slot,
             tokenNumber: t.token_number,
             status: t.status, // WAITING | SERVING | COMPLETED | NO_SHOW
-            position: waiting ? t.ahead + 1 : serving ? 1 : null,
-            citizensAhead: waiting ? t.ahead : 0,
-            waitingTotal: t.waiting_total,
+            position: computedPosition,
+            citizensAhead: computedAhead,
+            citizensBehind: computedBehind,
+            waitingTotal: posData?.totalInQueue ?? t.waiting_total,
             nowServing: t.now_serving ?? null,
             counterNumber: t.status === "SERVING" ? t.counter_number : null,
             checkedInTime: clock12(t.checked_in_time),
             calledTime: t.called_time ? clock12(t.called_time) : null,
-            estimatedWaitMinutes: waiting ? t.ahead * AVG_SERVICE_MINUTES : 0,
+            estimatedWaitMinutes: (isCompleted || serving) ? 0 : computedAhead * AVG_SERVICE_MINUTES,
             createdAt: t.appointment_created_at,
           };
         }),
         // Today's appointments not yet checked in (no queue token yet) or completed directly.
-        notCheckedIn: todays
-          .filter((a) => a.date === queueDate && !tokenApptIds.has(a.id))
-          .map((a) => ({
-            appointmentId: a.id,
-            referenceNumber: a.referenceNumber,
-            serviceName: a.serviceName,
-            departmentName: a.departmentName,
-            timeSlot: a.timeSlot,
-            status: a.status,
-            createdAt: a.createdAt,
-          })),
+        notCheckedIn: todaysForCitizen
+          .filter((a) => !tokenApptIds.has(a.id))
+          .map((a) => {
+            const isCompleted = a.status === "COMPLETED";
+            const isCancelled = a.status === "CANCELLED";
+            const isServing = a.status === "IN_PROGRESS";
+            const isPending = a.status === "PENDING";
+            const posData = positionMap.get(a.id);
+            const computedPosition = (isCompleted || isPending || isCancelled) ? null : isServing ? 1 : (posData ? posData.position : 1);
+            const computedAhead = (isCompleted || isPending || isCancelled) ? null : isServing ? 0 : (posData ? posData.citizensAhead : 0);
+            const computedBehind = (isCompleted || isPending || isCancelled) ? null : (posData ? posData.citizensBehind : 0);
+            return {
+              appointmentId: a.id,
+              referenceNumber: a.referenceNumber,
+              citizenName: a.citizenName,
+              serviceName: a.serviceName,
+              departmentName: a.departmentName,
+              timeSlot: a.timeSlot,
+              status: a.status,
+              position: computedPosition,
+              citizensAhead: computedAhead,
+              citizensBehind: computedBehind,
+              totalInQueue: posData ? posData.totalInQueue : 0,
+              estimatedWaitMinutes: (isCompleted || isPending || isCancelled) ? 0 : (computedAhead || 0) * AVG_SERVICE_MINUTES,
+              createdAt: a.createdAt,
+            };
+          }),
+        departmentQueue,
       };
     },
 
@@ -169,9 +309,23 @@ export function createQueueService({ events, audit } = {}) {
       const appointmentId = await transaction(async (client) => {
         let apptId = await queueTokens.finalize(id, officer.departmentId, req.status, client);
         if (!apptId) {
-          const a = await appointments.findById(id);
+          const a = await appointments.findById(id, client);
           if (a && (!officer.departmentId || a.departmentId === officer.departmentId)) {
+            if (a.status === "PENDING") {
+              throw new ConflictError("appointment must be APPROVED before service can be completed");
+            }
+            if (a.status === "REJECTED" || a.status === "CANCELLED") {
+              throw new ConflictError(`cannot complete service: appointment is ${a.status.toLowerCase()}`);
+            }
             apptId = a.id;
+          }
+        } else {
+          const a = await appointments.findById(apptId, client);
+          if (a && a.status === "PENDING") {
+            throw new ConflictError("appointment must be APPROVED before service can be completed");
+          }
+          if (a && (a.status === "REJECTED" || a.status === "CANCELLED")) {
+            throw new ConflictError(`cannot complete service: appointment is ${a.status.toLowerCase()}`);
           }
         }
         if (!apptId) throw new NotFoundError();

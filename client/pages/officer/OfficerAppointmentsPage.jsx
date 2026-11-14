@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { useStore } from "@/context";
+import { authApi } from "@/api";
 import { DataTable } from "@/components/ui";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatDate } from "@/utils";
@@ -24,8 +25,50 @@ export default function OfficerAppointmentsPage() {
     services,
     loadServices,
     loadDepartments,
+    loadAppointments,
     updateAppointmentStatus,
   } = useStore();
+
+  // 0. Ensure Officer assigned services are fully hydrated from server profile
+  useEffect(() => {
+    if (currentUser?.role === "OFFICER" && (!currentUser?.serviceIds || currentUser.serviceIds.length === 0)) {
+      authApi
+        .me()
+        .then(({ data }) => {
+          if (data && Array.isArray(data.serviceIds)) {
+            useStore.setState((state) => ({
+              currentUser: {
+                ...state.currentUser,
+                ...data,
+                serviceIds: data.serviceIds,
+              },
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [currentUser?.role, currentUser?.serviceIds]);
+
+  // Load appointments and subscribe to real-time updates
+  useEffect(() => {
+    loadAppointments?.().catch(() => {});
+    let timer = null;
+    const refreshAppointments = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        loadAppointments?.().catch(() => {});
+      }, 200);
+    };
+
+    const offAppt = subscribe("appointments.changed", refreshAppointments);
+    const offReconnect = subscribe("reconnected", refreshAppointments);
+
+    return () => {
+      clearTimeout(timer);
+      offAppt();
+      offReconnect();
+    };
+  }, [loadAppointments]);
 
   useEffect(() => {
     let timer = null;
@@ -37,8 +80,9 @@ export default function OfficerAppointmentsPage() {
       }, 150);
     };
 
-    // Initial load
-    refreshCatalog();
+    // Initial load immediately
+    loadServices?.().catch(() => {});
+    loadDepartments?.().catch(() => {});
 
     // Live catalog change updates without refreshing the page
     const offCatalog = subscribe("catalog.changed", refreshCatalog);
@@ -50,6 +94,59 @@ export default function OfficerAppointmentsPage() {
       offReconnect();
     };
   }, [loadServices, loadDepartments]);
+
+  // Live staff assignment changes (Admin edits, adds, or removes public services in Account Provision)
+  useEffect(() => {
+    let timer = null;
+    const refreshStaff = (msg) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const current = useStore.getState().currentUser;
+        if (current?.role === "OFFICER") {
+          const isTargetOfficer =
+            !msg?.entityId ||
+            msg.entityId === current.id ||
+            (msg?.staff && (msg.staff.id === current.id || msg.staff.phone === current.phone));
+
+          if (isTargetOfficer) {
+            if (msg?.staff && Array.isArray(msg.staff.serviceIds)) {
+              useStore.setState((state) => ({
+                currentUser: {
+                  ...state.currentUser,
+                  departmentId: msg.staff.departmentId !== undefined ? msg.staff.departmentId : state.currentUser?.departmentId,
+                  serviceIds: msg.staff.serviceIds,
+                },
+              }));
+            }
+            authApi
+              .me()
+              .then(({ data }) => {
+                if (data && Array.isArray(data.serviceIds)) {
+                  useStore.setState((state) => ({
+                    currentUser: {
+                      ...state.currentUser,
+                      ...data,
+                      serviceIds: data.serviceIds,
+                    },
+                  }));
+                }
+              })
+              .catch(() => {});
+
+            loadServices?.().catch(() => {});
+            loadDepartments?.().catch(() => {});
+            loadAppointments?.().catch(() => {});
+          }
+        }
+      }, 100);
+    };
+
+    const offStaff = subscribe("staff.changed", refreshStaff);
+    return () => {
+      clearTimeout(timer);
+      offStaff();
+    };
+  }, [loadServices, loadDepartments, loadAppointments]);
 
   const [busyId, setBusyId] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null);
@@ -99,17 +196,18 @@ export default function OfficerAppointmentsPage() {
     }
   };
 
-  // 1. All services assigned to this Department Head by the Administrator (RBAC Scoped)
+  // 1. All services assigned to this Department Head by the Administrator in Account Provision (RBAC Scoped)
   const assignedServices = useMemo(() => {
     if (!currentUser?.departmentId) return [];
-    const deptServices = (services || []).filter(
+    if (Array.isArray(currentUser?.serviceIds)) {
+      const idSet = new Set(currentUser.serviceIds);
+      return (services || []).filter(
+        (s) => s.isActive !== false && (idSet.has(s.id) || idSet.has(s.name))
+      );
+    }
+    return (services || []).filter(
       (s) => s.departmentId === currentUser.departmentId && s.isActive !== false
     );
-    const userAssignedIds = Array.isArray(currentUser.serviceIds) ? currentUser.serviceIds : [];
-    if (userAssignedIds.length > 0) {
-      return deptServices.filter((s) => userAssignedIds.includes(s.id));
-    }
-    return deptServices;
   }, [services, currentUser?.departmentId, currentUser?.serviceIds]);
 
   // Reset selected service filter if the selected service was removed/unassigned
@@ -128,13 +226,17 @@ export default function OfficerAppointmentsPage() {
   const effectiveAppointments = appointments || [];
   const deptAppointments = useMemo(() => {
     if (!currentUser?.departmentId) return [];
-    const allowedServiceIds = new Set(assignedServices.map((s) => s.id));
     return effectiveAppointments.filter((a) => {
+      // Must match assigned department
       if (a.departmentId !== currentUser.departmentId) return false;
-      if (allowedServiceIds.size > 0 && !allowedServiceIds.has(a.serviceId)) return false;
+      // Must match assigned public services
+      if (Array.isArray(currentUser?.serviceIds)) {
+        const idSet = new Set(currentUser.serviceIds);
+        return idSet.has(a.serviceId) || (a.serviceName && idSet.has(a.serviceName));
+      }
       return true;
     });
-  }, [effectiveAppointments, currentUser?.departmentId, assignedServices]);
+  }, [effectiveAppointments, currentUser?.departmentId, currentUser?.serviceIds]);
 
   // 3. Sort newest first
   const sortedAppointments = useMemo(() => {

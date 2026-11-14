@@ -87,9 +87,53 @@ export async function updateCitizen(id, f) {
 }
 
 /** Citizen accounts matching search + woreda/kebele/location filters: {total, totalRegistered, addresses, items} for one page, newest first. */
-export async function findCitizenPage({ search = "", woreda = "", kebele = "", location = "", offset = 0, limit = 5 }) {
+export async function findCitizenPage({
+  search = "",
+  woreda = "",
+  kebele = "",
+  location = "",
+  offset = 0,
+  limit = 5,
+  departmentId = null,
+  serviceIds = null,
+}) {
   const params = [];
   const where = ["u.role = 'CITIZEN'"];
+
+  const hasDept = Boolean(departmentId);
+  const hasSrvs = Array.isArray(serviceIds) && serviceIds.length > 0;
+
+  if (hasDept || hasSrvs) {
+    if (hasDept && hasSrvs) {
+      params.push(departmentId);
+      const pDept = `$${params.length}`;
+      params.push(serviceIds);
+      const pSrvs = `$${params.length}`;
+      where.push(`EXISTS (
+        SELECT 1 FROM appointments a
+        WHERE (a.citizen_id = u.id OR (a.citizen_phone IS NOT NULL AND a.citizen_phone = u.phone))
+          AND a.department_id = ${pDept}
+          AND (a.service_id = ANY(${pSrvs}) OR a.service_name = ANY(${pSrvs}))
+      )`);
+    } else if (hasDept) {
+      params.push(departmentId);
+      const pDept = `$${params.length}`;
+      where.push(`EXISTS (
+        SELECT 1 FROM appointments a
+        WHERE (a.citizen_id = u.id OR (a.citizen_phone IS NOT NULL AND a.citizen_phone = u.phone))
+          AND a.department_id = ${pDept}
+      )`);
+    } else if (hasSrvs) {
+      params.push(serviceIds);
+      const pSrvs = `$${params.length}`;
+      where.push(`EXISTS (
+        SELECT 1 FROM appointments a
+        WHERE (a.citizen_id = u.id OR (a.citizen_phone IS NOT NULL AND a.citizen_phone = u.phone))
+          AND (a.service_id = ANY(${pSrvs}) OR a.service_name = ANY(${pSrvs}))
+      )`);
+    }
+  }
+
   if (search !== "") {
     params.push(containsPattern(search));
     const p = `$${params.length}`;
@@ -109,7 +153,50 @@ export async function findCitizenPage({ search = "", woreda = "", kebele = "", l
   }
   const whereSql = where.join(" AND ");
   const [{ total }] = await rows(`SELECT COUNT(*)::int AS total FROM users u WHERE ${whereSql}`, params);
-  const [{ total_registered: totalRegistered }] = await rows("SELECT COUNT(*)::int AS total_registered FROM users WHERE role = 'CITIZEN'");
+
+  let totalRegistered;
+  if (hasDept || hasSrvs) {
+    if (search === "" && (!woreda || woreda.toUpperCase() === "ALL") && (!kebele || kebele.toUpperCase() === "ALL") && (!location || location.toUpperCase() === "ALL")) {
+      totalRegistered = total;
+    } else {
+      const scopeParams = [];
+      const scopeWhere = ["u.role = 'CITIZEN'"];
+      if (hasDept && hasSrvs) {
+        scopeParams.push(departmentId);
+        const pDept = `$${scopeParams.length}`;
+        scopeParams.push(serviceIds);
+        const pSrvs = `$${scopeParams.length}`;
+        scopeWhere.push(`EXISTS (
+          SELECT 1 FROM appointments a
+          WHERE (a.citizen_id = u.id OR (a.citizen_phone IS NOT NULL AND a.citizen_phone = u.phone))
+            AND a.department_id = ${pDept}
+            AND (a.service_id = ANY(${pSrvs}) OR a.service_name = ANY(${pSrvs}))
+        )`);
+      } else if (hasDept) {
+        scopeParams.push(departmentId);
+        const pDept = `$${scopeParams.length}`;
+        scopeWhere.push(`EXISTS (
+          SELECT 1 FROM appointments a
+          WHERE (a.citizen_id = u.id OR (a.citizen_phone IS NOT NULL AND a.citizen_phone = u.phone))
+            AND a.department_id = ${pDept}
+        )`);
+      } else if (hasSrvs) {
+        scopeParams.push(serviceIds);
+        const pSrvs = `$${scopeParams.length}`;
+        scopeWhere.push(`EXISTS (
+          SELECT 1 FROM appointments a
+          WHERE (a.citizen_id = u.id OR (a.citizen_phone IS NOT NULL AND a.citizen_phone = u.phone))
+            AND (a.service_id = ANY(${pSrvs}) OR a.service_name = ANY(${pSrvs}))
+        )`);
+      }
+      const [{ total: scopedTotal }] = await rows(`SELECT COUNT(*)::int AS total FROM users u WHERE ${scopeWhere.join(" AND ")}`, scopeParams);
+      totalRegistered = scopedTotal;
+    }
+  } else {
+    const [{ total_registered }] = await rows("SELECT COUNT(*)::int AS total_registered FROM users WHERE role = 'CITIZEN'");
+    totalRegistered = total_registered;
+  }
+
   const addressRows = await rows("SELECT DISTINCT address FROM users WHERE role = 'CITIZEN'");
   const items = await rows(
     `SELECT u.id, u.full_name, u.email, u.phone, u.national_id, u.address, u.is_active, u.created_at, u.updated_at
@@ -146,13 +233,13 @@ export async function findStaffPage(opts, maybeOffset, maybeLimit) {
   }
 
   const params = [];
-  let where = "u.role <> 'CITIZEN'";
+  let where = "u.role = 'OFFICER' AND u.role <> 'ADMIN' AND u.id <> 'usr-admin'";
 
   if (role && role !== "ALL") {
-    if (role === "ADMIN" || role === "Admin" || role === "Central Administrator") {
-      where += " AND u.role = 'ADMIN'";
-    } else if (role === "OFFICER" || role === "Department Officer") {
-      where += " AND u.role = 'OFFICER'";
+    if (role === "OFFICER" || role === "Department Officer") {
+      where = "u.role = 'OFFICER'";
+    } else if (role === "ADMIN" || role === "Admin" || role === "Central Administrator") {
+      where = "u.role = 'ADMIN' AND u.id <> 'usr-admin'";
     } else {
       params.push(role);
       where += ` AND (d.name = $${params.length} OR u.department_id = $${params.length})`;

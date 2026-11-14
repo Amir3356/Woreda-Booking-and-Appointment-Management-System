@@ -130,3 +130,124 @@ test("Queue Position Preview - Calculates how many citizens are scheduled before
   // 10:00 AM: 1 at 08:30 + 2 at 09:00 + 1 at 09:30 -> 4 people ahead (Serving Order: #5)
   assert.equal(getPeopleAhead("10:00 AM"), 4);
 });
+
+test("Queue Position Management - Calculate queue positions per serving desk / queue group", () => {
+  // Scenario:
+  // Birth Registration queue:
+  // Citizen A (4:00 PM) -> Position 1
+  // Citizen B (4:30 PM) -> Position 2
+  //
+  // School Registration queue:
+  // Citizen C (4:15 PM) -> Position 1
+  // Citizen D (4:45 PM) -> Position 2
+  const appointments = [
+    { id: "apt-A", citizenName: "Citizen A", serviceName: "Birth Registration", timeSlot: "04:00 PM", status: "PENDING" },
+    { id: "apt-B", citizenName: "Citizen B", serviceName: "Birth Registration", timeSlot: "04:30 PM", status: "PENDING" },
+    { id: "apt-C", citizenName: "Citizen C", serviceName: "School Registration Support", timeSlot: "04:15 PM", status: "PENDING" },
+    { id: "apt-D", citizenName: "Citizen D", serviceName: "School Registration Support", timeSlot: "04:45 PM", status: "PENDING" },
+  ];
+
+  function computeQueuePositionsPerGroup(list) {
+    const eligible = list.filter((a) =>
+      ["PENDING", "APPROVED", "CHECKED_IN", "IN_PROGRESS"].includes(a.status)
+    );
+    // Group by serving desk / queue group (service)
+    const groups = new Map();
+    eligible.forEach((a) => {
+      const key = a.serviceId || a.serviceName;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(a);
+    });
+
+    const positions = new Map();
+    groups.forEach((groupItems) => {
+      const sorted = sortQueue(groupItems);
+      sorted.forEach((item, index) => {
+        positions.set(item.id, index + 1);
+      });
+    });
+    return positions;
+  }
+
+  const positions = computeQueuePositionsPerGroup(appointments);
+
+  // Birth Registration queue positions:
+  assert.equal(positions.get("apt-A"), 1, "Citizen A (4:00 PM) should be Position 1 in Birth Registration queue");
+  assert.equal(positions.get("apt-B"), 2, "Citizen B (4:30 PM) should be Position 2 in Birth Registration queue");
+
+  // School Registration queue positions:
+  assert.equal(positions.get("apt-C"), 1, "Citizen C (4:15 PM) should be Position 1 in School Registration queue");
+  assert.equal(positions.get("apt-D"), 2, "Citizen D (4:45 PM) should be Position 2 in School Registration queue");
+
+  // Verify independence: Citizen C (4:15 PM) does NOT push Citizen B (4:30 PM) in Birth Registration
+  assert.equal(positions.get("apt-B"), 2, "Citizen B remains Position 2 in their own serving desk queue");
+
+  // If Citizen A cancels or is rejected, Citizen B moves to Position 1 in Birth Registration:
+  const aptA = appointments.find((a) => a.id === "apt-A");
+  aptA.status = "REJECTED";
+  const updatedPositions = computeQueuePositionsPerGroup(appointments);
+  assert.equal(updatedPositions.get("apt-A"), undefined);
+  assert.equal(updatedPositions.get("apt-B"), 1, "Citizen B advances to Position 1 in Birth Registration queue");
+  // School Registration queue remains unaffected:
+  assert.equal(updatedPositions.get("apt-C"), 1);
+  assert.equal(updatedPositions.get("apt-D"), 2);
+});
+
+test("Queue Position Management - Verify Now Serving, Completed, and Behind updates on cancellation", () => {
+  // Scenario:
+  // Three citizens booked Birth Registration:
+  // Citizen B: 4:00 PM
+  // Citizen A: 4:30 PM
+  // Citizen C: 5:00 PM
+  const appointments = [
+    { id: "apt-B", citizenName: "Citizen B", serviceName: "Birth Registration", timeSlot: "04:00 PM", status: "APPROVED" },
+    { id: "apt-A", citizenName: "Citizen A", serviceName: "Birth Registration", timeSlot: "04:30 PM", status: "APPROVED" },
+    { id: "apt-C", citizenName: "Citizen C", serviceName: "Birth Registration", timeSlot: "05:00 PM", status: "APPROVED" },
+  ];
+
+  function computeQueueMetrics(list) {
+    const eligible = list.filter((a) =>
+      ["PENDING", "APPROVED", "CHECKED_IN", "IN_PROGRESS", "SERVING"].includes(a.status)
+    );
+    const sorted = sortQueue(eligible);
+    const total = sorted.length;
+    const metrics = new Map();
+    sorted.forEach((item, index) => {
+      const position = index + 1;
+      const ahead = index;
+      const behind = total - 1 - index;
+      metrics.set(item.id, { position, ahead, behind, total, status: item.status });
+    });
+    return metrics;
+  }
+
+  // Initial state:
+  // Citizen B: Position 1, Ahead 0, Behind 2
+  // Citizen A: Position 2, Ahead 1, Behind 1
+  // Citizen C: Position 3, Ahead 2, Behind 0
+  let m = computeQueueMetrics(appointments);
+  assert.deepEqual(m.get("apt-B"), { position: 1, ahead: 0, behind: 2, total: 3, status: "APPROVED" });
+  assert.deepEqual(m.get("apt-A"), { position: 2, ahead: 1, behind: 1, total: 3, status: "APPROVED" });
+  assert.deepEqual(m.get("apt-C"), { position: 3, ahead: 2, behind: 0, total: 3, status: "APPROVED" });
+
+  // Verification 1. Now Serving: When Citizen B starts receiving service, their status becomes Serving
+  appointments.find((a) => a.id === "apt-B").status = "SERVING";
+  m = computeQueueMetrics(appointments);
+  assert.equal(m.get("apt-B").status, "SERVING", "Citizen B should have status SERVING");
+
+  // Verification 3. Queue updates: When Citizen C cancels, Citizen A's People Behind automatically changes from 1 to 0
+  appointments.find((a) => a.id === "apt-C").status = "CANCELLED";
+  m = computeQueueMetrics(appointments);
+  assert.equal(m.get("apt-C"), undefined, "Cancelled Citizen C should not be in active queue");
+  assert.equal(m.get("apt-A").behind, 0, "Citizen A's People Behind should automatically change from 1 to 0");
+  assert.equal(m.get("apt-A").ahead, 1, "Citizen A's People Ahead remains 1 (Citizen B is still in serving)");
+  assert.equal(m.get("apt-A").position, 2, "Citizen A remains Position 2");
+
+  // Verification 2. Completed: Once Citizen B finishes, they show Completed and disappear from active queue calculations
+  appointments.find((a) => a.id === "apt-B").status = "COMPLETED";
+  m = computeQueueMetrics(appointments);
+  assert.equal(m.get("apt-B"), undefined, "Completed Citizen B should disappear from active queue calculations");
+  assert.equal(m.get("apt-A").position, 1, "Citizen A advances to Position 1");
+  assert.equal(m.get("apt-A").ahead, 0, "Citizen A has 0 people ahead");
+  assert.equal(m.get("apt-A").behind, 0, "Citizen A has 0 people behind");
+});

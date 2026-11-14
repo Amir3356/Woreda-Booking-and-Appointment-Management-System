@@ -116,10 +116,50 @@ export default function App() {
         })
         .catch(() => {});
     }
+    const handleStaffChange = (msg) => {
+      const current = useStore.getState().currentUser;
+      if (current?.role === "OFFICER") {
+        const isSelf =
+          !msg?.entityId ||
+          msg.entityId === current.id ||
+          (msg?.staff && (msg.staff.id === current.id || msg.staff.phone === current.phone));
+        if (isSelf) {
+          if (msg?.staff && Array.isArray(msg.staff.serviceIds)) {
+            useStore.setState((state) => ({
+              currentUser: {
+                ...state.currentUser,
+                departmentId: msg.staff.departmentId !== undefined ? msg.staff.departmentId : state.currentUser?.departmentId,
+                serviceIds: msg.staff.serviceIds,
+              },
+            }));
+          }
+          authApi
+            .me()
+            .then(({ data }) => {
+              const now = useStore.getState().currentUser;
+              if (now?.id === current.id && data) {
+                useStore.setState({
+                  currentUser: {
+                    ...now,
+                    ...data,
+                    role: "OFFICER",
+                    serviceIds: Array.isArray(data.serviceIds) ? data.serviceIds : (now.serviceIds || []),
+                  },
+                });
+              }
+            })
+            .catch(() => {});
+          refreshSoon();
+        }
+      }
+    };
+
+    const offStaff = subscribe("staff.changed", handleStaffChange);
     const offChange = subscribe("appointments.changed", refreshSoon);
     const offReconnect = subscribe("reconnected", refreshSoon);
     return () => {
       clearTimeout(timer);
+      offStaff();
       offChange();
       offReconnect();
     };
@@ -163,6 +203,7 @@ export default function App() {
         <Route index element={<Navigate to="appointments" replace />} />
         <Route path="appointments" element={<OfficerAppointmentsPage />} />
         <Route path="queue" element={<OfficerQueuePage />} />
+        <Route path="citizens" element={<Navigate to="/admin/citizens" replace />} />
         <Route path="verify" element={<OfficerVerifyPage />} />
         <Route path="reports" element={<OfficerReportsPage />} />
       </Route>

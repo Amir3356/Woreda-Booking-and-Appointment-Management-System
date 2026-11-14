@@ -96,7 +96,7 @@ export default function AdminAppointmentsPage() {
         newTime,
         "Administrative desk rescheduling"
       );
-      toast.success(`Rescheduled ${rescheduleTarget.referenceNumber} successfully.`);
+      toast.success("Appointment rescheduled successfully.");
       setRescheduleTarget(null);
     } catch (err) {
       toast.error(err?.message || "This appointment time is already booked for this service. Please choose another available time.");

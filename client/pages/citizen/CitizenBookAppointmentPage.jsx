@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { toast } from "sonner";
 import { useStore } from "@/context";
 import { useEscapeKey } from "@/hooks";
-import { subscribe, isLive } from "@/api/realtime";
+import { subscribe } from "@/api/realtime";
 import { scheduleApi } from "@/api";
 import {
   APPOINTMENT_STATUS_CONFIG,
@@ -10,13 +10,11 @@ import {
   closedMessage,
   displayDate,
   displayTime,
-  formatWorkingDays,
   localIsoDate,
   addDays,
   nextWorkingDate,
   scheduleOn,
   schedulesForService,
-  weekdayOfIso,
 } from "@/utils";
 import { DataTable } from "@/components/ui";
 import {
@@ -209,6 +207,8 @@ function CitizenDateDmyInput({
 export default function CitizenBookAppointmentPage() {
   // Bumped on every catalog/schedule change so open availability is fetched again.
   const [availabilityVersion, setAvailabilityVersion] = useState(0);
+  // Today's active bookings count per service: { [serviceId]: number }
+  const [todayBookedCounts, setTodayBookedCounts] = useState({});
 
   const {
     currentUser,
@@ -234,6 +234,10 @@ export default function CitizenBookAppointmentPage() {
       loadDepartments?.().catch(() => {});
       loadBookableSchedules().catch(() => {});
       loadAppointments().catch(() => {});
+      scheduleApi
+        .dailyServiceStatus({ date: localIsoDate() })
+        .then(({ data }) => setTodayBookedCounts(data || {}))
+        .catch(() => {});
       setAvailabilityVersion((v) => v + 1); // re-read slot availability as well
     };
     refresh();
@@ -248,7 +252,7 @@ export default function CitizenBookAppointmentPage() {
   }, [loadServices, loadDepartments, loadBookableSchedules, loadAppointments]);
 
   /** Bookings still possible on a day: free places in its times, capped by the daily capacity. */
-  const placesLeft = (data) => {
+  const _placesLeft = (data) => {
     const free = (data?.slots || [])
       .filter((sl) => sl.status === "Available")
       .reduce((sum, sl) => sum + (sl.remainingCapacity || 0), 0);
@@ -283,11 +287,11 @@ export default function CitizenBookAppointmentPage() {
     setCancellingId(null);
     if (ok) {
       setAvailabilityVersion((v) => v + 1); // the freed time is bookable again
-      showSuccess(`Appointment ${booking.referenceNumber || ""} has been cancelled.`);
+      showSuccess("Appointment has been cancelled.");
       await loadAppointments().catch(() => {});
     } else {
       setCancelError(
-        `Could not cancel ${booking.referenceNumber || ""}: ${
+        `Could not cancel the appointment: ${
           useStore.getState().appointmentError?.message || "please try again."
         }`
       );
@@ -311,10 +315,11 @@ export default function CitizenBookAppointmentPage() {
   const activeServices = allServices.filter(isBookable);
   const activeDepartments = (departments || []).filter((d) => d.isActive !== false);
 
-  const selectedDeptId = selectedSlot?.departmentId || "";
-  const departmentServices = selectedDeptId
-    ? activeServices.filter((s) => s.departmentId === selectedDeptId)
-    : activeServices;
+  const [selectedPublicServiceDept, setSelectedPublicServiceDept] = useState("ALL");
+  const displayedPublicServices = useMemo(() => {
+    if (selectedPublicServiceDept === "ALL") return activeServices;
+    return activeServices.filter((s) => s.departmentId === selectedPublicServiceDept);
+  }, [activeServices, selectedPublicServiceDept]);
 
   const serviceSelection = (serviceId, bookable = activeServices) => {
     const srv = bookable.find((s) => s.id === serviceId);
@@ -328,6 +333,33 @@ export default function CitizenBookAppointmentPage() {
       departmentId: srv.departmentId,
       department: dept?.name || "Municipal Department",
     };
+  };
+
+  // Resolves the service's Daily Appointment Capacity configured by the Admin in Schedule Management > Working Hours
+  const getServiceDailyCapacity = (service) => {
+    if (!service) return 20;
+    const applicable = schedulesForService(service, schedules || []);
+    for (const sch of applicable) {
+      const caps = Array.isArray(sch.serviceCapacities) ? sch.serviceCapacities : [];
+      const own = caps.find((c) => c.serviceId === service.id);
+      if (own && own.dailyCapacity !== null && own.dailyCapacity !== undefined && Number(own.dailyCapacity) >= 0) {
+        return Number(own.dailyCapacity);
+      }
+      if (sch.dailyCapacity !== null && sch.dailyCapacity !== undefined && Number(sch.dailyCapacity) >= 0) {
+        return Number(sch.dailyCapacity);
+      }
+    }
+    for (const sch of schedules || []) {
+      const caps = Array.isArray(sch.serviceCapacities) ? sch.serviceCapacities : [];
+      const own = caps.find((c) => c.serviceId === service.id);
+      if (own && own.dailyCapacity !== null && own.dailyCapacity !== undefined && Number(own.dailyCapacity) >= 0) {
+        return Number(own.dailyCapacity);
+      }
+      if (sch.dailyCapacity !== null && sch.dailyCapacity !== undefined && Number(sch.dailyCapacity) >= 0) {
+        return Number(sch.dailyCapacity);
+      }
+    }
+    return service.dailyQuota ?? 20;
   };
 
   const todayIso = localIsoDate();
@@ -465,19 +497,25 @@ export default function CitizenBookAppointmentPage() {
 
   /**
    * Calculates how many citizens are already scheduled to be served before the target appointment time
-   * for this specific public service on the selected date. Priority rule: Appointment Time -> Check-in Time (FIFO).
-   * Citizens with earlier scheduled appointments for the same service are served first.
+   * for this serving desk / public service queue group on the selected date. Priority rule: Appointment Time -> Check-in Time (FIFO).
+   * Citizens with earlier scheduled appointments for the same service desk are served first.
    */
   const getPeopleAheadCount = (targetTime) => {
     if (!targetTime || !availability.data) return 0;
     const targetMin = parseTimeToMinutes(targetTime);
     if (targetMin <= 0) return 0;
 
-    // 1. Service-specific slot counts (confirmed appointments for this public service before target time)
-    const serviceSlotCounts = availability.data.serviceSlotCounts;
-    if (serviceSlotCounts && typeof serviceSlotCounts === "object" && Object.keys(serviceSlotCounts).length > 0) {
+    // Service-specific slot counts (confirmed appointments for this serving desk before target time)
+    const servCounts = availability.data.serviceSlotCounts;
+    const deptCounts = availability.data.departmentSlotCounts;
+    const slotCounts =
+      servCounts && typeof servCounts === "object" && Object.keys(servCounts).length > 0
+        ? servCounts
+        : deptCounts;
+
+    if (slotCounts && typeof slotCounts === "object" && Object.keys(slotCounts).length > 0) {
       let count = 0;
-      for (const [timeKey, num] of Object.entries(serviceSlotCounts)) {
+      for (const [timeKey, num] of Object.entries(slotCounts)) {
         if (parseTimeToMinutes(timeKey) < targetMin) {
           count += Number(num) || 0;
         }
@@ -485,7 +523,7 @@ export default function CitizenBookAppointmentPage() {
       return count;
     }
 
-    // 2. Fallback to slots list (service-specific bookedCount)
+    // Fallback to slots list
     const slots = availability.data.slots || [];
     return slots
       .filter((sl) => parseTimeToMinutes(sl.timeSlot) < targetMin)
@@ -512,50 +550,6 @@ export default function CitizenBookAppointmentPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [services]);
-
-  const handleDepartmentChange = (deptId) => {
-    const servicesForDept = activeServices.filter((s) => s.departmentId === deptId);
-    const firstSrv = servicesForDept[0];
-    const dept = departments.find((d) => d.id === deptId);
-    if (firstSrv) {
-      handleServiceChange(firstSrv.id, deptId);
-    } else {
-      setSelectedSlot((prev) => ({
-        ...prev,
-        departmentId: deptId,
-        department: dept?.name || "Municipal Department",
-        serviceId: "",
-        service: "",
-        time: "",
-      }));
-    }
-  };
-
-  const handleServiceChange = (serviceId, overrideDeptId = null) => {
-    const srv = activeServices.find((s) => s.id === serviceId);
-    const deptId = overrideDeptId || srv?.departmentId || selectedSlot?.departmentId || "";
-    setSelectedSlot((prev) => {
-      // Same service chosen again: keep the date and time already picked.
-      if (prev?.serviceId === serviceId && prev?.departmentId === deptId) return prev;
-      // Keep the date if the new service is open then; otherwise move to its next working day.
-      const sch = prev?.date && srv ? scheduleOn(srv, schedules, prev.date) : null;
-      const keep = Boolean(sch && prev.date >= todayIso && (sch.workingDays || []).includes(weekdayOfIso(prev.date)));
-      const date = keep ? prev.date : nextWorkingDate(srv, schedules) || "";
-      const dept = departments.find((d) => d.id === (srv?.departmentId || deptId));
-      return {
-        ...prev,
-        serviceId: srv?.id || serviceId,
-        service: srv?.name || "",
-        departmentId: srv?.departmentId || deptId,
-        department: dept?.name || "Municipal Department",
-        date,
-        dateDisplay: date ? displayDate(date) : "",
-        time: "",
-        availabilityText: "Available",
-        actionValue: "Available",
-      };
-    });
-  };
 
   const handleDateChange = (dateVal) => {
     if (!dateVal) {
@@ -656,35 +650,40 @@ export default function CitizenBookAppointmentPage() {
     setCitizenNotes("");
   };
 
-  // Always opens the modal; with no active services it shows an empty-state notice instead.
-  // Fetches the catalog again so services the Admin added since this page loaded are included.
-  const handleOpenNewBooking = async () => {
-    try {
-      await loadServices();
-    } catch {
-      // Server unreachable: fall back to the last list fetched.
+  // Directly opens the booking modal for a chosen public service card in the dashboard
+  const handleSelectServiceForBooking = (service) => {
+    const dailyCap = getServiceDailyCapacity(service);
+    const bookedToday = todayBookedCounts[service.id] ?? 0;
+    if (dailyCap === 0) {
+      toast.error(
+        `Appointments for "${service.name}" are currently unavailable (Daily Appointment Capacity is set to 0 by administration).`,
+        { duration: 6000 }
+      );
+      return;
     }
-    const latestSchedules = await loadBookableSchedules().catch(() => useStore.getState().schedules || []);
-    const bookable = (useStore.getState().services || []).filter(isBookable);
-    const activeDepts = (useStore.getState().departments || []).filter((d) => d.isActive !== false);
-    // Start with the first service that has an opening schedule, on its next working day.
-    const first =
-      bookable.find((s) => nextWorkingDate(s, latestSchedules)) || bookable[0] || null;
-    const firstDept = activeDepts.find((d) => d.id === first?.departmentId) || activeDepts[0] || null;
-    const date = first ? nextWorkingDate(first, latestSchedules) || "" : "";
+    if (bookedToday >= dailyCap) {
+      toast.error(
+        `Appointments for "${service.name}" are currently full today (${bookedToday}/${dailyCap} appointments booked). Please choose another date or service.`,
+        { duration: 6000 }
+      );
+      return;
+    }
+    const latestSchedules = schedules || [];
+    const dept = departments.find((d) => d.id === service.departmentId);
+    const date = nextWorkingDate(service, latestSchedules) || "";
     handleOpenBooking(
       {
         id: `slot-${Date.now()}`,
         date,
         dateDisplay: date ? displayDate(date) : "",
         time: "",
-        serviceId: first?.id || "",
-        departmentId: firstDept?.id || first?.departmentId || "",
-        department: firstDept?.name || "Municipal Department",
+        serviceId: service.id,
+        departmentId: service.departmentId || dept?.id || "",
+        department: dept?.name || "Municipal Department",
         availabilityText: "Available",
         actionValue: "Available",
       },
-      bookable
+      activeServices
     );
   };
 
@@ -698,7 +697,7 @@ export default function CitizenBookAppointmentPage() {
     setBookingError("");
     setSubmitting(true);
     try {
-      const apt = await bookAppointment({
+      await bookAppointment({
         // The server uses the full name and phone number of the citizen's account (from sign-up).
         departmentId: selectedSlot.departmentId,
         serviceId: selectedSlot.serviceId,
@@ -709,7 +708,7 @@ export default function CitizenBookAppointmentPage() {
       setSelectedSlot(null);
       setAvailabilityVersion((v) => v + 1); // the slot just taken
       await loadAppointments().catch(() => {});
-      showSuccess(`Appointment booked successfully! Reference number: ${apt.referenceNumber}`);
+      showSuccess("Appointment booked successfully!");
     } catch (err) {
       let msg = "Could not book the appointment: the server is unreachable. Please try again.";
       if (err?.status === 401 || err?.status === 403) {
@@ -933,34 +932,14 @@ export default function CitizenBookAppointmentPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Centered Page Header with Action Button at Right Edge */}
-      <div
-        className="relative flex items-center justify-center w-full min-h-[48px]"
-        style={{ position: "relative", minHeight: "48px", width: "100%" }}
-      >
-        <div className="w-full text-center" style={{ textAlign: "center", width: "100%" }}>
-          <h2 className="text-xl font-bold text-slate-900" style={{ textAlign: "center" }}>
-            Book Appointment
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5" style={{ textAlign: "center" }}>
-            Browse available municipal service slots and reserve your in-person office schedule.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleOpenNewBooking}
-          className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0b2545] hover:bg-[#133b5c] text-white text-xs font-bold shadow transition-all cursor-pointer shrink-0"
-          style={{
-            position: "absolute",
-            right: 0,
-            top: "50%",
-            transform: "translateY(-50%)",
-            whiteSpace: "nowrap",
-          }}
-        >
-          <Calendar className="w-4 h-4 text-amber-300" />
-          <span>Book Appointment</span>
-        </button>
+      {/* Centered Page Header */}
+      <div className="w-full text-center">
+        <h2 className="text-xl font-bold text-slate-900">
+          Book Appointment
+        </h2>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Browse available municipal service slots and reserve your in-person office schedule.
+        </p>
       </div>
 
       {serverSessionInvalid && (
@@ -1003,6 +982,139 @@ export default function CitizenBookAppointmentPage() {
         </div>
       )}
 
+      {/* Dynamic Available Public Services Section (Retrieved from Database) */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="flex flex-col items-center text-center space-y-3">
+          <div className="flex flex-col items-center">
+            <div className="flex items-center justify-center gap-2">
+              <span className="p-1.5 rounded-lg bg-blue-50 text-blue-700">
+                <FileText className="w-4 h-4" />
+              </span>
+              <h3 className="text-base font-bold text-slate-900">
+                Available Public Services
+              </h3>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                {activeServices.length} {activeServices.length === 1 ? "Service" : "Services"}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1 text-center">
+              Select any public service configured by the administration to schedule an appointment.
+            </p>
+          </div>
+
+          {/* Department Filter Pills */}
+          {activeDepartments.length > 0 && (
+            <div className="flex items-center justify-center gap-1.5 flex-wrap pb-1 sm:pb-0 max-w-full">
+              <button
+                type="button"
+                onClick={() => setSelectedPublicServiceDept("ALL")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors shrink-0 cursor-pointer ${
+                  selectedPublicServiceDept === "ALL"
+                    ? "bg-[#0b2545] text-white shadow-2xs"
+                    : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                }`}
+              >
+                All Departments
+              </button>
+              {activeDepartments.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => setSelectedPublicServiceDept(d.id)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors shrink-0 cursor-pointer ${
+                    selectedPublicServiceDept === d.id
+                      ? "bg-[#0b2545] text-white shadow-2xs"
+                      : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                  }`}
+                >
+                  {d.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Services Cards Grid */}
+        {displayedPublicServices.length === 0 ? (
+          <div className="p-8 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60">
+            <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <p className="text-xs font-bold text-slate-700">No public services available</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {selectedPublicServiceDept !== "ALL"
+                ? "No active services found for the selected department."
+                : "Public services are being updated by the administration."}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {displayedPublicServices.map((service) => {
+              const dept = departments.find((d) => d.id === service.departmentId);
+              const dailyCapacity = getServiceDailyCapacity(service);
+              const bookedToday = todayBookedCounts[service.id] ?? 0;
+              const isZeroCapacity = dailyCapacity === 0;
+              const isFull = !isZeroCapacity && bookedToday >= dailyCapacity;
+              return (
+                <div
+                  key={service.id}
+                  className="p-4 rounded-xl border border-slate-200/90 bg-white hover:border-blue-400 hover:shadow-xs transition-all flex flex-col justify-between group"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-700 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80">
+                        <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span>
+                          Daily Appointment Capacity: <strong className="font-bold text-slate-900">{dailyCapacity}</strong>
+                        </span>
+                      </span>
+                    </div>
+
+                    <h4 className="text-xs font-bold text-slate-900 group-hover:text-blue-700 transition-colors line-clamp-1">
+                      {service.name}
+                    </h4>
+
+                    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500 font-medium">
+                      <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="truncate">{dept?.name || "General Administration"}</span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 line-clamp-2 mt-2 leading-relaxed">
+                      {service.description || "Public administrative appointment and registration service."}
+                    </p>
+                  </div>
+
+                  <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <span
+                      className={`text-xs font-bold ${
+                        isZeroCapacity
+                          ? "text-amber-600"
+                          : isFull
+                            ? "text-rose-600"
+                            : "text-emerald-700"
+                      }`}
+                    >
+                      {isZeroCapacity ? "Unavailable" : isFull ? "Full" : "Free"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectServiceForBooking(service)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#0b2545] hover:bg-[#133b5c] text-white text-[11px] font-bold shadow-2xs transition-all cursor-pointer"
+                    >
+                      <Calendar className="w-3 h-3 text-amber-300" />
+                      <span>Book Slot</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Booked Appointments Section Header */}
+      <div className="w-full text-center pt-2">
+        <h3 className="text-sm font-bold text-slate-900">My Appointments</h3>
+        <p className="text-xs text-slate-500 mt-0.5">View and track your scheduled office visits</p>
+      </div>
 
       {/* Search Box & Dropdown Filters Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -1039,7 +1151,7 @@ export default function CitizenBookAppointmentPage() {
               className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 shadow-2xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer max-w-[200px] truncate"
             >
               <option value="ALL">All Services</option>
-              {services.map((s) => (
+              {activeServices.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
@@ -1097,7 +1209,7 @@ export default function CitizenBookAppointmentPage() {
               <div className="text-center">
                 <p className="text-sm font-bold text-slate-700">No appointments booked yet</p>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  Click &quot;Book Appointment&quot; above to schedule your in-person office visit.
+                  Select an available public service above to schedule your in-person office visit.
                 </p>
               </div>
             </div>
@@ -1118,16 +1230,13 @@ export default function CitizenBookAppointmentPage() {
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 id="booking-modal-title" className="font-extrabold text-slate-900 text-base tracking-tight">
-                      Book Municipal Appointment
+                      Book Appointment: {selectedService?.name || selectedSlot.service || "Municipal Service"}
                     </h3>
                     <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />
                       {selectedSlot.availabilityText || "Slots Available"}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Select a service and slot, then review queue order before confirming
-                  </p>
                 </div>
               </div>
               <button
@@ -1143,76 +1252,6 @@ export default function CitizenBookAppointmentPage() {
             <form onSubmit={handleConfirmBooking} className="mt-5 space-y-5">
               {/* Service & Appointment Slot Selection */}
               <div className="bg-slate-50/70 p-5 rounded-2xl border border-slate-200/90 space-y-4 shadow-2xs">
-                {/* Department Dropdown */}
-                <div>
-                  <label htmlFor="citizen-department-select" className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Department <span className="text-rose-600 font-bold">*</span>
-                  </label>
-                  <div className="relative">
-                    <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <select
-                      id="citizen-department-select"
-                      value={selectedDeptId}
-                      onChange={(e) => handleDepartmentChange(e.target.value)}
-                      required
-                      disabled={activeDepartments.length === 0}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0b2545]/20 focus:border-[#0b2545] cursor-pointer shadow-2xs disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                    >
-                      <option value="" disabled>
-                        {activeDepartments.length === 0
-                          ? "No departments available"
-                          : "Select a department"}
-                      </option>
-                      {activeDepartments.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Service Dropdown */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label htmlFor="citizen-service-select" className="block text-xs font-bold text-slate-700">
-                      Public Service <span className="text-rose-600 font-bold">*</span>
-                    </label>
-                    {selectedService?.estimatedDurationMinutes && (
-                      <span className="text-[11px] font-semibold text-slate-500">
-                        ~{selectedService.estimatedDurationMinutes} mins estimated
-                      </span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <FileText className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <select
-                      id="citizen-service-select"
-                      value={selectedSlot.serviceId}
-                      onChange={(e) => handleServiceChange(e.target.value)}
-                      onFocus={() => {
-                        // Live updates keep this list current; without a live connection,
-                        // fetch the latest catalog when the citizen opens the dropdown.
-                        if (!isLive()) loadServices().catch(() => {});
-                      }}
-                      required
-                      disabled={departmentServices.length === 0}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0b2545]/20 focus:border-[#0b2545] cursor-pointer shadow-2xs disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                    >
-                      <option value="" disabled>
-                        {departmentServices.length === 0
-                          ? selectedDeptId ? "No services available in this department" : "Select a department first"
-                          : "Select a public service"}
-                      </option>
-                      {departmentServices.map((s) => (
-                        <option key={s.id} value={s.id} disabled={!isBookable(s)}>
-                          {isBookable(s) ? s.name : `${s.name} (currently unavailable)`}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
                 {/* Appointment Date and Time in clean responsive 2-column grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
@@ -1255,11 +1294,11 @@ export default function CitizenBookAppointmentPage() {
                 {/* Available / Booked Slot Selection Pills */}
                 {daySlots.length > 0 && !timeInputDisabled && (
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-700">
+                    <div className="relative flex items-center justify-center">
+                      <span className="text-xs font-bold text-slate-700 text-center">
                         Available Time Slots
                       </span>
-                      <span className="text-[11px] font-semibold text-slate-500">
+                      <span className="absolute right-0 text-[11px] font-semibold text-slate-500">
                         {availability.data?.slotIntervalMinutes || scheduleForDate?.slotIntervalMinutes || 30} mins per slot
                       </span>
                     </div>
@@ -1329,105 +1368,103 @@ export default function CitizenBookAppointmentPage() {
                 {/* Queue Preview Card: Displays live queue serving order & same service bookings */}
                 {selectedSlot.date && selectedSlot.time && !timeNotice && !timeInputDisabled && (
                   <div className="p-4 rounded-xl border border-slate-200 bg-white text-slate-900 shadow-2xs mt-3">
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
-                          selectedPeopleAhead === 0
-                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                            : "bg-[#0b2545]/10 text-[#0b2545] border border-[#0b2545]/15"
-                        }`}
-                      >
-                        <Users className="w-5 h-5" />
+                    <div className="flex flex-col items-center text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <div
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-2xs ${
+                            selectedPeopleAhead === 0
+                              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                              : "bg-[#0b2545]/10 text-[#0b2545] border border-[#0b2545]/15"
+                          }`}
+                        >
+                          <Users className="w-4 h-4" />
+                        </div>
+                        <span className="text-xs font-bold text-slate-900 tracking-tight">
+                          Queue Serving Order & Flow
+                        </span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <span className="text-xs font-bold text-slate-900 tracking-tight block">
-                              Queue Serving Order & Flow
-                            </span>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              Live estimated order based on scheduled appointment time
-                            </p>
-                          </div>
-                          <span
-                            className={`text-xs font-bold px-3 py-1 rounded-full border shadow-2xs inline-flex items-center gap-1.5 ${
-                              selectedPeopleAhead === 0
-                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                                : "bg-slate-100 text-slate-800 border-slate-200"
-                            }`}
-                          >
-                            {selectedPeopleAhead === 0 ? (
-                              <>
-                                <CheckCircle className="w-3.5 h-3.5 text-emerald-700" />
-                                <span>Estimated Order: 1st in Queue</span>
-                              </>
-                            ) : (
-                              <>
-                                <Users className="w-3.5 h-3.5 text-slate-600" />
-                                <span>Estimated Order: #{selectedPeopleAhead + 1} in Queue (Position {selectedPeopleAhead + 1})</span>
-                              </>
-                            )}
+                      <p className="text-[11px] text-slate-500 mt-0.5 text-center">
+                        Live estimated order based on scheduled appointment time
+                      </p>
+                      <div className="mt-2.5">
+                        <span
+                          className={`text-xs font-bold px-3 py-1 rounded-full border shadow-2xs inline-flex items-center gap-1.5 ${
+                            selectedPeopleAhead === 0
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                              : "bg-slate-100 text-slate-800 border-slate-200"
+                          }`}
+                        >
+                          {selectedPeopleAhead === 0 ? (
+                            <>
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-700" />
+                              <span>Estimated Order: 1st in Queue</span>
+                            </>
+                          ) : (
+                            <>
+                              <Users className="w-3.5 h-3.5 text-slate-600" />
+                              <span>Estimated Order: #{selectedPeopleAhead + 1} in Queue (Position {selectedPeopleAhead + 1})</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 2 Key Metrics Grid: Service Bookings & Scheduled Ahead */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3 pt-3 border-t border-slate-100">
+                      <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                        <span className="text-[11px] font-semibold text-slate-600 block">
+                          Same-Day Service Bookings
+                        </span>
+                        <div className="mt-1 flex items-baseline gap-1.5">
+                          <strong className="text-[#0b2545] font-black text-lg">{sameServiceBookedCount}</strong>
+                          <span className="text-xs text-slate-700">
+                            {sameServiceBookedCount === 1 ? "other citizen booked" : "other citizens booked"}
                           </span>
                         </div>
-
-                        {/* 2 Key Metrics Grid: Service Bookings & Scheduled Ahead */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3 pt-3 border-t border-slate-100">
-                          <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                            <span className="text-[11px] font-semibold text-slate-600 block">
-                              Same-Day Service Bookings
-                            </span>
-                            <div className="mt-1 flex items-baseline gap-1.5">
-                              <strong className="text-[#0b2545] font-black text-lg">{sameServiceBookedCount}</strong>
-                              <span className="text-xs text-slate-700">
-                                {sameServiceBookedCount === 1 ? "other citizen booked" : "other citizens booked"}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              For {displayDate(selectedSlot.date)}
-                            </p>
-                          </div>
-
-                          <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                            <span className="text-[11px] font-semibold text-slate-600 block">
-                              Queue Preceding Your Slot
-                            </span>
-                            <div className="mt-1 flex items-baseline gap-1.5">
-                              {selectedPeopleAhead === 0 ? (
-                                <span className="text-emerald-800 font-bold text-xs flex items-center gap-1">
-                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                                  0 people ahead · You will be served 1st!
-                                </span>
-                              ) : (
-                                <>
-                                  <strong className="text-[#0b2545] font-black text-lg">{selectedPeopleAhead}</strong>
-                                  <span className="text-xs text-slate-700">
-                                    {selectedPeopleAhead === 1 ? "person ahead" : "people ahead"}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              Scheduled before {displayTime(selectedSlot.time)}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-start gap-2 text-[11px] leading-relaxed">
-                          <Info className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
-                          <p className="text-slate-600">
-                            Citizens are served in order of scheduled appointment time.{" "}
-                            {selectedPeopleAhead > 0 ? (
-                              <span className="text-slate-900 font-semibold">
-                                Choosing an earlier available slot will move your desk serving order forward.
-                              </span>
-                            ) : (
-                              <span className="text-emerald-800 font-semibold">
-                                You selected the earliest available slot — you will be first in line when desk service begins.
-                              </span>
-                            )}
-                          </p>
-                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          For {displayDate(selectedSlot.date)}
+                        </p>
                       </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                        <span className="text-[11px] font-semibold text-slate-600 block">
+                          Queue Preceding Your Slot
+                        </span>
+                        <div className="mt-1 flex items-baseline gap-1.5">
+                          {selectedPeopleAhead === 0 ? (
+                            <span className="text-emerald-800 font-bold text-xs flex items-center gap-1">
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                              0 people ahead · You will be served 1st!
+                            </span>
+                          ) : (
+                            <>
+                              <strong className="text-[#0b2545] font-black text-lg">{selectedPeopleAhead}</strong>
+                              <span className="text-xs text-slate-700">
+                                {selectedPeopleAhead === 1 ? "person ahead" : "people ahead"}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Scheduled before {displayTime(selectedSlot.time)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-start gap-2 text-[11px] leading-relaxed">
+                      <Info className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+                      <p className="text-slate-600">
+                        Citizens are served in order of scheduled appointment time.{" "}
+                        {selectedPeopleAhead > 0 ? (
+                          <span className="text-slate-900 font-semibold">
+                            Choosing an earlier available slot will move your desk serving order forward.
+                          </span>
+                        ) : (
+                          <span className="text-emerald-800 font-semibold">
+                            You selected the earliest available slot — you will be first in line when desk service begins.
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -1439,38 +1476,7 @@ export default function CitizenBookAppointmentPage() {
                   </div>
                 )}
 
-                {/* What the schedule allows for this service */}
-                {scheduleForDate && (
-                  <div className="p-3 rounded-xl bg-slate-100/70 border border-slate-200/60 text-xs text-slate-600 flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="font-semibold text-slate-700">
-                      Hours: {formatWorkingDays(scheduleForDate.workingDays)}, {displayTime(scheduleForDate.openingTime)} – {displayTime(scheduleForDate.closingTime)}
-                    </span>
-                    <span>·</span>
-                    <span>{availability.data?.slotIntervalMinutes || scheduleForDate.slotIntervalMinutes || 30} min intervals</span>
-                    {scheduleForDate.lunchStart && scheduleForDate.lunchEnd && (
-                      <>
-                        <span>·</span>
-                        <span>Lunch: {displayTime(scheduleForDate.lunchStart)} – {displayTime(scheduleForDate.lunchEnd)}</span>
-                      </>
-                    )}
-                    {dateRange?.max && (
-                      <>
-                        <span>·</span>
-                        <span>Bookable until {displayDate(dateRange.max)}</span>
-                      </>
-                    )}
-                    {availability.data?.dailyCapacity ? (
-                      <>
-                        <span>·</span>
-                        <span className={placesLeft(availability.data) > 0 ? "font-bold text-emerald-800" : "font-bold text-rose-800"}>
-                          {placesLeft(availability.data) === 0
-                            ? "Fully booked"
-                            : `${placesLeft(availability.data)} ${placesLeft(availability.data) === 1 ? "appointment" : "appointments"} available on this day`}
-                        </span>
-                      </>
-                    ) : null}
-                  </div>
-                )}
+
                 {dateNotice && (
                   <div role="alert" className="flex items-start gap-2 text-xs font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
                     <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />

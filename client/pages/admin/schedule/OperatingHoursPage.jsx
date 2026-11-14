@@ -14,7 +14,6 @@ import {
   Plus,
   CheckCircle2,
   Edit2,
-  Trash2,
   X,
   Search,
   Circle,
@@ -134,9 +133,10 @@ function ScheduleDateDmyInput({
         onClick={openPicker}
         title="Open calendar picker"
         aria-label="Open calendar picker"
-        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer z-10"
+        className="absolute left-3 top-1/2 -translate-y-1/2 p-0 m-0 border-0 bg-transparent text-slate-400 hover:text-slate-600 cursor-pointer z-10 flex items-center justify-center outline-none focus:outline-none"
+        style={{ background: "transparent", border: "none", padding: 0, boxShadow: "none" }}
       >
-        <Calendar className="w-4 h-4 text-slate-500 hover:text-slate-800" aria-hidden="true" />
+        <Calendar className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" aria-hidden="true" />
       </button>
 
       {/* Main Formatted Text Input */}
@@ -151,7 +151,7 @@ function ScheduleDateDmyInput({
         onClick={openPicker}
         aria-label={ariaLabel}
         maxLength={10}
-        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0b2545] focus:border-[#0b2545] cursor-pointer shadow-2xs tabular-nums tracking-wide placeholder:text-slate-400"
+        className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0b2545] focus:border-[#0b2545] cursor-pointer shadow-2xs tabular-nums tracking-wide placeholder:text-slate-400"
       />
 
       {/* Transparent native date picker layered directly over the left icon */}
@@ -165,17 +165,18 @@ function ScheduleDateDmyInput({
         title="Choose date"
         style={{
           position: "absolute",
-          left: "0.375rem",
+          left: "0.5rem",
           top: "50%",
           transform: "translateY(-50%)",
-          width: "2rem",
-          height: "2rem",
+          width: "1.75rem",
+          height: "1.75rem",
           opacity: 0,
           cursor: "pointer",
           zIndex: 20,
           border: "none",
           padding: 0,
           margin: 0,
+          background: "transparent",
         }}
       />
     </div>
@@ -201,7 +202,6 @@ export default function OperatingHoursPage() {
   const {
     addSchedule,
     updateSchedule,
-    deleteSchedule,
     toggleScheduleStatus,
     services: storeServices,
     departments: storeDepartments,
@@ -261,7 +261,7 @@ export default function OperatingHoursPage() {
     lunchEnd: "13:30",
     slotIntervalMinutes: 30,
     capacities: {}, // { serviceId: "20" }; a service not in it shows the default 20
-    effectiveStartDate: "",
+    effectiveStartDate: localIsoDate(),
     effectiveEndDate: "",
     status: "Active",
   };
@@ -270,7 +270,24 @@ export default function OperatingHoursPage() {
 
   const formatDaysDisplay = formatWorkingDays;
 
-  const handleOpenCreate = () => {
+  const handleOpenCreate = async () => {
+    // If a schedule already exists, block creation and display Sonner toast notification
+    const existingCount = pagination?.meta?.totalCount ?? schedules?.length ?? 0;
+    if (existingCount > 0) {
+      toast.error("A working schedule already exists. You cannot create another schedule; please edit the existing one.", { duration: 6000 });
+      return;
+    }
+    try {
+      const res = await scheduleApi.list();
+      const allSchedules = Array.isArray(res?.data) ? res.data : [];
+      if (allSchedules.length > 0) {
+        toast.error("A working schedule already exists. You cannot create another schedule; please edit the existing one.", { duration: 6000 });
+        return;
+      }
+    } catch {
+      // If network fails, proceed with the UI count check
+    }
+
     setEditingSchedule(null);
     setForm(emptyForm);
     setModalOpen(true);
@@ -307,14 +324,6 @@ export default function OperatingHoursPage() {
       const msg = describeError(err, action);
       toast.error(msg, { duration: 6000 });
       return false;
-    }
-  };
-
-  // The delete icon deletes the schedule straight away (no confirmation dialog).
-  const handleDelete = async (target) => {
-    if (await run("delete the schedule", () => deleteSchedule(target.id))) {
-      triggerToast("Schedule deleted successfully.");
-      reloadSchedules();
     }
   };
 
@@ -372,15 +381,15 @@ export default function OperatingHoursPage() {
       }
     }
 
-    // Each service's own Daily Appointment Capacity (whole number, at least 1).
+    // Each service's own Daily Appointment Capacity (whole number, at least 0).
     const serviceCapacities = capacityServices.map((srv) => ({
       serviceId: srv.id,
       dailyCapacity: Number(form.capacities[srv.id] ?? DEFAULT_CAPACITY),
     }));
-    const badCapacity = serviceCapacities.find((c) => !Number.isInteger(c.dailyCapacity) || c.dailyCapacity < 1 || c.dailyCapacity > 10000);
+    const badCapacity = serviceCapacities.find((c) => !Number.isInteger(c.dailyCapacity) || c.dailyCapacity < 0 || c.dailyCapacity > 10000);
     if (badCapacity) {
       const name = capacityServices.find((srv) => srv.id === badCapacity.serviceId)?.name || "a service";
-      toast.error(`Could not save the schedule: the Daily Appointment Capacity of ${name} must be a whole number from 1 to 10000.`, { duration: 6000 });
+      toast.error(`Could not save the schedule: the Daily Appointment Capacity of ${name} must be a whole number from 0 to 10000.`, { duration: 6000 });
       return;
     }
 
@@ -393,6 +402,14 @@ export default function OperatingHoursPage() {
     if (!form.effectiveStartDate) {
       toast.error("Could not save the schedule: please select an Effective Start Date.", { duration: 6000 });
       return;
+    }
+
+    if (!editingSchedule) {
+      const existingCount = pagination?.meta?.totalCount ?? schedules?.length ?? 0;
+      if (existingCount > 0) {
+        toast.error("A working schedule already exists. You cannot create another schedule; please edit the existing one.", { duration: 6000 });
+        return;
+      }
     }
 
     const payload = {
@@ -473,7 +490,7 @@ export default function OperatingHoursPage() {
     {
       id: "slotInterval",
       accessorFn: (sch) => sch.slotIntervalMinutes ?? 30,
-      header: "Slot Interval",
+      header: "Appointment Interval",
       meta: { className: "text-slate-700 whitespace-nowrap" },
       cell: ({ row }) => (
         <span className="font-semibold text-slate-800 text-xs">
@@ -555,14 +572,6 @@ export default function OperatingHoursPage() {
               title="Edit Schedule"
             >
               <Edit2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDelete(sch)}
-              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all cursor-pointer"
-              title="Delete Schedule"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         );
@@ -828,7 +837,7 @@ export default function OperatingHoursPage() {
                         </span>
                         <input
                           type="number"
-                          min="1"
+                          min="0"
                           max="10000"
                           required
                           aria-label={`Daily Appointment Capacity for ${srv.name}`}

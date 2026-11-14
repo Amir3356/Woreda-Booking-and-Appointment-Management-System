@@ -199,7 +199,7 @@ export default function AuthPage() {
           autoComplete={autoComplete}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder={placeholder ?? (autoComplete === "new-password" ? "At least 8 characters" : "Enter your password")}
+          placeholder={placeholder ?? "Enter your password"}
           className="auth-input auth-input--with-toggle"
         />
         <button
@@ -364,7 +364,7 @@ export default function AuthPage() {
                 </div>
 
                 <div className="auth-field-row">
-                  {passwordField("signup-password", signUpPassword, setSignUpPassword, showSignUpPassword, setShowSignUpPassword, "new-password", "Password", "8+ characters")}
+                  {passwordField("signup-password", signUpPassword, setSignUpPassword, showSignUpPassword, setShowSignUpPassword, "new-password", "Password", "Enter your password")}
                   {passwordField("signup-confirm-password", signUpConfirmPassword, setSignUpConfirmPassword, showSignUpConfirm, setShowSignUpConfirm, "new-password", "Confirm Password", "Type again")}
                 </div>
 

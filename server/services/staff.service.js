@@ -61,8 +61,34 @@ export function createStaffService({ events } = {}) {
       };
     },
 
-    /** Validated query in; {items, cursor, totalRegistered, filters} of registered citizens out. */
-    async listCitizens({ search = "", woreda = "", kebele = "", location = "", cursor = 0, pageSize = 5 }) {
+    /** Validated query in; {items, cursor, totalRegistered, filters} of registered citizens out. Scoped to officer's assigned department and services. */
+    async listCitizens(callerOrOpts, maybeOpts) {
+      const caller = maybeOpts !== undefined ? callerOrOpts : null;
+      const opts = maybeOpts !== undefined ? maybeOpts : callerOrOpts || {};
+      const { search = "", woreda = "", kebele = "", location = "", cursor = 0, pageSize = 5 } = opts;
+
+      const isOfficer = caller?.role === "OFFICER";
+      let departmentId = isOfficer ? (caller.departmentId || null) : null;
+      let serviceIds = null;
+      if (isOfficer) {
+        if (Array.isArray(caller.serviceIds) && caller.serviceIds.length > 0) {
+          serviceIds = caller.serviceIds;
+        }
+        if ((!departmentId || !serviceIds) && caller.userId) {
+          const u = await users.findById(caller.userId);
+          if (u) {
+            if (!departmentId && u.departmentId) departmentId = u.departmentId;
+            if (!serviceIds && u.address) {
+              try {
+                const parsed = JSON.parse(u.address);
+                if (Array.isArray(parsed?.serviceIds)) serviceIds = parsed.serviceIds;
+                else if (Array.isArray(parsed)) serviceIds = parsed;
+              } catch {}
+            }
+          }
+        }
+      }
+
       const { total, totalRegistered, addresses, items } = await users.findCitizenPage({
         search,
         woreda,
@@ -70,6 +96,8 @@ export function createStaffService({ events } = {}) {
         location,
         offset: cursor,
         limit: pageSize,
+        departmentId,
+        serviceIds,
       });
 
       const parsedAddresses = addresses.map(parseCitizenAddress);
@@ -120,7 +148,17 @@ export function createStaffService({ events } = {}) {
         .catch((err) => {
           throw isDuplicateKey(err) ? new ConflictError("phone, email or national ID already registered") : err;
         });
-      events?.publish("staff.created", id, null);
+      events?.publish("staff.created", id, {
+        id,
+        fullName: req.fullName,
+        email: emailVal,
+        phone: phoneVal,
+        role: roleLabel(req.role),
+        roleCode: req.role,
+        departmentId: req.departmentId,
+        serviceIds: req.serviceIds || [],
+        isActive: true,
+      });
       return id;
     },
 
@@ -147,9 +185,8 @@ export function createStaffService({ events } = {}) {
           throw isDuplicateKey(err) ? new ConflictError("phone or email already registered") : err;
         });
       if (!updated) throw new NotFoundError();
-      events?.publish("staff.updated", id, null);
       const u = await users.findById(id);
-      return {
+      const staffSummary = {
         id: u.id,
         fullName: u.fullName,
         email: u.email,
@@ -162,18 +199,20 @@ export function createStaffService({ events } = {}) {
         isActive: u.isActive,
         createdAt: u.createdAt,
       };
+      events?.publish("staff.updated", id, staffSummary);
+      return staffSummary;
     },
 
     async toggleStatus(id) {
       const isActive = await users.toggleStaffActive(id);
       if (isActive === null) throw new NotFoundError();
-      events?.publish("staff.status_changed", id, null);
+      events?.publish("staff.status_changed", id, { id, isActive });
       return isActive;
     },
 
     async remove(id) {
       if (!(await users.removeStaff(id))) throw new NotFoundError();
-      events?.publish("staff.deleted", id, null);
+      events?.publish("staff.deleted", id, { id });
     },
   };
 }

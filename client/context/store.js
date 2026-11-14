@@ -123,7 +123,7 @@ export const useStore = create(
       },
       deleteDepartment: async (id) => {
         await departmentApi.remove(id);
-        await get().loadDepartments();
+        await Promise.all([get().loadDepartments(), get().loadServices().catch(() => {})]);
         get().addAuditLog({
           userName: get().currentUser?.fullName || "Admin",
           userRole: "ADMIN",
@@ -252,7 +252,14 @@ export const useStore = create(
         set((state) => {
           const currentList = state.provisionedAccounts || [];
           const filteredAccs = currentList.filter((a) => !matchesAcc(a));
-          const updatedAccounts = [newAccount, ...filteredAccs];
+          const updatedAccounts = [
+            {
+              ...newAccount,
+              serviceIds: Array.isArray(newAccount.serviceIds) ? newAccount.serviceIds : [],
+              isProvisioned: true,
+            },
+            ...filteredAccs,
+          ];
 
           const currentDepts = state.departments || [];
           const matchedDept =
@@ -269,6 +276,7 @@ export const useStore = create(
               password: cleanPassword,
               role,
               departmentId: role === "OFFICER" ? (newAccount.departmentId || matchedDept?.id || null) : null,
+              serviceIds: Array.isArray(newAccount.serviceIds) ? newAccount.serviceIds : [],
               departmentName:
                 role === "OFFICER"
                   ? (matchedDept?.name || newAccount.role || "Unassigned Department")
@@ -286,6 +294,7 @@ export const useStore = create(
               nationalId: `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
               role,
               departmentId: role === "OFFICER" ? (newAccount.departmentId || matchedDept?.id || null) : null,
+              serviceIds: Array.isArray(newAccount.serviceIds) ? newAccount.serviceIds : [],
               departmentName:
                 role === "OFFICER"
                   ? (matchedDept?.name || newAccount.role || "Unassigned Department")
@@ -355,6 +364,7 @@ export const useStore = create(
                   password: cleanPassword,
                   passwordHash: updatedAcc.passwordHash || null,
                   departmentId: updatedAcc.departmentId || null,
+                  serviceIds: Array.isArray(updatedAcc.serviceIds) ? updatedAcc.serviceIds : (a.serviceIds || []),
                   isProvisioned: true,
                   updatedAt: new Date().toISOString(),
                 }
@@ -376,6 +386,7 @@ export const useStore = create(
               password: cleanPassword,
               role,
               departmentId: role === "OFFICER" ? (updatedAcc.departmentId || matchedDept?.id || null) : null,
+              serviceIds: Array.isArray(updatedAcc.serviceIds) ? updatedAcc.serviceIds : (updatedUsers[userIdx].serviceIds || []),
               departmentName:
                 role === "OFFICER"
                   ? (matchedDept?.name || updatedAcc.role || "Unassigned Department")
@@ -392,6 +403,7 @@ export const useStore = create(
               nationalId: `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
               role,
               departmentId: role === "OFFICER" ? (updatedAcc.departmentId || matchedDept?.id || null) : null,
+              serviceIds: Array.isArray(updatedAcc.serviceIds) ? updatedAcc.serviceIds : [],
               departmentName:
                 role === "OFFICER"
                   ? (matchedDept?.name || updatedAcc.role || "Unassigned Department")
@@ -403,9 +415,24 @@ export const useStore = create(
             });
           }
 
+          const isCurrent = state.currentUser && (
+            matchesKey(state.currentUser) ||
+            (updatedAcc.id && state.currentUser.id === updatedAcc.id)
+          );
+          const nextCurrentUser = isCurrent
+            ? {
+                ...state.currentUser,
+                fullName: (updatedAcc.fullName || state.currentUser.fullName || "").trim(),
+                departmentId: updatedAcc.departmentId !== undefined ? updatedAcc.departmentId : state.currentUser.departmentId,
+                departmentName: role === "OFFICER" ? (matchedDept?.name || state.currentUser.departmentName) : state.currentUser.departmentName,
+                serviceIds: Array.isArray(updatedAcc.serviceIds) ? updatedAcc.serviceIds : (state.currentUser.serviceIds || []),
+              }
+            : state.currentUser;
+
           return {
             provisionedAccounts: updatedAccounts,
             users: updatedUsers,
+            ...(isCurrent ? { currentUser: nextCurrentUser } : {}),
           };
         });
 
@@ -811,6 +838,7 @@ export const useStore = create(
         persistedProv.forEach((a) => {
           const emailKey = (a.email || "").trim().toLowerCase();
           if (!emailKey) return;
+          if (a.role === "Central Administrator" || a.role === "Admin" || a.role === "ADMIN" || a.id === "usr-admin") return;
           const resolvedPassword = (a.password || "").trim() || "Password@123";
 
           provMap.set(emailKey, {

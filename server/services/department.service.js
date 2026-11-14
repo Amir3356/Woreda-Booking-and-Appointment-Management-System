@@ -85,11 +85,10 @@ export function createDepartmentService({ events }) {
     },
 
     async remove(id) {
-      if (await publicServices.existsInDepartment(id)) {
-        throw new ConflictError("department still has services; delete or move them first");
-      }
       if (!(await departments.remove(id))) throw new NotFoundError();
       events.publish("catalog.department.deleted", id, null);
+      events.publish("catalog.changed", id, null);
+      events.publish("appointments.changed", id, null);
     },
   };
   return service;

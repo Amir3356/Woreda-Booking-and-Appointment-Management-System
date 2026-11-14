@@ -12,6 +12,8 @@ export const scheduleApi = {
   // ---- public (citizen booking) ----
   /** ACTIVE schedules that have not ended (citizen booking form). */
   active: () => http.get("/schedules/active"),
+  /** Active bookings count per service on a date: { [serviceId]: number }. */
+  dailyServiceStatus: (params) => http.get("/schedules/daily-status", params),
   /** @param {{ serviceId: string, date: string }} params */
   availability: (params) => http.get("/schedules/availability", params),
   /** Same as availability, retried once after a short pause when the request fails (e.g. a brief network blip). */

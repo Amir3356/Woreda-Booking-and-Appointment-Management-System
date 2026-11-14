@@ -115,19 +115,13 @@ export default function AdminDepartmentsPage() {
   };
 
   const handleDelete = (dept) => {
-    const assignedCount = (services || []).filter((s) => s.departmentId === dept.id).length;
-    if (assignedCount > 0) {
-      toast.error(
-        `Cannot delete "${dept.name}": it still has ${assignedCount} service(s) assigned. Delete or move them first in Service Management.`,
-        { duration: 6000 }
-      );
-      return;
-    }
     if (window.confirm(`Are you sure you want to delete ${dept.name}?`)) {
       run(`delete "${dept.name}"`, async () => {
         await deleteDepartment(dept.id);
-        toast.success(`Department "${dept.name}" deleted successfully.`, { duration: 5000 });
+        toast.success(`Department "${dept.name}" deleted successfully. Services remain available in Service Management.`, { duration: 5000 });
         await fetchPagedDepartments();
+        await loadDepartments().catch(() => {});
+        await loadServices().catch(() => {});
       });
     }
   };

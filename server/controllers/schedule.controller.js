@@ -21,6 +21,10 @@ export function createScheduleController({ scheduleService, availabilityService,
     async listBookable(_req, res) {
       ok(res, 200, "Schedules retrieved successfully.", await scheduleService.listBookable());
     },
+    async dailyServiceStatus(req, res) {
+      const date = req.query?.date;
+      ok(res, 200, "Daily service status retrieved.", await scheduleService.dailyServiceCounts(date || undefined));
+    },
     async create(req, res) {
       ok(res, 201, "Schedule created successfully.", await scheduleService.create(req.body));
     },

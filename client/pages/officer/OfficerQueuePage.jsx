@@ -76,13 +76,17 @@ export default function OfficerQueuePage() {
     };
   }, [loadBoard, loadAppointments]);
 
-  // Department's appointments that are active or completed (excludes rejected and cancelled)
+  // Department's appointments that have been approved or completed by the Department Head.
+  // PENDING, REJECTED, and CANCELLED appointments are excluded from the live Queue.
+  const QUEUE_ELIGIBLE_STATUSES = useMemo(() => new Set(["APPROVED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED"]), []);
   const deptAppointments = (appointments || []).filter(
     (a) =>
       Boolean(currentUser?.departmentId) &&
       a.departmentId === currentUser.departmentId &&
-      a.status !== "REJECTED" &&
-      a.status !== "CANCELLED"
+      (!Array.isArray(currentUser?.serviceIds) ||
+        currentUser.serviceIds.includes(a.serviceId) ||
+        (a.serviceName && currentUser.serviceIds.includes(a.serviceName))) &&
+      QUEUE_ELIGIBLE_STATUSES.has(a.status)
   );
 
   // Map server board items if present
@@ -94,6 +98,8 @@ export default function OfficerQueuePage() {
 
   // 1. Process board items first if any
   boardServing.forEach((item) => {
+    const fullApt = (appointments || []).find((a) => a.id === item.appointmentId || a.id === item.id);
+    if (fullApt && !QUEUE_ELIGIBLE_STATUSES.has(fullApt.status)) return;
     const matchingApt = deptAppointments.find(
       (a) => a.id === item.appointmentId || a.id === item.id || a.citizenName === item.citizenName
     );
@@ -125,6 +131,8 @@ export default function OfficerQueuePage() {
   });
 
   boardWaiting.forEach((item) => {
+    const fullApt = (appointments || []).find((a) => a.id === item.appointmentId || a.id === item.id);
+    if (fullApt && !QUEUE_ELIGIBLE_STATUSES.has(fullApt.status)) return;
     const matchingApt = deptAppointments.find(
       (a) => a.id === item.appointmentId || a.id === item.id || a.citizenName === item.citizenName
     );
@@ -227,17 +235,16 @@ export default function OfficerQueuePage() {
     );
   });
 
-  // Assign queue positions independently per public service.
-  // Within each service, active citizens (SERVING and WAITING) are numbered starting from 1.
+  // Assign queue positions per serving desk / public service queue group based on scheduled appointment time.
+  // Within each service queue group, active citizens (SERVING and WAITING) are numbered starting from 1.
   // Completed citizens are excluded from position numbering (position = null -> "Served" badge).
-  // Two citizens in DIFFERENT services can both be position "1" -- that is correct and expected.
   const serviceCounters = new Map();
   const allRows = sortedRows.map((row) => {
     const isCompleted = row.status === "COMPLETED";
     if (isCompleted) return { ...row, position: null };
-    const svcKey = row.serviceId || row.serviceName || "unknown";
-    const next = (serviceCounters.get(svcKey) ?? 0) + 1;
-    serviceCounters.set(svcKey, next);
+    const queueGroupKey = row.serviceId || row.serviceName || "default";
+    const next = (serviceCounters.get(queueGroupKey) ?? 0) + 1;
+    serviceCounters.set(queueGroupKey, next);
     return { ...row, position: next };
   });
 
@@ -297,9 +304,24 @@ export default function OfficerQueuePage() {
 
   const handleFinalize = async (row, status = "COMPLETED") => {
     if (busy) return;
+    const targetId = row.appointmentId || row.id;
+    const currentApt = (appointments || []).find((a) => a.id === targetId);
+    if (currentApt && currentApt.status === "PENDING") {
+      toast.error(
+        "Cannot complete service: this appointment must first be Approved in the Appointment menu.",
+        { duration: 6000 }
+      );
+      return;
+    }
+    if (currentApt && (currentApt.status === "REJECTED" || currentApt.status === "CANCELLED")) {
+      toast.error(
+        `Cannot complete service: appointment is ${currentApt.status.toLowerCase()}.`,
+        { duration: 6000 }
+      );
+      return;
+    }
     setBusy(true);
     try {
-      const targetId = row.appointmentId || row.id;
       await queueApi.finalize(row.id, status).catch(() => {});
       if (targetId && targetId !== row.id) {
         await queueApi.finalize(targetId, status).catch(() => {});

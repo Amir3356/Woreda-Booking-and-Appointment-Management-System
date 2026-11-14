@@ -98,7 +98,7 @@ export function scheduleIssue(schedule, date, timeSlot) {
 export function closedReason(schedule, day, bookedForDay) {
   if (!schedule) return "NO_SCHEDULE";
   if (!(schedule.workingDays ?? []).includes(weekdayOf(day))) return "NOT_WORKING_DAY";
-  if (schedule.dailyCapacity > 0 && bookedForDay >= schedule.dailyCapacity) return "DAILY_CAPACITY_REACHED";
+  if (schedule.dailyCapacity !== null && schedule.dailyCapacity !== undefined && bookedForDay >= schedule.dailyCapacity) return "DAILY_CAPACITY_REACHED";
   return null;
 }
 

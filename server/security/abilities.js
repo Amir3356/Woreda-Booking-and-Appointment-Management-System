@@ -49,8 +49,8 @@ export function defineAbilityFor(caller) {
     can(Actions.MANAGE, Subjects.ALL);
   } else if (role === "OFFICER" && isAuthenticated) {
     // Department Officer permissions:
-    // Can view public catalogs & services
-    can(Actions.READ, [Subjects.DEPARTMENT, Subjects.SERVICE, Subjects.SCHEDULE]);
+    // Can view public catalogs, services, and citizen directory
+    can(Actions.READ, [Subjects.DEPARTMENT, Subjects.SERVICE, Subjects.SCHEDULE, Subjects.STAFF]);
 
     // Can read registry list of appointments
     can(Actions.READ_REGISTRY, Subjects.APPOINTMENT);
@@ -60,11 +60,13 @@ export function defineAbilityFor(caller) {
 
     // Can read, review, reschedule, and cancel appointments within their department and authorized public services
     if (caller.departmentId) {
-      if (caller.serviceIds && caller.serviceIds.length > 0) {
-        can([Actions.READ, Actions.REVIEW, Actions.CANCEL, Actions.RESCHEDULE], Subjects.APPOINTMENT, {
-          departmentId: caller.departmentId,
-          serviceId: { $in: caller.serviceIds },
-        });
+      if (caller.serviceIds && Array.isArray(caller.serviceIds)) {
+        if (caller.serviceIds.length > 0) {
+          can([Actions.READ, Actions.REVIEW, Actions.CANCEL, Actions.RESCHEDULE], Subjects.APPOINTMENT, {
+            departmentId: caller.departmentId,
+            serviceId: { $in: caller.serviceIds },
+          });
+        }
       } else {
         can([Actions.READ, Actions.REVIEW, Actions.CANCEL, Actions.RESCHEDULE], Subjects.APPOINTMENT, {
           departmentId: caller.departmentId,

@@ -2,6 +2,7 @@
 import { ok } from "../utils/response.js";
 import { AUTH_COOKIE_NAME } from "../middleware/jwt.js";
 import { setCsrfCookie, clearCsrfCookie, generateCsrfToken, CSRF_COOKIE_NAME } from "../middleware/csrf.js";
+import { issueToken } from "../utils/token.js";
 import { config } from "../config/index.js";
 
 const COOKIE_MAX_AGE_MS = 365 * 24 * 3600 * 1000; // 1 year (no auto-expiration on idle)
@@ -35,7 +36,10 @@ export function createAuthController(authService) {
     },
 
     async me(req, res) {
-      ok(res, 200, "Profile retrieved successfully.", await authService.me(req.caller.userId));
+      const user = await authService.me(req.caller.userId);
+      const token = issueToken(config.jwtSecret, user);
+      res.cookie(AUTH_COOKIE_NAME, token, AUTH_COOKIE_OPTIONS);
+      ok(res, 200, "Profile retrieved successfully.", { ...user, token });
     },
 
     async csrf(req, res) {

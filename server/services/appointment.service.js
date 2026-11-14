@@ -71,7 +71,7 @@ export function createAppointmentService({ events, audit }) {
   async function getOfficerAssignedServices(caller) {
     if (caller.role !== "OFFICER") return null;
     let serviceIds = caller.serviceIds;
-    if (!serviceIds || serviceIds.length === 0) {
+    if (serviceIds === undefined || serviceIds === null) {
       const u = await users.findById(caller.userId);
       if (u?.address) {
         try {
@@ -81,7 +81,7 @@ export function createAppointmentService({ events, audit }) {
         } catch {}
       }
     }
-    return serviceIds && serviceIds.length > 0 ? serviceIds : null;
+    return Array.isArray(serviceIds) ? serviceIds : null;
   }
 
   /** Fetches an appointment and enforces ownership (citizen) / department & assigned service (officer) scoping. */
@@ -89,10 +89,12 @@ export function createAppointmentService({ events, audit }) {
     const a = await appointments.findById(id);
     if (!a) throw new NotFoundError();
     if (caller.role === "OFFICER") {
-      if (a.departmentId !== caller.departmentId) throw new ForbiddenError();
+      if (a.departmentId !== caller.departmentId) {
+        throw new ForbiddenError("Cannot access appointments belonging to other departments.");
+      }
       const assigned = await getOfficerAssignedServices(caller);
-      if (assigned && !assigned.includes(a.serviceId)) {
-        throw new ForbiddenError();
+      if (assigned !== null && (!assigned.includes(a.serviceId) && !assigned.includes(a.serviceName))) {
+        throw new ForbiddenError("Cannot access appointments for unassigned public services.");
       }
     }
     if (caller?.ability) {
@@ -171,7 +173,7 @@ export function createAppointmentService({ events, audit }) {
       const filter = {
         departmentId: caller.role === "OFFICER" ? caller.departmentId : f.departmentId,
         serviceId: f.serviceId,
-        serviceIds: caller.role === "OFFICER" && assigned ? assigned : undefined,
+        serviceIds: caller.role === "OFFICER" && assigned !== null ? assigned : undefined,
         status: f.status,
         search: f.search,
       };

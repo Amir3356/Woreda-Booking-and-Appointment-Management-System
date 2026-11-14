@@ -28,8 +28,8 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
     if (currentUser?.departmentId && a.departmentId !== currentUser.departmentId) return false;
     if (
       Array.isArray(currentUser?.serviceIds) &&
-      currentUser.serviceIds.length > 0 &&
-      !currentUser.serviceIds.includes(a.serviceId)
+      !currentUser.serviceIds.includes(a.serviceId) &&
+      !(a.serviceName && currentUser.serviceIds.includes(a.serviceName))
     ) {
       return false;
     }
