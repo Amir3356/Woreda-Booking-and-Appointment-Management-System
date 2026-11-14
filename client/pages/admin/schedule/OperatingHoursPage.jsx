@@ -250,7 +250,7 @@ export default function OperatingHoursPage() {
   const [saving, setSaving] = useState(false);
 
   const triggerToast = (msg) => {
-    toast.success(msg, { duration: 6000 });
+    toast.success(msg, { duration: 5000 });
   };
 
   const emptyForm = {
@@ -274,14 +274,14 @@ export default function OperatingHoursPage() {
     // If a schedule already exists, block creation and display Sonner toast notification
     const existingCount = pagination?.meta?.totalCount ?? schedules?.length ?? 0;
     if (existingCount > 0) {
-      toast.error("A working schedule already exists. You cannot create another schedule; please edit the existing one.", { duration: 6000 });
+      toast.error("A working schedule already exists. You cannot create another schedule; please edit the existing one.", { duration: 5000 });
       return;
     }
     try {
       const res = await scheduleApi.list();
       const allSchedules = Array.isArray(res?.data) ? res.data : [];
       if (allSchedules.length > 0) {
-        toast.error("A working schedule already exists. You cannot create another schedule; please edit the existing one.", { duration: 6000 });
+        toast.error("A working schedule already exists. You cannot create another schedule; please edit the existing one.", { duration: 5000 });
         return;
       }
     } catch {
@@ -322,7 +322,7 @@ export default function OperatingHoursPage() {
       return true;
     } catch (err) {
       const msg = describeError(err, action);
-      toast.error(msg, { duration: 6000 });
+      toast.error(msg, { duration: 5000 });
       return false;
     }
   };
@@ -358,25 +358,25 @@ export default function OperatingHoursPage() {
     e.preventDefault();
     if (saving) return;
     if (form.workingDays.length === 0) {
-      toast.error("Could not save the schedule: choose at least one working day.", { duration: 6000 });
+      toast.error("Could not save the schedule: choose at least one working day.", { duration: 5000 });
       return;
     }
     if (form.closingTime <= form.openingTime) {
-      toast.error("Could not save the schedule: closing time must be after opening time.", { duration: 6000 });
+      toast.error("Could not save the schedule: closing time must be after opening time.", { duration: 5000 });
       return;
     }
     const hasLunch = Boolean(form.lunchStart || form.lunchEnd);
     if (hasLunch) {
       if (!form.lunchStart || !form.lunchEnd) {
-        toast.error("Could not save the schedule: set both the lunch start and end time, or clear both.", { duration: 6000 });
+        toast.error("Could not save the schedule: set both the lunch start and end time, or clear both.", { duration: 5000 });
         return;
       }
       if (form.lunchEnd <= form.lunchStart) {
-        toast.error("Could not save the schedule: lunch end must be after lunch start.", { duration: 6000 });
+        toast.error("Could not save the schedule: lunch end must be after lunch start.", { duration: 5000 });
         return;
       }
       if (form.lunchStart <= form.openingTime || form.lunchEnd >= form.closingTime) {
-        toast.error("Could not save the schedule: the lunch break must fall within the working hours.", { duration: 6000 });
+        toast.error("Could not save the schedule: the lunch break must fall within the working hours.", { duration: 5000 });
         return;
       }
     }
@@ -389,25 +389,25 @@ export default function OperatingHoursPage() {
     const badCapacity = serviceCapacities.find((c) => !Number.isInteger(c.dailyCapacity) || c.dailyCapacity < 0 || c.dailyCapacity > 10000);
     if (badCapacity) {
       const name = capacityServices.find((srv) => srv.id === badCapacity.serviceId)?.name || "a service";
-      toast.error(`Could not save the schedule: the Daily Appointment Capacity of ${name} must be a whole number from 0 to 10000.`, { duration: 6000 });
+      toast.error(`Could not save the schedule: the Daily Appointment Capacity of ${name} must be a whole number from 0 to 10000.`, { duration: 5000 });
       return;
     }
 
     const slotInterval = Number(form.slotIntervalMinutes) || 30;
     if (!Number.isInteger(slotInterval) || slotInterval < 5 || slotInterval > 240) {
-      toast.error("Could not save the schedule: the Appointment Slot Interval must be a whole number between 5 and 240 minutes.", { duration: 6000 });
+      toast.error("Could not save the schedule: the Appointment Slot Interval must be a whole number between 5 and 240 minutes.", { duration: 5000 });
       return;
     }
 
     if (!form.effectiveStartDate) {
-      toast.error("Could not save the schedule: please select an Effective Start Date.", { duration: 6000 });
+      toast.error("Could not save the schedule: please select an Effective Start Date.", { duration: 5000 });
       return;
     }
 
     if (!editingSchedule) {
       const existingCount = pagination?.meta?.totalCount ?? schedules?.length ?? 0;
       if (existingCount > 0) {
-        toast.error("A working schedule already exists. You cannot create another schedule; please edit the existing one.", { duration: 6000 });
+        toast.error("A working schedule already exists. You cannot create another schedule; please edit the existing one.", { duration: 5000 });
         return;
       }
     }
@@ -435,10 +435,32 @@ export default function OperatingHoursPage() {
   const save = async (payload) => {
     setSaving(true);
     const action = editingSchedule ? "update the schedule" : "create the schedule";
-    const ok = await run(action, () =>
-      editingSchedule ? updateSchedule(editingSchedule.id, payload) : addSchedule(payload)
-    );
-    setSaving(false);
+    let ok = false;
+    try {
+      if (editingSchedule) {
+        try {
+          await updateSchedule(editingSchedule.id, payload);
+          ok = true;
+        } catch (err) {
+          if (err?.status === 404) {
+            // If the schedule by this id does not exist in DB (e.g. wiped/stale id), fall back to create
+            await addSchedule(payload);
+            ok = true;
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        await addSchedule(payload);
+        ok = true;
+      }
+    } catch (err) {
+      const msg = describeError(err, action);
+      toast.error(msg, { duration: 5000 });
+      ok = false;
+    } finally {
+      setSaving(false);
+    }
     if (!ok) return; // keep the form open so the administrator can correct it
     triggerToast(editingSchedule ? "Schedule updated successfully." : "Schedule created successfully.");
     setModalOpen(false);

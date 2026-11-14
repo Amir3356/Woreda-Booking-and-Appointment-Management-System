@@ -509,7 +509,7 @@ export default function OfficerQueuePage() {
           return (
             <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200">
               <Check className="w-3.5 h-3.5" />
-              <span>Completed</span>
+              <span>Served</span>
             </span>
           );
         }

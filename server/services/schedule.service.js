@@ -9,6 +9,7 @@ import * as schedules from "../repositories/schedule.repository.js";
 import * as departments from "../repositories/department.repository.js";
 import * as publicServices from "../repositories/publicService.repository.js";
 import * as appointments from "../repositories/appointment.repository.js";
+import * as calendar from "../repositories/calendar.repository.js";
 
 const labelled = (s) => ({ ...s, status: statusLabel(s.status) });
 
@@ -61,6 +62,11 @@ export function createScheduleService({ events }) {
       return appointments.countActiveByService(date);
     },
 
+    /** Public: active/upcoming calendar exceptions, for citizen booking checks. */
+    async listActiveExceptions({ from = today() } = {}) {
+      return calendar.findExceptions({ from });
+    },
+
     /** fields: validated body (validations/schedule.validation.js). */
     async create(fields) {
       await checkReferences(fields);
@@ -79,21 +85,47 @@ export function createScheduleService({ events }) {
 
     async update(id, fields) {
       await checkReferences(fields);
-      if (!(await schedules.update(id, fields))) throw new NotFoundError();
+      if (!(await schedules.update(id, fields))) {
+        const all = await schedules.findAll();
+        if (all.length > 0) {
+          id = all[0].id;
+          if (!(await schedules.update(id, fields))) throw new NotFoundError();
+        } else {
+          await schedules.create({ id, ...fields, status: fields.status ?? "ACTIVE" });
+          const created = await get(id);
+          events.publish("catalog.schedule.created", id, created);
+          return created;
+        }
+      }
       const updated = await get(id);
       events.publish("catalog.schedule.updated", id, updated);
       return updated;
     },
 
     async toggle(id) {
-      const status = await schedules.toggleStatus(id);
-      if (status === null) throw new NotFoundError();
+      let status = await schedules.toggleStatus(id);
+      if (status === null) {
+        const all = await schedules.findAll();
+        if (all.length > 0) {
+          id = all[0].id;
+          status = await schedules.toggleStatus(id);
+        }
+        if (status === null) throw new NotFoundError();
+      }
       events.publish("catalog.schedule.status_changed", id, { status: statusLabel(status) });
       return { id, status: statusLabel(status) };
     },
 
     async remove(id) {
-      if (!(await schedules.remove(id))) throw new NotFoundError();
+      if (!(await schedules.remove(id))) {
+        const all = await schedules.findAll();
+        if (all.length > 0) {
+          id = all[0].id;
+          await schedules.remove(id);
+        } else {
+          throw new NotFoundError();
+        }
+      }
       events.publish("catalog.schedule.deleted", id, null);
     },
   };

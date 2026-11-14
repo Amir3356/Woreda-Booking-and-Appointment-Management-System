@@ -44,6 +44,19 @@ export default function CitizenQueuePage() {
   const [state, setState] = useState({ loading: true, data: null, error: false });
   const [cancellingId, setCancellingId] = useState(null);
   const request = useRef(0);
+  const citizenAppointmentsRef = useRef([]);
+  const notifiedCompletedRef = useRef(new Set());
+  const initialMountRef = useRef(true);
+  const prevStatusesRef = useRef(new Map());
+
+  const notifyServiceCompleted = useCallback((serviceName) => {
+    toast.success("Service Completed!", {
+      description: serviceName
+        ? `The Department Head has completed your service for ${serviceName}. Your status is now Served.`
+        : "The Department Head has completed your service. Your status is now Served in My Queue.",
+      duration: 7000,
+    });
+  }, []);
 
   const load = useCallback(async () => {
     const id = ++request.current;
@@ -89,8 +102,30 @@ export default function CitizenQueuePage() {
       }, 300);
     };
 
+    const handleAppointmentNotice = (payload) => {
+      reload();
+
+      if (payload?.event === "appointment.completed" || payload?.status === "COMPLETED") {
+        const targetAptId = payload?.entityId || payload?.appointmentId;
+        const cId = currentUser?.id;
+        const cPhone = (currentUser?.phone || "").replace(/\D/g, "");
+        const eventPhone = (payload?.citizenPhone || "").replace(/\D/g, "");
+
+        const isMine =
+          (cId && payload?.citizenId && payload.citizenId === cId) ||
+          (cPhone && eventPhone && (cPhone === eventPhone || cPhone.endsWith(eventPhone) || eventPhone.endsWith(cPhone))) ||
+          (targetAptId && citizenAppointmentsRef.current.some((a) => a.id === targetAptId || a.referenceNumber === payload?.referenceNumber));
+
+        if (isMine && targetAptId && !notifiedCompletedRef.current.has(targetAptId)) {
+          notifiedCompletedRef.current.add(targetAptId);
+          if (payload?.referenceNumber) notifiedCompletedRef.current.add(payload.referenceNumber);
+          notifyServiceCompleted(payload?.serviceName);
+        }
+      }
+    };
+
     const offs = [
-      subscribe("appointments.changed", reload),
+      subscribe("appointments.changed", handleAppointmentNotice),
       subscribe("reconnected", reload),
     ];
 
@@ -102,30 +137,78 @@ export default function CitizenQueuePage() {
       clearInterval(interval);
       offs.forEach((off) => off());
     };
-  }, [load, loadAppointments]);
+  }, [load, loadAppointments, currentUser?.id, currentUser?.phone, notifyServiceCompleted]);
 
   const queue = state.data?.queue || [];
   const notCheckedIn = state.data?.notCheckedIn || [];
 
+  // Strictly filter appointments for the signed-in citizen
+  const citizenAppointments = (appointments || []).filter((apt) => {
+    if (!currentUser) return false;
+    if (currentUser.id && apt.citizenId && apt.citizenId !== currentUser.id) return false;
+    const aptPhone = (apt.citizenPhone || apt.phone || "").replace(/\D/g, "");
+    const userPhone = (currentUser.phone || "").replace(/\D/g, "");
+    if (aptPhone && userPhone && aptPhone !== userPhone && !aptPhone.endsWith(userPhone) && !userPhone.endsWith(aptPhone)) return false;
+    return true;
+  });
+
+  citizenAppointmentsRef.current = citizenAppointments;
+
+  // Track status transitions: when an active appointment transitions to COMPLETED / SERVED, trigger a 7-second Sonner toast
+  useEffect(() => {
+    if (initialMountRef.current) {
+      if (citizenAppointments.length > 0) {
+        citizenAppointments.forEach((apt) => {
+          if (apt.status === "COMPLETED" || apt.status === "SERVED" || apt.completedAt) {
+            notifiedCompletedRef.current.add(apt.id);
+            if (apt.referenceNumber) notifiedCompletedRef.current.add(apt.referenceNumber);
+          }
+          prevStatusesRef.current.set(apt.id, apt.status);
+        });
+        initialMountRef.current = false;
+      }
+      return;
+    }
+
+    citizenAppointments.forEach((apt) => {
+      const prev = prevStatusesRef.current.get(apt.id);
+      const isNowCompleted = apt.status === "COMPLETED" || apt.status === "SERVED" || Boolean(apt.completedAt);
+      const wasActive = prev && prev !== "COMPLETED" && prev !== "SERVED";
+
+      if (isNowCompleted && wasActive && !notifiedCompletedRef.current.has(apt.id)) {
+        notifiedCompletedRef.current.add(apt.id);
+        if (apt.referenceNumber) notifiedCompletedRef.current.add(apt.referenceNumber);
+        notifyServiceCompleted(apt.serviceName);
+      }
+
+      prevStatusesRef.current.set(apt.id, apt.status);
+    });
+  }, [citizenAppointments, notifyServiceCompleted]);
+
   // Cross-reference with appointments from store for immediate local reactivity
-  const storeAptMap = new Map((appointments || []).map((a) => [a.id, a]));
+  const storeAptMap = new Map();
+  citizenAppointments.forEach((a) => {
+    if (a.id) storeAptMap.set(a.id, a);
+    if (a.referenceNumber) storeAptMap.set(a.referenceNumber, a);
+  });
 
   const queueRows = queue.map((t, index) => {
-    const aptInStore = storeAptMap.get(t.appointmentId);
+    const aptInStore = storeAptMap.get(t.appointmentId) || storeAptMap.get(t.id) || storeAptMap.get(t.referenceNumber);
     const effectiveStatus =
-      aptInStore?.status === "COMPLETED" || t.status === "COMPLETED"
+      aptInStore?.status === "COMPLETED" || t.status === "COMPLETED" || Boolean(aptInStore?.completedAt)
         ? "COMPLETED"
         : aptInStore?.status === "SERVING" || t.status === "SERVING"
         ? "SERVING"
         : aptInStore?.status || t.status;
 
-    const isCompleted = effectiveStatus === "COMPLETED";
+    const isCompleted = effectiveStatus === "COMPLETED" || effectiveStatus === "SERVED";
     const isServing = effectiveStatus === "SERVING";
     const isPending = effectiveStatus === "PENDING";
 
     return {
       ...t,
       status: effectiveStatus,
+      completedAt: aptInStore?.completedAt || null,
       position: isCompleted || isPending ? null : isServing ? 1 : t.position != null ? t.position : index + 1,
       isCheckedIn: true,
       counterNumber: t.counterNumber || aptInStore?.deskNumber || null,
@@ -135,19 +218,20 @@ export default function CitizenQueuePage() {
   });
 
   const notCheckedInRows = notCheckedIn.map((a, index) => {
-    const aptInStore = storeAptMap.get(a.appointmentId);
+    const aptInStore = storeAptMap.get(a.appointmentId) || storeAptMap.get(a.id) || storeAptMap.get(a.referenceNumber);
     const effectiveStatus =
-      aptInStore?.status === "COMPLETED" || a.status === "COMPLETED"
+      aptInStore?.status === "COMPLETED" || a.status === "COMPLETED" || Boolean(aptInStore?.completedAt)
         ? "COMPLETED"
         : aptInStore?.status || a.status;
 
-    const isCompleted = effectiveStatus === "COMPLETED";
+    const isCompleted = effectiveStatus === "COMPLETED" || effectiveStatus === "SERVED";
     const isPending = effectiveStatus === "PENDING";
 
     return {
       ...a,
       tokenNumber: a.tokenNumber || aptInStore?.tokenNumber || "—",
       status: effectiveStatus,
+      completedAt: aptInStore?.completedAt || null,
       position: isCompleted || isPending ? null : a.position != null ? a.position : (queue.length + index + 1),
       citizensAhead: isPending ? null : a.citizensAhead ?? 0,
       citizensBehind: isPending ? null : a.citizensBehind ?? 0,
@@ -165,14 +249,14 @@ export default function CitizenQueuePage() {
   ]);
 
   const todayStr = state.data?.date || new Date().toISOString().split("T")[0];
-  const extraStoreRows = (appointments || [])
+  const extraStoreRows = citizenAppointments
     .filter((a) => {
       if (seenIds.has(a.id)) return false;
       const aptDate = (a.date || "").split("T")[0];
       return aptDate === todayStr && a.status !== "REJECTED";
     })
     .map((a, index) => {
-      const isCompleted = a.status === "COMPLETED";
+      const isCompleted = a.status === "COMPLETED" || a.status === "SERVED" || Boolean(a.completedAt);
       const isCancelled = a.status === "CANCELLED";
       const isPending = a.status === "PENDING";
       return {
@@ -182,7 +266,8 @@ export default function CitizenQueuePage() {
         departmentName: a.departmentName,
         timeSlot: a.timeSlot,
         tokenNumber: a.tokenNumber || "—",
-        status: a.status,
+        status: isCompleted ? "COMPLETED" : a.status,
+        completedAt: a.completedAt || null,
         position: isCompleted || isCancelled || isPending ? null : queue.length + notCheckedIn.length + index + 1,
         citizensAhead: isCompleted || isCancelled || isPending ? null : 0,
         citizensBehind: isCompleted || isCancelled || isPending ? null : 0,
@@ -195,29 +280,34 @@ export default function CitizenQueuePage() {
 
   const combinedRows = [...queueRows, ...notCheckedInRows, ...extraStoreRows];
 
-  // If server returns live departmentQueue for today's active department, display it
-  // so the citizen sees the complete queue order (e.g. Citizen B at 4:00 PM, Citizen A at 4:45 PM).
-  const hasDeptQueue = Array.isArray(state.data?.departmentQueue) && state.data.departmentQueue.length > 0;
-  const rawRows = (hasDeptQueue ? state.data.departmentQueue : combinedRows).map((row) => {
-    const aptInStore = storeAptMap.get(row.appointmentId);
-    if (!aptInStore) return row;
-    const effectiveStatus =
-      aptInStore.status === "COMPLETED" || row.status === "COMPLETED"
+  // Citizen My Queue page strictly displays only the signed-in citizen's own appointments & tokens.
+  const rawRows = combinedRows
+    .filter((row) => {
+      if (currentUser?.id && row.citizenId && row.citizenId !== currentUser.id) return false;
+      if (currentUser?.phone && row.citizenPhone && row.citizenPhone !== currentUser.phone) return false;
+      return true;
+    })
+    .map((row) => {
+      const aptInStore = storeAptMap.get(row.appointmentId) || storeAptMap.get(row.id) || storeAptMap.get(row.referenceNumber);
+      const isAptCompleted = aptInStore?.status === "COMPLETED" || aptInStore?.status === "SERVED" || Boolean(aptInStore?.completedAt);
+      const isRowCompleted = row.status === "COMPLETED" || row.status === "SERVED" || Boolean(row.completedAt);
+      const effectiveStatus = (isAptCompleted || isRowCompleted)
         ? "COMPLETED"
-        : aptInStore.status === "SERVING" || row.status === "SERVING"
+        : aptInStore?.status === "SERVING" || row.status === "SERVING"
         ? "SERVING"
-        : aptInStore.status || row.status;
-    const isPending = effectiveStatus === "PENDING";
-    const isCompleted = effectiveStatus === "COMPLETED";
-    const isCancelled = effectiveStatus === "CANCELLED";
-    return {
-      ...row,
-      status: effectiveStatus,
-      position: isPending || isCompleted || isCancelled ? null : row.position,
-      citizensAhead: isPending || isCompleted || isCancelled ? null : row.citizensAhead,
-      citizensBehind: isPending || isCompleted || isCancelled ? null : row.citizensBehind,
-    };
-  });
+        : aptInStore?.status || row.status;
+      const isPending = effectiveStatus === "PENDING";
+      const isCompleted = effectiveStatus === "COMPLETED";
+      const isCancelled = effectiveStatus === "CANCELLED";
+      return {
+        ...row,
+        status: effectiveStatus,
+        completedAt: aptInStore?.completedAt || row.completedAt || null,
+        position: isPending || isCompleted || isCancelled ? null : row.position,
+        citizensAhead: isPending || isCompleted || isCancelled ? null : row.citizensAhead,
+        citizensBehind: isPending || isCompleted || isCancelled ? null : row.citizensBehind,
+      };
+    });
 
   // Sort: SERVING first, then active by Queue Position / scheduled appointment time, pending awaiting approval, and COMPLETED / CANCELLED cleanly displayed at the bottom
   const allRows = [...rawRows].sort((a, b) => {
@@ -278,23 +368,21 @@ export default function CitizenQueuePage() {
   const queueColumns = [
     {
       id: "citizen",
-      accessorFn: (row) => row.citizenName || currentUser?.fullName || "",
+      accessorFn: (row) => currentUser?.fullName || row.citizenName || "",
       header: "Citizen",
       sortFn: "text",
       cell: ({ row }) => {
         const rawName = row.original.citizenName || currentUser?.fullName || "Citizen";
         const cleanName = rawName.replace(/\s*\(You\)$/, "");
-        const isYou = row.original.isYou || (!row.original.citizenName || cleanName === currentUser?.fullName);
+        const displayName = currentUser?.fullName || cleanName;
         return (
           <div className="flex items-center gap-1.5">
-            <span className={`font-semibold text-xs ${isYou ? "text-[#0b2545] font-bold" : "text-slate-800"}`}>
-              {cleanName}
+            <span className="font-semibold text-xs text-[#0b2545] font-bold">
+              {displayName}
             </span>
-            {isYou && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 shadow-2xs">
-                You
-              </span>
-            )}
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 shadow-2xs">
+              You
+            </span>
           </div>
         );
       },
@@ -357,7 +445,7 @@ export default function CitizenQueuePage() {
           return (
             <span className="inline-flex items-center gap-1.5 text-emerald-700 font-bold text-xs bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 shadow-2xs">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Completed</span>
+              <span>Served</span>
             </span>
           );
         }
@@ -538,11 +626,11 @@ export default function CitizenQueuePage() {
       sortFn: "text",
       cell: ({ row }) => {
         const status = row.original.status;
-        if (status === "COMPLETED") {
+        if (status === "COMPLETED" || status === "SERVED") {
           return (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              Completed
+              Served
             </span>
           );
         }
@@ -599,7 +687,7 @@ export default function CitizenQueuePage() {
       header: "Action",
       cell: ({ row }) => {
         const item = row.original;
-        const isCompleted = item.status === "COMPLETED";
+        const isCompleted = item.status === "COMPLETED" || item.status === "SERVED" || Boolean(item.completedAt);
         const isCancelled = item.status === "CANCELLED";
         const isServing = item.status === "SERVING" || item.status === "IN_PROGRESS";
         const rawName = item.citizenName || currentUser?.fullName || "Citizen";
@@ -612,7 +700,7 @@ export default function CitizenQueuePage() {
           return (
             <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 shadow-2xs">
               <Check className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Completed</span>
+              <span>Served</span>
             </span>
           );
         }

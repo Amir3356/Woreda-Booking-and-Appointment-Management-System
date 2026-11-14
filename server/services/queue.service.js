@@ -158,50 +158,6 @@ export function createQueueService({ events, audit } = {}) {
         });
       });
 
-      // Construct live queue for the service desks / queue groups the citizen has bookings in today
-      const citizenQueueKeys = new Set(
-        todaysForCitizen.map((a) => a.serviceId || a.serviceName || a.departmentId || "all")
-      );
-      let departmentQueue = [];
-      if (citizenQueueKeys.size > 0) {
-        const relevantActive = activeAppointments.filter((apt) =>
-          citizenQueueKeys.has(apt.serviceId || apt.serviceName || apt.departmentId || "all")
-        );
-        // Include the citizen's own today's pending or cancelled appointments so they see their status
-        const mySpecial = todaysForCitizen.filter((a) => a.status === "PENDING" || a.status === "CANCELLED");
-        const allList = [...relevantActive];
-        mySpecial.forEach((p) => {
-          if (!allList.some((x) => x.id === p.id)) allList.push(p);
-        });
-        const sortedActive = [...allList].sort(compareQueuePriority);
-        departmentQueue = sortedActive.map((apt) => {
-          const isPending = apt.status === "PENDING";
-          const isCancelled = apt.status === "CANCELLED";
-          const isCompleted = apt.status === "COMPLETED";
-          const posData = positionMap.get(apt.id);
-          const isYou = Boolean(
-            apt.citizenId === caller.userId ||
-            (caller.phone && apt.citizenPhone === caller.phone)
-          );
-          const status = (apt.status === "IN_PROGRESS" || apt.status === "SERVING") ? "SERVING" : apt.status;
-          return {
-            appointmentId: apt.id,
-            referenceNumber: apt.referenceNumber,
-            citizenName: isYou ? `${apt.citizenName || "You"} (You)` : (apt.citizenName || "Citizen"),
-            serviceName: apt.serviceName,
-            departmentName: apt.departmentName,
-            timeSlot: apt.timeSlot,
-            status,
-            position: (isPending || isCancelled || isCompleted) ? null : (posData ? posData.position : 1),
-            citizensAhead: (isPending || isCancelled || isCompleted) ? null : (posData ? posData.citizensAhead : 0),
-            citizensBehind: (isPending || isCancelled || isCompleted) ? null : (posData ? posData.citizensBehind : 0),
-            totalInQueue: posData ? posData.totalInQueue : 0,
-            createdAt: apt.createdAt,
-            isYou,
-          };
-        });
-      }
-
       return {
         date: queueDate,
         averageServiceMinutes: AVG_SERVICE_MINUTES,
@@ -261,7 +217,6 @@ export function createQueueService({ events, audit } = {}) {
               createdAt: a.createdAt,
             };
           }),
-        departmentQueue,
       };
     },
 
@@ -332,16 +287,27 @@ export function createQueueService({ events, audit } = {}) {
         await appointments.markFinal(apptId, req.status, client);
         return apptId;
       });
-      if (audit && appointmentId) {
-        const a = await appointments.findById(appointmentId);
-        if (a) {
-          await audit.record(officer, req.status, a, {
+      let finalizedApt = null;
+      if (appointmentId) {
+        finalizedApt = await appointments.findById(appointmentId);
+        if (audit && finalizedApt) {
+          await audit.record(officer, req.status, finalizedApt, {
             fromStatus: "SERVING",
             reason: req.status === "COMPLETED" ? "Service completed at counter" : "No-show at counter",
           });
         }
       }
-      events.publish(`appointment.${req.status.toLowerCase()}`, appointmentId, { queueTokenId: id });
+      events.publish(`appointment.${req.status.toLowerCase()}`, appointmentId, {
+        queueTokenId: id,
+        status: req.status,
+        appointmentId,
+        citizenId: finalizedApt?.citizenId,
+        citizenPhone: finalizedApt?.citizenPhone,
+        citizenName: finalizedApt?.citizenName,
+        referenceNumber: finalizedApt?.referenceNumber,
+        serviceName: finalizedApt?.serviceName,
+        departmentName: finalizedApt?.departmentName,
+      });
       return { id, status: req.status };
     },
   };

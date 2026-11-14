@@ -271,7 +271,7 @@ export const useStore = create(
             updatedUsers[userIndex] = {
               ...updatedUsers[userIndex],
               fullName: newAccount.fullName,
-              phone: newAccount.phone || updatedUsers[userIndex].phone || "+251911000000",
+              phone: newAccount.phone || updatedUsers[userIndex].phone || "",
               email: newAccount.email,
               password: cleanPassword,
               role,
@@ -288,7 +288,7 @@ export const useStore = create(
             updatedUsers.push({
               id: newAccount.id || `usr-prov-${Date.now()}`,
               fullName: newAccount.fullName,
-              phone: newAccount.phone || "+251911000000",
+              phone: newAccount.phone || "",
               email: newAccount.email,
               password: cleanPassword,
               nationalId: `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -397,7 +397,7 @@ export const useStore = create(
             updatedUsers.push({
               id: updatedAcc.id || `usr-prov-${Date.now()}`,
               fullName: (updatedAcc.fullName || "").trim(),
-              phone: cleanPhone || "+251911000000",
+              phone: cleanPhone || "",
               email: (updatedAcc.email || "").trim(),
               password: cleanPassword,
               nationalId: `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -486,6 +486,7 @@ export const useStore = create(
       // Schedule Management reads all of them; the citizen booking page reads the bookable ones
       // (ACTIVE, not yet ended) from the public /schedules/active.
       schedules: [],
+      exceptions: [],
       loadSchedules: async () => {
         const { data } = await scheduleApi.list();
         const schedules = Array.isArray(data) ? data : [];
@@ -497,6 +498,17 @@ export const useStore = create(
         const schedules = Array.isArray(data) ? data : [];
         set({ schedules });
         return schedules;
+      },
+      loadActiveExceptions: async () => {
+        try {
+          const { data } = await scheduleApi.activeExceptions();
+          const exceptions = Array.isArray(data) ? data : [];
+          set({ exceptions });
+          return exceptions;
+        } catch {
+          set({ exceptions: [] });
+          return [];
+        }
       },
       addSchedule: async (sch) => {
         const { data } = await scheduleApi.create(sch);
@@ -538,7 +550,14 @@ export const useStore = create(
         try {
           if (role === "CITIZEN") {
             const { data } = await appointmentApi.myHistory();
-            list = Array.isArray(data) ? data : [];
+            const rawList = Array.isArray(data) ? data : [];
+            list = rawList.filter((a) => {
+              if (currentUser?.id && a.citizenId && a.citizenId !== currentUser.id) return false;
+              const aPhone = (a.citizenPhone || a.phone || "").replace(/\D/g, "");
+              const uPhone = (currentUser?.phone || "").replace(/\D/g, "");
+              if (aPhone && uPhone && aPhone !== uPhone && !aPhone.endsWith(uPhone) && !uPhone.endsWith(aPhone)) return false;
+              return true;
+            });
           } else if (role === "OFFICER" || role === "ADMIN") {
             const { data } = await appointmentApi.list({ limit: 200 });
             list = Array.isArray(data) ? data : [];
@@ -886,7 +905,7 @@ export const useStore = create(
               fullName: prov.fullName,
               email: prov.email || userIdentifier,
               password: prov.password || "Password@123",
-              phone: prov.phone || "+251911000000",
+              phone: prov.phone || "",
               nationalId: prov.nationalId || `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
               role,
               departmentId: isOfficer ? (prov.departmentId || null) : null,
@@ -934,6 +953,7 @@ export const useStore = create(
           provisionedAccounts: cleanedProvisioned,
           registeredCitizens: safePersisted.registeredCitizens || currentState.registeredCitizens || [],
           schedules: currentState.schedules, // loaded from the API, never from storage
+          exceptions: currentState.exceptions, // loaded from the API, never from storage
           currentUser: restoredUser,
         };
       },

@@ -69,15 +69,56 @@ export function bookableRange(service, schedules, today = localIsoDate()) {
   return { min, max };
 }
 
-/** First date from `from` on which a schedule is in force and it is a working day (or null). */
-export function nextWorkingDate(service, schedules, from = localIsoDate(), horizonDays = 366) {
+/** Whether a calendar exception applies to a given service/department on date. */
+export function exceptionOnDate(exception, service, date) {
+  if (!exception || !date) return false;
+  const start = exception.startDate;
+  const end = exception.endDate || exception.startDate;
+  if (date < start || date > end) return false;
+  if (!exception.scope || exception.scope === "ALL") return true;
+  const deptId = service?.departmentId || (typeof service === "string" ? service : null);
+  if (deptId && (exception.departmentIds || []).includes(deptId)) return true;
+  return false;
+}
+
+/** Whether a date is closed for the service due to an active calendar exception (e.g. holiday or blocked). */
+export function isDayClosedByException(date, service, exceptions = []) {
+  if (!exceptions || !exceptions.length) return false;
+  const onDay = exceptions.filter((e) => exceptionOnDate(e, service, date));
+  if (onDay.length === 0) return false;
+  if (onDay.some((e) => e.type === "BLOCKED")) return true;
+  if (onDay.some((e) => e.type === "WORKING_DAY")) return false; // exceptional working day is open
+  if (onDay.some((e) => e.type === "PUBLIC_HOLIDAY" || e.type === "NON_WORKING_DAY")) return true;
+  return true;
+}
+
+/**
+ * First date from `from` on which a schedule is in force, it is a working day,
+ * and it is NOT closed by any active calendar exception (or null).
+ * Accepts either:
+ * - nextWorkingDate(service, schedules, from, horizonDays)
+ * - nextWorkingDate(service, schedules, exceptions, from, horizonDays)
+ */
+export function nextWorkingDate(service, schedules, exceptionsOrFrom = localIsoDate(), maybeFrom = localIsoDate(), horizonDays = 366) {
+  let exceptions = [];
+  let from = localIsoDate();
+  if (Array.isArray(exceptionsOrFrom)) {
+    exceptions = exceptionsOrFrom;
+    from = typeof maybeFrom === "string" ? maybeFrom : localIsoDate();
+  } else if (typeof exceptionsOrFrom === "string") {
+    from = exceptionsOrFrom;
+  }
   const range = bookableRange(service, schedules, from);
   if (!range) return null;
   let date = range.min;
   for (let i = 0; i < horizonDays; i += 1) {
     if (range.max && date > range.max) return null;
-    const sch = scheduleOn(service, schedules, date);
-    if (sch && (sch.workingDays || []).includes(weekdayOfIso(date))) return date;
+    if (!isDayClosedByException(date, service, exceptions)) {
+      const workingDay = exceptions.find((e) => exceptionOnDate(e, service, date) && e.type === "WORKING_DAY");
+      if (workingDay) return date;
+      const sch = scheduleOn(service, schedules, date);
+      if (sch && (sch.workingDays || []).includes(weekdayOfIso(date))) return date;
+    }
     date = addDays(date, 1);
   }
   return null;

@@ -419,8 +419,8 @@ export default function AdminDepartmentsPage() {
       name: form.name.trim(),
       code: deptCode,
       description: form.description || existingDept?.description || "",
-      buildingRoom: form.buildingRoom || existingDept?.buildingRoom || "Building A, Room 101",
-      contactPhone: form.contactPhone || existingDept?.contactPhone || "+251911223344",
+      buildingRoom: form.buildingRoom?.trim() || existingDept?.buildingRoom || "",
+      contactPhone: form.contactPhone?.trim() || existingDept?.contactPhone || "",
       serviceIds: selectedServiceIds,
     };
 

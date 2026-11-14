@@ -240,7 +240,7 @@ export default function AdminAppointmentsPage() {
                   const responsibleOfficer =
                     apt.responsibleOfficer ||
                     users?.find((u) => u.departmentId === apt.departmentId && u.role === "OFFICER")?.fullName ||
-                    "W/ro Tigist Mulugeta";
+                    "—";
 
                   return (
                     <tr

@@ -14,7 +14,7 @@ export function createEventService({ realtimeService, logger }) {
     publish(type, entityId, _data) {
       try {
         if (type.startsWith("appointment.")) {
-          realtimeService.broadcast({ type: "appointments.changed", event: type });
+          realtimeService.broadcast({ type: "appointments.changed", event: type, entityId, ...(_data || {}) });
         } else if (type.startsWith("catalog.")) {
           realtimeService.broadcast({ type: "catalog.changed", event: type, entityId });
         } else if (type.startsWith("citizen.")) {

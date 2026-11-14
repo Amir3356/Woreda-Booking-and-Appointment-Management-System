@@ -275,3 +275,53 @@ test("duplicate booking prevention - buildSlots enforces max 1 booking per slot"
   assert.equal(err.code, "SLOT_FULL");
   assert.match(err.message, /already booked/i);
 });
+
+test("calendar exception range - dates between startDate and endDate are blocked, dates after endDate are bookable", () => {
+  const exception = {
+    id: "EXC-HOLIDAY",
+    type: "PUBLIC_HOLIDAY",
+    title: "Public Holidays",
+    description: "National Holiday",
+    startDate: "2026-11-16", // Monday
+    endDate: "2026-11-18",   // Wednesday
+    scope: "ALL",
+    departmentIds: [],
+  };
+
+  // 2026-11-16 (Monday, startDate): closed by exception
+  const day1 = resolveDay({
+    date: "2026-11-16",
+    baseSchedule: weekdays,
+    exceptions: exceptionsOn([exception], "d1", "2026-11-16"),
+  });
+  assert.equal(day1.open, false);
+  assert.equal(day1.reason, "PUBLIC_HOLIDAY");
+
+  // 2026-11-17 (Tuesday, in range): closed by exception
+  const day2 = resolveDay({
+    date: "2026-11-17",
+    baseSchedule: weekdays,
+    exceptions: exceptionsOn([exception], "d1", "2026-11-17"),
+  });
+  assert.equal(day2.open, false);
+  assert.equal(day2.reason, "PUBLIC_HOLIDAY");
+
+  // 2026-11-18 (Wednesday, endDate): closed by exception
+  const day3 = resolveDay({
+    date: "2026-11-18",
+    baseSchedule: weekdays,
+    exceptions: exceptionsOn([exception], "d1", "2026-11-18"),
+  });
+  assert.equal(day3.open, false);
+  assert.equal(day3.reason, "PUBLIC_HOLIDAY");
+
+  // 2026-11-19 (Thursday, after endDate): open and bookable!
+  const day4 = resolveDay({
+    date: "2026-11-19",
+    baseSchedule: weekdays,
+    exceptions: exceptionsOn([exception], "d1", "2026-11-19"),
+  });
+  assert.equal(day4.open, true);
+  assert.equal(day4.reason, null);
+  assert.ok(day4.schedule);
+});

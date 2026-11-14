@@ -22,6 +22,7 @@ export function createScheduleRoutes(c) {
   router.get("/daily-status", c.dailyServiceStatus);
   router.get("/availability", validate({ query: availabilityQuery }), c.availability);
   router.get("/bookable-dates", validate({ query: bookableDatesQuery }), c.bookableDates);
+  router.get("/active-exceptions", c.listActiveExceptions);
 
   // Schedule Management (registered before "/:id").
   router.get("/calendar", canRead, validate({ query: calendarQuery }), c.calendar);

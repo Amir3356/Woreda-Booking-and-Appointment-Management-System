@@ -27,6 +27,8 @@ export const scheduleApi = {
   },
   /** Which dates can be booked. @param {{ serviceId: string, from: string, to: string }} params */
   bookableDates: (params) => http.get("/schedules/bookable-dates", params),
+  /** Active/upcoming calendar exceptions (holidays, closures) for booking validation. */
+  activeExceptions: (params) => http.get("/schedules/active-exceptions", params),
 
   // ---- Schedule Management (changes: administrator only; reads: staff, own department for officers) ----
   /** Per-day status for each department. @param {{ from: string, to: string, departmentId?: string }} params */

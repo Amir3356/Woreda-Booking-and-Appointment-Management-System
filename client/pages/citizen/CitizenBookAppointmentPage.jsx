@@ -15,6 +15,8 @@ import {
   nextWorkingDate,
   scheduleOn,
   schedulesForService,
+  exceptionOnDate,
+  isDayClosedByException,
 } from "@/utils";
 import { DataTable } from "@/components/ui";
 import {
@@ -25,6 +27,7 @@ import {
   Filter,
   RotateCcw,
   CheckCircle,
+  Check,
   X,
   AlertCircle,
   Users,
@@ -220,9 +223,11 @@ export default function CitizenBookAppointmentPage() {
     departments = [],
     services = [],
     schedules = [],
+    exceptions = [],
     loadServices,
     loadDepartments,
     loadBookableSchedules,
+    loadActiveExceptions,
     loadAppointments,
   } = useStore();
 
@@ -233,6 +238,7 @@ export default function CitizenBookAppointmentPage() {
       loadServices().catch(() => {});
       loadDepartments?.().catch(() => {});
       loadBookableSchedules().catch(() => {});
+      loadActiveExceptions?.().catch(() => {});
       loadAppointments().catch(() => {});
       scheduleApi
         .dailyServiceStatus({ date: localIsoDate() })
@@ -249,7 +255,7 @@ export default function CitizenBookAppointmentPage() {
       offApts();
       offReconnect();
     };
-  }, [loadServices, loadDepartments, loadBookableSchedules, loadAppointments]);
+  }, [loadServices, loadDepartments, loadBookableSchedules, loadActiveExceptions, loadAppointments]);
 
   /** Bookings still possible on a day: free places in its times, capped by the daily capacity. */
   const _placesLeft = (data) => {
@@ -306,7 +312,7 @@ export default function CitizenBookAppointmentPage() {
   const [selectedSlot, setSelectedSlot] = useState(null);
   useEscapeKey(Boolean(selectedSlot), () => setSelectedSlot(null));
   const [citizenNotes, setCitizenNotes] = useState("");
-  const showSuccess = (msg) => toast.success(msg, { duration: 6000 });
+  const showSuccess = (msg) => toast.success(msg, { duration: 5000 });
 
   // Modal department & service dropdowns: active departments and services from Admin Management.
   // Citizens select Department -> Public Service to inspect that service's availability.
@@ -388,7 +394,12 @@ export default function CitizenBookAppointmentPage() {
         if (data?.closedReason === "DAY_OVER" && date === localIsoDate()) {
           // All of today's times have passed: go to the service's next working day instead.
           const srv = (useStore.getState().services || []).find((s) => s.id === serviceId);
-          const next = nextWorkingDate(srv, useStore.getState().schedules || [], addDays(date, 1));
+          const next = nextWorkingDate(
+            srv,
+            useStore.getState().schedules || [],
+            useStore.getState().exceptions || [],
+            addDays(date, 1)
+          );
           if (next) {
             setSelectedSlot((prev) => (prev?.serviceId === serviceId && prev.date === date
               ? { ...prev, date: next, dateDisplay: displayDate(next), time: "" }
@@ -566,6 +577,26 @@ export default function CitizenBookAppointmentPage() {
           day: "numeric",
           year: "numeric",
         });
+
+    const activeExcList = useStore.getState().exceptions || exceptions || [];
+    const blockedException = activeExcList.find(
+      (e) => exceptionOnDate(e, selectedService, dateVal) && e.type !== "WORKING_DAY"
+    );
+
+    if (blockedException) {
+      const excTitle = blockedException.description
+        ? `${blockedException.description} (${blockedException.title})`
+        : blockedException.title || "Calendar Exception";
+      const rangeText =
+        blockedException.endDate && blockedException.endDate !== blockedException.startDate
+          ? `from ${displayDate(blockedException.startDate)} to ${displayDate(blockedException.endDate)}`
+          : `on ${displayDate(blockedException.startDate)}`;
+      toast.error(
+        `Appointments cannot be booked on that date: ${excTitle}. The office is closed ${rangeText}. Please select a date after ${displayDate(blockedException.endDate || blockedException.startDate)}.`,
+        { duration: 5000 }
+      );
+    }
+
     setSelectedSlot((prev) => ({
       ...prev,
       date: dateVal,
@@ -574,9 +605,15 @@ export default function CitizenBookAppointmentPage() {
     }));
   };
 
-  // Filter appointments for the signed-in citizen
+  // Filter appointments strictly for the signed-in citizen (Appointment sidebar)
   const citizenAppointments = (appointments || []).filter((apt) => {
-    if (currentUser?.id && apt.citizenId && apt.citizenId !== currentUser.id) {
+    if (!currentUser) return false;
+    if (currentUser.id && apt.citizenId && apt.citizenId !== currentUser.id) {
+      return false;
+    }
+    const aptPhone = (apt.citizenPhone || apt.phone || "").replace(/\D/g, "");
+    const userPhone = (currentUser.phone || "").replace(/\D/g, "");
+    if (aptPhone && userPhone && aptPhone !== userPhone && !aptPhone.endsWith(userPhone) && !userPhone.endsWith(aptPhone)) {
       return false;
     }
     return true;
@@ -652,25 +689,81 @@ export default function CitizenBookAppointmentPage() {
 
   // Directly opens the booking modal for a chosen public service card in the dashboard
   const handleSelectServiceForBooking = (service) => {
+    const latestSchedules = schedules || [];
+    const applicableSchedules = schedulesForService(service, latestSchedules);
+
+    // If working hours / calendar schedule is empty or not configured by the admin yet
+    if (!latestSchedules.length || !applicableSchedules.length) {
+      toast.error(
+        `Working hours and calendar schedule have not been configured by the administration yet. Appointments for "${service.name}" are currently unavailable.`,
+        { duration: 5000 }
+      );
+      return;
+    }
+
     const dailyCap = getServiceDailyCapacity(service);
     const bookedToday = todayBookedCounts[service.id] ?? 0;
     if (dailyCap === 0) {
       toast.error(
         `Appointments for "${service.name}" are currently unavailable (Daily Appointment Capacity is set to 0 by administration).`,
-        { duration: 6000 }
+        { duration: 5000 }
       );
       return;
     }
     if (bookedToday >= dailyCap) {
       toast.error(
         `Appointments for "${service.name}" are currently full today (${bookedToday}/${dailyCap} appointments booked). Please choose another date or service.`,
-        { duration: 6000 }
+        { duration: 5000 }
       );
       return;
     }
-    const latestSchedules = schedules || [];
+
+    const activeExcList = useStore.getState().exceptions || exceptions || [];
     const dept = departments.find((d) => d.id === service.departmentId);
-    const date = nextWorkingDate(service, latestSchedules) || "";
+    const date = nextWorkingDate(service, latestSchedules, activeExcList) || "";
+    if (!date) {
+      const activeExc = activeExcList.find(
+        (e) => exceptionOnDate(e, service, todayIso) && e.type !== "WORKING_DAY"
+      );
+      if (activeExc) {
+        const excTitle = activeExc.description
+          ? `${activeExc.description} (${activeExc.title})`
+          : activeExc.title || "Calendar Exception";
+        const rangeText =
+          activeExc.endDate && activeExc.endDate !== activeExc.startDate
+            ? `from ${displayDate(activeExc.startDate)} to ${displayDate(activeExc.endDate)}`
+            : `on ${displayDate(activeExc.startDate)}`;
+        toast.error(
+          `Appointments for "${service.name}" cannot be booked at this time: Office is closed for ${excTitle} ${rangeText}. Please check back after ${displayDate(activeExc.endDate || activeExc.startDate)}.`,
+          { duration: 5000 }
+        );
+      } else {
+        toast.error(
+          `Working hours and calendar schedule have not been configured by the administration yet. Appointments for "${service.name}" are currently unavailable.`,
+          { duration: 5000 }
+        );
+      }
+      return;
+    }
+
+    // If today falls within an active calendar exception, notify the citizen that initial date was moved to the next available working day
+    const activeExcToday = activeExcList.find(
+      (e) => exceptionOnDate(e, service, todayIso) && e.type !== "WORKING_DAY"
+    );
+    if (activeExcToday) {
+      const excTitle = activeExcToday.description
+        ? `${activeExcToday.description} (${activeExcToday.title})`
+        : activeExcToday.title || "Calendar Exception";
+      const rangeText =
+        activeExcToday.endDate && activeExcToday.endDate !== activeExcToday.startDate
+          ? `from ${displayDate(activeExcToday.startDate)} to ${displayDate(activeExcToday.endDate)}`
+          : `on ${displayDate(activeExcToday.startDate)}`;
+      toast.info(
+        `Notice: Office is closed for ${excTitle} ${rangeText}. Initial booking date has been set to the next available working day (${displayDate(date)}).`,
+        { duration: 5000 }
+      );
+    }
+
     handleOpenBooking(
       {
         id: `slot-${Date.now()}`,
@@ -695,6 +788,22 @@ export default function CitizenBookAppointmentPage() {
     e.preventDefault();
     if (!selectedSlot || !canConfirm || submitting) return;
     setBookingError("");
+
+    const activeExcList = useStore.getState().exceptions || exceptions || [];
+    const blocked = activeExcList.find(
+      (e) => exceptionOnDate(e, selectedService, selectedSlot.date) && e.type !== "WORKING_DAY"
+    );
+    if (blocked) {
+      const excTitle = blocked.description
+        ? `${blocked.description} (${blocked.title})`
+        : blocked.title || "Calendar Exception";
+      toast.error(
+        `Cannot book appointment: The office is closed for ${excTitle} until ${displayDate(blocked.endDate || blocked.startDate)}. Please choose a date after ${displayDate(blocked.endDate || blocked.startDate)}.`,
+        { duration: 5000 }
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
       await bookAppointment({
@@ -725,7 +834,7 @@ export default function CitizenBookAppointmentPage() {
         msg = "This service is no longer available. Please choose another one.";
       }
       setBookingError(msg);
-      toast.error(msg, { duration: 6000 });
+      toast.error(msg, { duration: 5000 });
     } finally {
       setSubmitting(false);
     }
@@ -907,6 +1016,15 @@ export default function CitizenBookAppointmentPage() {
       enableSorting: false,
       cell: ({ row }) => {
         const apt = row.original;
+        const isCompleted = apt.status === "COMPLETED" || apt.status === "SERVED" || Boolean(apt.completedAt);
+        if (isCompleted) {
+          return (
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 shadow-2xs">
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Served</span>
+            </span>
+          );
+        }
         const isCancellable = CANCELLABLE.includes(apt.status);
         if (!isCancellable) {
           return <span className="text-xs text-slate-400">—</span>;
@@ -1051,6 +1169,8 @@ export default function CitizenBookAppointmentPage() {
               const dept = departments.find((d) => d.id === service.departmentId);
               const dailyCapacity = getServiceDailyCapacity(service);
               const bookedToday = todayBookedCounts[service.id] ?? 0;
+              const hasSchedule = schedulesForService(service, schedules || []).length > 0;
+              const isUnscheduled = !hasSchedule;
               const isZeroCapacity = dailyCapacity === 0;
               const isFull = !isZeroCapacity && bookedToday >= dailyCapacity;
               return (
@@ -1085,14 +1205,16 @@ export default function CitizenBookAppointmentPage() {
                   <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                     <span
                       className={`text-xs font-bold ${
-                        isZeroCapacity
+                        isUnscheduled
                           ? "text-amber-600"
-                          : isFull
-                            ? "text-rose-600"
-                            : "text-emerald-700"
+                          : isZeroCapacity
+                            ? "text-amber-600"
+                            : isFull
+                              ? "text-rose-600"
+                              : "text-emerald-700"
                       }`}
                     >
-                      {isZeroCapacity ? "Unavailable" : isFull ? "Full" : "Free"}
+                      {isUnscheduled ? "Not Configured" : isZeroCapacity ? "Unavailable" : isFull ? "Full" : "Free"}
                     </span>
                     <button
                       type="button"

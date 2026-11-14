@@ -46,6 +46,10 @@ export function createScheduleController({ scheduleService, availabilityService,
     async bookableDates(req, res) {
       ok(res, 200, "Bookable dates calculated.", await availabilityService.bookableDates(req.validatedQuery));
     },
+    async listActiveExceptions(req, res) {
+      const from = req.query?.from || undefined;
+      ok(res, 200, "Active calendar exceptions retrieved.", await scheduleService.listActiveExceptions({ from }));
+    },
 
     // ---- calendar exceptions ----
     async listExceptions(req, res) {

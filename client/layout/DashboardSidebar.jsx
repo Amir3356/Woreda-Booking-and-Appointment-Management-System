@@ -161,11 +161,15 @@ export default function DashboardSidebar({ role = "ADMIN" }) {
             <span className="sidebar-user-role" title={roleLabel}>
               {roleLabel}
             </span>
-            <span className="sidebar-user-email" title={currentUser?.phone || (role === "ADMIN" ? "+251911223344" : role === "OFFICER" ? "+251911334455" : subtitle)}>
-              <span className="inline-flex items-center gap-1.5 font-mono">
-                <EthiopianFlag className="w-3.5 h-2.5 shrink-0 shadow-2xs" />
-                <span>{currentUser?.phone || (role === "ADMIN" ? "+251911223344" : role === "OFFICER" ? "+251911334455" : subtitle)}</span>
-              </span>
+            <span className="sidebar-user-email" title={currentUser?.phone || currentUser?.email || subtitle}>
+              {currentUser?.phone ? (
+                <span className="inline-flex items-center gap-1.5 font-mono">
+                  <EthiopianFlag className="w-3.5 h-2.5 shrink-0 shadow-2xs" />
+                  <span>{currentUser.phone}</span>
+                </span>
+              ) : (
+                <span>{currentUser?.email || subtitle}</span>
+              )}
             </span>
           </span>
         </div>

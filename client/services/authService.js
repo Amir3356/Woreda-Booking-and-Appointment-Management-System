@@ -220,7 +220,7 @@ export function resolveUserSession(
       id: matchedProvisioned.id || `usr-prov-${Date.now()}`,
       fullName: matchedProvisioned.fullName?.trim() || "Department Officer",
       email: cleanEmail,
-      phone: matchedProvisioned.phone ? normalizeEthiopianPhone(matchedProvisioned.phone) : "+251911000000",
+      phone: matchedProvisioned.phone ? normalizeEthiopianPhone(matchedProvisioned.phone) : "",
       nationalId: matchedProvisioned.nationalId || `ET-${role.slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
       role,
       departmentId: isOfficer ? (matchedProvisioned.departmentId || matchedDept?.id || null) : null,
@@ -489,7 +489,7 @@ export function getUserFromJwtCookie(
   return {
     id: claims.sub,
     fullName: claims.name || sessionUser?.fullName || "User",
-    phone: claims.phone || sessionUser?.phone || (claims.role === "ADMIN" ? "+251911223344" : "+251911334455"),
+    phone: claims.phone || sessionUser?.phone || "",
     email: claims.email || sessionUser?.email,
     role: claims.role || sessionUser?.role,
     departmentId: claims.dept || sessionUser?.departmentId || null,
