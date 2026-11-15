@@ -412,3 +412,120 @@ test("audit log: keyset cursor pages of 5, stable while new entries arrive", { s
   const bad = await api("GET", "/audit-logs?cursor=not-a-cursor", { token: ctx.admin });
   assert.equal(bad.status, 422);
 });
+
+test("/queue/me: people ahead / behind count other bookings on the same date by time", { skip }, async () => {
+  const date = futureDate(25);
+  const third = (await api("POST", "/auth/register", { body: { fullName: "Third Citizen", phone: "+251911000007", password: "Citizen#123" } })).json.data.token;
+  const book = async (token, timeSlot) => {
+    const r = await api("POST", "/appointments", { token, body: { serviceId: ctx.serviceId, date, timeSlot } });
+    assert.equal(r.status, 201, JSON.stringify(r.json));
+    return r.json.data;
+  };
+  const mine = await book(ctx.citizen, "10:00 AM");
+  await api("PATCH", `/appointments/${mine.id}/status`, { token: ctx.officer, body: { status: "APPROVED" } });
+  await api("POST", "/queue/verify-checkin", { token: ctx.officer, body: { appointmentId: mine.id } });
+  const entry = async () => (await api("GET", "/queue/me", { token: ctx.citizen })).json.data.queue.find((q) => q.appointmentId === mine.id);
+
+  let e = await entry();
+  assert.deepEqual([e.citizensAhead, e.citizensBehind, e.position], [0, 0, 1], "alone on that date");
+
+  const approve = (a) => api("PATCH", `/appointments/${a.id}/status`, { token: ctx.officer, body: { status: "APPROVED" } });
+  const earlier = await book(ctx.otherCitizen, "09:00 AM"); // earlier, still pending: not counted yet
+  e = await entry();
+  assert.deepEqual([e.citizensAhead, e.citizensBehind, e.position], [0, 0, 1], "a pending request is not counted");
+  await approve(earlier);                                   // approved: now counts ahead
+  e = await entry();
+  assert.deepEqual([e.citizensAhead, e.citizensBehind, e.position], [1, 0, 2]);
+
+  await approve(await book(third, "11:00 AM"));            // later, approved: counts behind
+  const cancelledLater = await book(third, "12:00 PM");    // later, approved, then cancelled: no longer counts
+  await approve(cancelledLater);
+  await api("POST", `/appointments/${cancelledLater.id}/cancel`, { token: third });
+  e = await entry();
+  assert.deepEqual([e.citizensAhead, e.citizensBehind, e.position], [1, 1, 2]);
+  assert.equal(e.estimatedWaitMinutes, 1 * 15);
+
+  await approve(await book(third, "09:30 AM"));            // another earlier approved booking
+  e = await entry();
+  assert.deepEqual([e.citizensAhead, e.citizensBehind, e.position], [2, 1, 3]);
+
+  // An earlier booking on another date does not count.
+  const other = await api("POST", "/appointments", { token: third, body: { serviceId: ctx.serviceId, date: futureDate(26), timeSlot: "08:00 AM" } });
+  assert.equal(other.status, 201, JSON.stringify(other.json));
+  e = await entry();
+  assert.deepEqual([e.citizensAhead, e.citizensBehind], [2, 1]);
+});
+
+test("/queue/me: appointments on later days are listed too (pending, then approved)", { skip }, async () => {
+  const date = futureDate(30);
+  const booked = await api("POST", "/appointments", { token: ctx.otherCitizen, body: { serviceId: ctx.serviceId, date, timeSlot: "02:00 PM" } });
+  assert.equal(booked.status, 201, JSON.stringify(booked.json));
+  const id = booked.json.data.id;
+  const find = async () => (await api("GET", "/queue/me", { token: ctx.otherCitizen })).json.data.notCheckedIn.find((a) => a.appointmentId === id);
+
+  let e = await find();
+  assert.ok(e, "a pending appointment on a later day is listed");
+  assert.equal(e.status, "PENDING");
+  assert.equal(e.appointmentDate, date);
+
+  await api("PATCH", `/appointments/${id}/status`, { token: ctx.officer, body: { status: "APPROVED" } });
+  e = await find();
+  assert.equal(e.status, "APPROVED", "after approval it is still listed, as approved");
+  assert.deepEqual([e.position, e.citizensAhead, e.citizensBehind], [1, 0, 0]);
+
+  // Someone books earlier that same day: counted once the department approves it.
+  const early = await api("POST", "/appointments", { token: ctx.citizen, body: { serviceId: ctx.serviceId, date, timeSlot: "09:00 AM" } });
+  e = await find();
+  assert.deepEqual([e.position, e.citizensAhead], [1, 0], "pending: not counted");
+  await api("PATCH", `/appointments/${early.json.data.id}/status`, { token: ctx.officer, body: { status: "APPROVED" } });
+  e = await find();
+  assert.deepEqual([e.position, e.citizensAhead], [2, 1]);
+});
+
+test("a citizen can cancel an approved appointment, up to the cancellation cutoff", { skip }, async () => {
+  const settingsNow = (await api("GET", "/admin/settings", { token: ctx.admin })).json.data;
+  const setCutoff = async (hours) => {
+    const r = await api("PUT", "/admin/settings", { token: ctx.admin, body: { ...settingsNow, cancellationCutoffHours: hours } });
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+  };
+  const bookApproved = async (date, timeSlot) => {
+    const r = await api("POST", "/appointments", { token: ctx.citizen, body: { serviceId: ctx.serviceId, date, timeSlot } });
+    assert.equal(r.status, 201, JSON.stringify(r.json));
+    await api("PATCH", `/appointments/${r.json.data.id}/status`, { token: ctx.officer, body: { status: "APPROVED" } });
+    return r.json.data;
+  };
+
+  try {
+    // Cutoff 4 h; the appointment is days away: allowed.
+    await setCutoff(4);
+    const far = await bookApproved(futureDate(40), "10:00 AM");
+    const ok = await api("POST", `/appointments/${far.id}/cancel`, { token: ctx.citizen });
+    assert.equal(ok.status, 200, JSON.stringify(ok.json));
+    const log = await api("GET", "/audit-logs?action=CANCELLED&pageSize=100", { token: ctx.admin });
+    const entry = log.json.data.find((e) => e.appointmentId === far.id);
+    assert.equal(entry?.actorRole, "CITIZEN");
+    assert.equal(entry?.before?.status, "APPROVED");
+    // The freed time can be booked again.
+    const rebook = await api("POST", "/appointments", { token: ctx.otherCitizen, body: { serviceId: ctx.serviceId, date: futureDate(40), timeSlot: "10:00 AM" } });
+    assert.equal(rebook.status, 201, JSON.stringify(rebook.json));
+
+    // Cutoff larger than the time left: refused with the reason.
+    await setCutoff(24 * 60);
+    const near = await bookApproved(futureDate(41), "10:00 AM");
+    const refused = await api("POST", `/appointments/${near.id}/cancel`, { token: ctx.citizen });
+    assert.equal(refused.status, 409);
+    assert.match(refused.json.message, /up to 1440 hours before its time/);
+    // Staff can still cancel it.
+    assert.equal((await api("POST", `/appointments/${near.id}/cancel`, { token: ctx.officer })).status, 200);
+
+    // Checked in at the desk: no longer cancellable by the citizen.
+    await setCutoff(0);
+    const desk = await bookApproved(futureDate(42), "10:00 AM");
+    await api("POST", "/queue/verify-checkin", { token: ctx.officer, body: { appointmentId: desk.id } });
+    const late = await api("POST", `/appointments/${desk.id}/cancel`, { token: ctx.citizen });
+    assert.equal(late.status, 409);
+    assert.match(late.json.message, /can no longer be cancelled/);
+  } finally {
+    await setCutoff(settingsNow.cancellationCutoffHours ?? 4);
+  }
+});

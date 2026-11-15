@@ -144,22 +144,18 @@ export default function AdminAuditPage() {
     fn(value);
   };
 
-  // Audit table columns: Date & Time (of the action), Performed By, Citizen, Service, Action, Before, After
+  // Audit table columns: Citizen, Performed By, Service, Action, Before, After, Date & Time (of the action)
   const auditColumns = [
     {
-      id: "at",
-      accessorKey: "at",
-      header: "Date & Time",
+      id: "citizenName",
+      accessorKey: "citizenName",
+      header: "Citizen",
       enableSorting: false,
-      cell: ({ row }) => {
-        const { date, time } = formatWhen(row.original.at);
-        return (
-          <div className="audit-nowrap">
-            <div className="font-semibold text-slate-800">{date}</div>
-            <div className="font-mono text-[11px] text-slate-500">{time}</div>
-          </div>
-        );
-      },
+      cell: ({ row }) => (
+        <div className="audit-nowrap">
+          <div className="font-semibold text-slate-900">{row.original.citizenName || "—"}</div>
+        </div>
+      ),
     },
     {
       id: "actor",
@@ -175,20 +171,6 @@ export default function AdminAuditPage() {
           </div>
         );
       },
-    },
-    {
-      id: "citizenName",
-      accessorKey: "citizenName",
-      header: "Citizen",
-      enableSorting: false,
-      cell: ({ row }) => (
-        <div className="audit-nowrap">
-          <div className="font-semibold text-slate-900">{row.original.citizenName || "—"}</div>
-          {row.original.referenceNumber && (
-            <div className="font-mono text-[11px] text-slate-500">{row.original.referenceNumber}</div>
-          )}
-        </div>
-      ),
     },
     {
       id: "services",
@@ -243,6 +225,21 @@ export default function AdminAuditPage() {
           emptyLabel="—"
         />
       ),
+    },
+    {
+      id: "at",
+      accessorKey: "at",
+      header: "Date & Time",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const { date, time } = formatWhen(row.original.at);
+        return (
+          <div className="audit-nowrap">
+            <div className="font-semibold text-slate-800">{date}</div>
+            <div className="font-mono text-[11px] text-slate-500">{time}</div>
+          </div>
+        );
+      },
     },
   ];
 

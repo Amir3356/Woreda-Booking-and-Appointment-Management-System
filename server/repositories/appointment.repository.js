@@ -267,23 +267,17 @@ export async function countOutcomes({ from, to, departmentId }) {
 
 /** All active appointments for a date eligible for the queue (APPROVED, CHECKED_IN, IN_PROGRESS).
  * Note: PENDING appointments are awaiting Department Head approval and are excluded until approved. */
-export async function findActiveQueueForDate(date, departmentId = null) {
-  const params = [date];
-  const where = [
-    "a.date = $1",
-    "a.status IN ('APPROVED', 'CHECKED_IN', 'IN_PROGRESS')",
-  ];
-  if (departmentId) {
-    params.push(departmentId);
-    where.push(`a.department_id = $${params.length}`);
-  }
+/**
+ * Bookings the department has approved on the given dates that are still in the queue (approved,
+ * checked in or at the counter): { id, serviceId, date, timeSlot }. For "people ahead / behind" in
+ * My Queue; a pending request is not counted until it is approved.
+ */
+export async function findHoldingPlaceOn(dates) {
+  if (!dates.length) return [];
   const list = await rows(
-    `SELECT a.*, d.name AS department_name, s.name AS service_name
-     FROM appointments a
-     LEFT JOIN departments d ON d.id = a.department_id
-     LEFT JOIN services s ON s.id = a.service_id
-     WHERE ${where.join(" AND ")}`,
-    params,
+    `SELECT id, service_id, date, time_slot FROM appointments
+     WHERE date = ANY($1::date[]) AND status IN ('APPROVED', 'CHECKED_IN', 'IN_PROGRESS')`,
+    [dates],
   );
-  return list.map(fromRow);
+  return list.map((r) => ({ id: r.id, serviceId: r.service_id, date: r.date, timeSlot: r.time_slot }));
 }

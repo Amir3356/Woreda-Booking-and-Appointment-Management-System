@@ -12,17 +12,36 @@ import {
   BellRing,
   Building2,
   X,
+  Search,
+  Filter,
+  FileText,
 } from "lucide-react";
 import { useStore } from "@/context";
 import { appointmentApi, queueApi } from "@/api";
 import { subscribe } from "@/api/realtime";
-import { displayDate, displayTime } from "@/utils";
+import { displayDate, displayTime, localIsoDate } from "@/utils";
 import { CountdownChip, DataTable } from "@/components/ui";
 import { appointmentStartMs } from "@/utils/countdown";
 
 // Appointments not yet at the counter get a live countdown, from booking (pending approval) on.
 const COUNTDOWN_STATUSES = new Set(["PENDING", "APPROVED", "CHECKED_IN", "WAITING"]);
 const countdownStage = (status) => (status === "PENDING" ? "pending" : status === "APPROVED" ? "approved" : "checkedIn");
+
+// "All Statuses" dropdown: label -> the row statuses it covers.
+const STATUS_FILTERS = [
+  { value: "PENDING", label: "Pending", statuses: ["PENDING"] },
+  { value: "APPROVED", label: "Approved", statuses: ["APPROVED"] },
+  { value: "WAITING", label: "Waiting", statuses: ["WAITING", "CHECKED_IN"] },
+  { value: "SERVING", label: "Now Serving", statuses: ["SERVING", "IN_PROGRESS"] },
+  { value: "COMPLETED", label: "Served", statuses: ["COMPLETED", "SERVED"] },
+  { value: "NO_SHOW", label: "No-show", statuses: ["NO_SHOW"] },
+  { value: "CANCELLED", label: "Cancelled", statuses: ["CANCELLED"] },
+];
+// Words a row's status can be found by in the search box.
+const STATUS_WORDS = Object.fromEntries(STATUS_FILTERS.flatMap((f) => f.statuses.map((st) => [st, f.label])));
+
+// Served at the desk or cancelled: no longer in the queue, so People Ahead / Behind show "—".
+const NO_COUNTS = new Set(["COMPLETED", "SERVED", "CANCELLED"]);
 
 // Statuses after which the appointment has no place in the queue any more.
 const FINISHED = new Set(["COMPLETED", "SERVED", "NO_SHOW", "CANCELLED", "REJECTED"]);
@@ -75,7 +94,7 @@ export default function CitizenQueuePage() {
     }
   }, []);
 
-  // A citizen may cancel only a PENDING appointment (the server refuses once it is approved).
+  // A citizen may cancel a pending appointment, or an approved one up to the cancellation cutoff (the server checks it).
   const handleCancel = async (item) => {
     const aptId = item.appointmentId || item.id;
     if (!aptId) return;
@@ -86,7 +105,10 @@ export default function CitizenQueuePage() {
     } catch (err) {
       toast.error(
         err?.status === 409
-          ? "This appointment has already been approved, so it can no longer be cancelled."
+          ? (() => {
+              const text = String(err.message || "").replace(/^conflict:\s*/i, "").trim();
+              return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}.` : "This appointment can no longer be cancelled.";
+            })()
           : err?.message || "Could not cancel appointment. Please try again.",
         { duration: 6000 }
       );
@@ -242,8 +264,8 @@ export default function CitizenQueuePage() {
       status: effectiveStatus,
       completedAt: aptInStore?.completedAt || null,
       position: isCompleted || isPending ? null : a.position != null ? a.position : (queue.length + index + 1),
-      citizensAhead: isPending ? null : a.citizensAhead ?? 0,
-      citizensBehind: isPending ? null : a.citizensBehind ?? 0,
+      citizensAhead: a.citizensAhead ?? 0,
+      citizensBehind: a.citizensBehind ?? 0,
       counterNumber: a.counterNumber || aptInStore?.deskNumber || null,
       isCheckedIn: false,
       createdAt: aptInStore?.createdAt || a.createdAt || null,
@@ -257,12 +279,12 @@ export default function CitizenQueuePage() {
     ...notCheckedInRows.map((r) => r.appointmentId),
   ]);
 
-  const todayStr = state.data?.date || new Date().toISOString().split("T")[0];
+  const todayStr = state.data?.date || localIsoDate();
   const extraStoreRows = citizenAppointments
     .filter((a) => {
       if (seenIds.has(a.id)) return false;
       const aptDate = (a.date || "").split("T")[0];
-      return aptDate === todayStr && a.status !== "REJECTED";
+      return aptDate >= todayStr && a.status !== "REJECTED"; // today and later days
     })
     .map((a, index) => {
       const isCompleted = a.status === "COMPLETED" || a.status === "SERVED" || Boolean(a.completedAt);
@@ -279,8 +301,8 @@ export default function CitizenQueuePage() {
         status: isCompleted ? "COMPLETED" : a.status,
         completedAt: a.completedAt || null,
         position: isCompleted || isCancelled || isPending ? null : queue.length + notCheckedIn.length + index + 1,
-        citizensAhead: isCompleted || isCancelled || isPending ? null : 0,
-        citizensBehind: isCompleted || isCancelled || isPending ? null : 0,
+        citizensAhead: 0,
+        citizensBehind: 0,
         counterNumber: a.deskNumber || null,
         isCheckedIn: Boolean(a.checkedInAt),
         createdAt: a.createdAt || null,
@@ -306,18 +328,22 @@ export default function CitizenQueuePage() {
         : aptInStore?.status === "SERVING" || row.status === "SERVING"
         ? "SERVING"
         : aptInStore?.status || row.status;
+      // A pending or finished appointment has no queue position; people ahead / behind always show a
+      // number (the server counts them; a finished appointment has 0 and 0).
       const noPlace = effectiveStatus === "PENDING" || FINISHED.has(effectiveStatus);
+      const finished = FINISHED.has(effectiveStatus);
       return {
         ...row,
         status: effectiveStatus,
         completedAt: aptInStore?.completedAt || row.completedAt || null,
         position: noPlace ? null : row.position,
-        citizensAhead: noPlace ? null : row.citizensAhead,
-        citizensBehind: noPlace ? null : row.citizensBehind,
+        citizensAhead: finished ? 0 : row.citizensAhead ?? 0,
+        citizensBehind: finished ? 0 : row.citizensBehind ?? 0,
       };
     });
 
-  // Sort: SERVING first, then active by Queue Position / scheduled appointment time, pending awaiting approval, and COMPLETED / CANCELLED cleanly displayed at the bottom
+  // Sort: SERVING first, then active, then pending awaiting approval, finished at the bottom; within
+  // each group by appointment date, then queue position (same date), then time.
   const allRows = [...rawRows].sort((a, b) => {
     const aFinal = FINISHED.has(a.status);
     const bFinal = FINISHED.has(b.status);
@@ -330,6 +356,10 @@ export default function CitizenQueuePage() {
     const aServing = a.status === "SERVING";
     const bServing = b.status === "SERVING";
     if (aServing !== bServing) return aServing ? -1 : 1;
+
+    const dateA = a.appointmentDate || todayStr;
+    const dateB = b.appointmentDate || todayStr;
+    if (dateA !== dateB) return dateA < dateB ? -1 : 1;
 
     if (a.position != null && b.position != null && a.position !== b.position) {
       return a.position - b.position;
@@ -348,6 +378,8 @@ export default function CitizenQueuePage() {
   const servingRows = allRows.filter((r) => r.status === "SERVING");
 
   const [selectedService, setSelectedService] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [search, setSearch] = useState("");
 
   const serviceOptions = useMemo(() => {
     const s = new Set();
@@ -357,10 +389,30 @@ export default function CitizenQueuePage() {
     return Array.from(s);
   }, [allRows]);
 
+  // Search box and dropdown filters (the citizen's own entries for today, filtered in the page).
   const displayedRows = useMemo(() => {
-    if (selectedService === "ALL") return allRows;
-    return allRows.filter((r) => r.serviceName === selectedService);
-  }, [allRows, selectedService]);
+    const q = search.trim().toLowerCase();
+    const statuses = STATUS_FILTERS.find((f) => f.value === statusFilter)?.statuses;
+    return allRows.filter((r) => {
+      if (selectedService !== "ALL" && r.serviceName !== selectedService) return false;
+      if (statuses && !statuses.includes(r.status)) return false;
+      if (!q) return true;
+      return [
+        r.serviceName,
+        r.departmentName,
+        r.referenceNumber,
+        r.timeSlot,
+        r.timeSlot ? displayTime(r.timeSlot) : "",
+        STATUS_WORDS[r.status] || r.status,
+      ].some((v) => String(v || "").toLowerCase().includes(q));
+    });
+  }, [allRows, selectedService, statusFilter, search]);
+  const filtering = search.trim() !== "" || selectedService !== "ALL" || statusFilter !== "ALL";
+  const clearFilters = () => {
+    setSearch("");
+    setSelectedService("ALL");
+    setStatusFilter("ALL");
+  };
 
   // Group active rows by service to accurately calculate peopleBehind
   const activeRowsByService = useMemo(() => {
@@ -418,6 +470,20 @@ export default function CitizenQueuePage() {
           )}
         </div>
       ),
+    },
+    {
+      id: "appointmentDate",
+      accessorFn: (row) => row.appointmentDate || state.data?.date || "",
+      header: "Appointment Date",
+      sortFn: "text",
+      cell: ({ row }) => {
+        const date = row.original.appointmentDate || state.data?.date;
+        return (
+          <div className="font-bold text-slate-900 text-xs whitespace-nowrap">
+            {date ? displayDate(date) : "—"}
+          </div>
+        );
+      },
     },
     {
       id: "appointmentTime",
@@ -516,16 +582,14 @@ export default function CitizenQueuePage() {
     {
       id: "peopleAhead",
       accessorFn: (row) =>
-        row.status === "PENDING" || row.status === "CANCELLED"
-          ? 999
-          : row.citizensAhead != null
+        row.citizensAhead != null
           ? row.citizensAhead
           : row.position != null
           ? Math.max(0, Number(row.position) - 1)
           : 0,
       header: () => (
         <div className="flex flex-col">
-          <span className="font-bold text-slate-800 text-xs whitespace-nowrap">People Ahead</span>
+          <span className="font-bold text-slate-800 text-xs">People Ahead</span>
           <span className="queue-th-note text-[10px] text-slate-400 font-normal">
             (Number of citizens before you)
           </span>
@@ -533,10 +597,8 @@ export default function CitizenQueuePage() {
       ),
       sortFn: "basic",
       cell: ({ row }) => {
-        const isCompleted = row.original.status === "COMPLETED";
-        const isCancelled = row.original.status === "CANCELLED";
-        const isPending = row.original.status === "PENDING";
-        if (isCompleted || isCancelled || isPending || FINISHED.has(row.original.status)) return <span className="text-slate-400 text-xs">—</span>;
+        // Served or cancelled: the citizen has left the queue, so there is no one ahead or behind.
+        if (NO_COUNTS.has(row.original.status)) return <span className="text-slate-400 text-xs">—</span>;
         const ahead =
           row.original.citizensAhead != null
             ? row.original.citizensAhead
@@ -546,7 +608,7 @@ export default function CitizenQueuePage() {
         return (
           <span className="inline-flex items-center gap-1 font-semibold text-xs text-slate-700">
             <span
-              className={`px-2 py-0.5 rounded-md font-bold ${
+              className={`px-2 py-0.5 rounded-md font-bold whitespace-nowrap ${
                 ahead === 0
                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                   : "bg-slate-100 text-slate-700 border border-slate-200"
@@ -561,7 +623,6 @@ export default function CitizenQueuePage() {
     {
       id: "peopleBehind",
       accessorFn: (row) => {
-        if (row.status === "PENDING" || row.status === "CANCELLED") return 999;
         const key = row.serviceName || row.serviceId || "default";
         const groupList = activeRowsByService.get(key) || [];
         const total = row.totalInQueue != null ? row.totalInQueue : groupList.length;
@@ -572,7 +633,7 @@ export default function CitizenQueuePage() {
       },
       header: () => (
         <div className="flex flex-col">
-          <span className="font-bold text-slate-800 text-xs whitespace-nowrap">People Behind</span>
+          <span className="font-bold text-slate-800 text-xs">People Behind</span>
           <span className="queue-th-note text-[10px] text-slate-400 font-normal">
             (Citizens scheduled after you)
           </span>
@@ -580,10 +641,8 @@ export default function CitizenQueuePage() {
       ),
       sortFn: "basic",
       cell: ({ row }) => {
-        const isCompleted = row.original.status === "COMPLETED";
-        const isCancelled = row.original.status === "CANCELLED";
-        const isPending = row.original.status === "PENDING";
-        if (isCompleted || isCancelled || isPending || FINISHED.has(row.original.status)) return <span className="text-slate-400 text-xs">—</span>;
+        // Served or cancelled: the citizen has left the queue, so there is no one ahead or behind.
+        if (NO_COUNTS.has(row.original.status)) return <span className="text-slate-400 text-xs">—</span>;
         const key = row.original.serviceName || row.original.serviceId || "default";
         const groupList = activeRowsByService.get(key) || [];
         const total = row.original.totalInQueue != null ? row.original.totalInQueue : groupList.length;
@@ -595,7 +654,7 @@ export default function CitizenQueuePage() {
         return (
           <span className="inline-flex items-center gap-1 font-semibold text-xs text-slate-700">
             <span
-              className={`px-2 py-0.5 rounded-md font-bold ${
+              className={`px-2 py-0.5 rounded-md font-bold whitespace-nowrap ${
                 behind === 0
                   ? "bg-slate-50 text-slate-500 border border-slate-200"
                   : "bg-blue-50 text-blue-700 border border-blue-200"
@@ -760,8 +819,8 @@ export default function CitizenQueuePage() {
           );
         }
 
-        // The server lets a citizen cancel only while the booking still awaits approval.
-        if (isYou && item.status === "PENDING") {
+        // Pending, or approved but not yet checked in (the server enforces the cancellation cutoff).
+        if (isYou && (item.status === "PENDING" || item.status === "APPROVED")) {
           return (
             <button
               type="button"
@@ -788,7 +847,7 @@ export default function CitizenQueuePage() {
         <div className="w-full text-center" style={{ textAlign: "center", width: "100%" }}>
           <h1 className="sm-title" style={{ textAlign: "center" }}>My Queue</h1>
           <p className="sm-subtitle mx-auto" style={{ textAlign: "center", margin: "0.25rem auto 0 auto" }}>
-            Your place in today&apos;s queue{state.data?.date ? ` (${displayDate(state.data.date)})` : ""}. Shows your live queue status, desk assignment, and progression.
+            Your appointments from today{state.data?.date ? ` (${displayDate(state.data.date)})` : ""} onward: live queue status, desk assignment, and progression.
           </p>
         </div>
       </header>
@@ -817,40 +876,66 @@ export default function CitizenQueuePage() {
         </div>
       )}
 
-      {/* Service Filter (when booked in multiple services) */}
-      {serviceOptions.length > 1 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-bold text-slate-600">Filter Service Desk:</span>
-          <button
-            type="button"
-            onClick={() => setSelectedService("ALL")}
-            className={`px-3 py-1 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
-              selectedService === "ALL"
-                ? "bg-[#0b2545] text-white border-[#0b2545]"
-                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            All Services ({allRows.length})
-          </button>
-          {serviceOptions.map((srv) => {
-            const count = allRows.filter((r) => r.serviceName === srv).length;
-            return (
-              <button
-                key={srv}
-                type="button"
-                onClick={() => setSelectedService(srv)}
-                className={`px-3 py-1 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
-                  selectedService === srv
-                    ? "bg-[#0b2545] text-white border-[#0b2545]"
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                {srv} ({count})
-              </button>
-            );
-          })}
+      {/* Search Box & Dropdown Filters Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search service, department, reference, time, status..."
+            aria-label="Search my queue"
+            className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-1"
+              title="Clear search"
+              aria-label="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
-      )}
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={selectedService}
+              onChange={(e) => setSelectedService(e.target.value)}
+              aria-label="Filter by service"
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium text-slate-700 shadow-2xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer max-w-[200px] truncate"
+            >
+              <option value="ALL">All Services</option>
+              {serviceOptions.map((srv) => (
+                <option key={srv} value={srv}>
+                  {srv}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Filter by status"
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-semibold text-slate-800 shadow-2xs focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">All Statuses</option>
+              {STATUS_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
       {/* Main Queue DataTable */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden queue-table">
@@ -861,17 +946,35 @@ export default function CitizenQueuePage() {
           itemLabel="queue entries"
           minWidth="960px"
           emptyState={
+            filtering && allRows.length > 0 ? (
+              <div className="flex flex-col items-center gap-3 text-slate-400 py-8">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                  <Search className="w-6 h-6 text-slate-400" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-bold text-slate-700">No queue entries match your search or filters</p>
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="mt-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#0b2545] bg-slate-50 border border-slate-200 hover:bg-slate-100 cursor-pointer"
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              </div>
+            ) : (
             <div className="flex flex-col items-center gap-3 text-slate-400 py-8">
               <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
                 <Users className="w-6 h-6 text-slate-400" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-bold text-slate-700">You are not in a queue today</p>
+                <p className="text-sm font-bold text-slate-700">You have no upcoming appointments</p>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  When you have an appointment today, your queue position and live status will appear here.
+                  When you book an appointment, its queue position and live status will appear here.
                 </p>
               </div>
             </div>
+            )
           }
         />
       </div>

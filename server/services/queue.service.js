@@ -58,37 +58,6 @@ function parseTimeToMinutes(val) {
   return h * 60 + min;
 }
 
-function compareQueuePriority(a, b) {
-  const apptA = parseTimeToMinutes(a.timeSlot || a.time_slot);
-  const apptB = parseTimeToMinutes(b.timeSlot || b.time_slot);
-  const checkInA = a.checkedInAt ? parseTimeToMinutes(a.checkedInAt) : (a.checkedInTime ? parseTimeToMinutes(a.checkedInTime) : apptA);
-  const checkInB = b.checkedInAt ? parseTimeToMinutes(b.checkedInAt) : (b.checkedInTime ? parseTimeToMinutes(b.checkedInTime) : apptB);
-
-  const effA = Math.max(apptA, checkInA);
-  const effB = Math.max(apptB, checkInB);
-
-  // 1. Earlier scheduled appointment time served first
-  if (effA !== effB) return effA - effB;
-
-  // 2. Earlier check-in time FIFO tie-breaker
-  if (a.checkedInAt && b.checkedInAt) {
-    const cA = new Date(a.checkedInAt).getTime();
-    const cB = new Date(b.checkedInAt).getTime();
-    if (cA !== cB) return cA - cB;
-  } else if (a.checkedInAt || b.checkedInAt) {
-    return a.checkedInAt ? -1 : 1;
-  }
-
-  // 3. Booking creation time tie-breaker
-  if (a.createdAt && b.createdAt) {
-    const crA = new Date(a.createdAt).getTime();
-    const crB = new Date(b.createdAt).getTime();
-    if (crA !== crB) return crA - crB;
-  }
-
-  // 4. Deterministic tie-breaker
-  return String(a.id || "").localeCompare(String(b.id || ""));
-}
 
 export function createQueueService({ events, audit } = {}) {
   return {
@@ -121,45 +90,42 @@ export function createQueueService({ events, audit } = {}) {
     },
 
     /**
-     * GET /queue/me: the signed-in citizen's place in today's queues. For each of their checked-in
-     * appointments: token, status, position, citizens ahead, the token being served and an
-     * estimated wait; plus today's appointments that still need a check-in at the desk.
+     * GET /queue/me: the signed-in citizen's place in the queues, today and on later days. For each
+     * of their checked-in appointments: token, status, position, citizens ahead, the token being
+     * served and an estimated wait; plus their appointments from today on that are not checked in
+     * yet (pending, approved, ...), each counted against the other bookings on its own date.
      */
     async mine(caller) {
       const queueDate = today();
-      const [tokens, todays, activeAppointments] = await Promise.all([
+      const [tokens, upcoming] = await Promise.all([
         queueTokens.findForCitizen(caller.userId, queueDate),
         appointments.findByCitizen({
           citizenId: caller.userId,
           fromDate: queueDate,
           statuses: ["PENDING", "APPROVED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED", "NO_SHOW", "CANCELLED"],
         }),
-        appointments.findActiveQueueForDate(queueDate),
       ]);
 
-      const todaysForCitizen = todays.filter((a) => a.date === queueDate);
       const tokenApptIds = new Set(tokens.map((t) => t.appointment_id));
 
-      // Group active appointments by serving desk / public service queue group to calculate queue positions
-      const queueGroups = new Map();
-      activeAppointments.forEach((apt) => {
-        const key = apt.serviceId || apt.serviceName || apt.departmentId || "all";
-        if (!queueGroups.has(key)) queueGroups.set(key, []);
-        queueGroups.get(key).push(apt);
-      });
-
-      const positionMap = new Map();
-      queueGroups.forEach((list) => {
-        const sorted = [...list].sort(compareQueuePriority);
-        sorted.forEach((apt, idx) => {
-          positionMap.set(apt.id, {
-            position: idx + 1,
-            citizensAhead: idx,
-            citizensBehind: Math.max(0, sorted.length - 1 - idx),
-            totalInQueue: sorted.length,
-          });
-        });
-      });
+      // People ahead / behind: the other bookings for the same service on the same date that still
+      // the department approved and that are still in the queue (approved, checked in, at the counter),
+      // by appointment time. Pending requests are not counted until they are approved.
+      const dates = [...new Set([queueDate, ...upcoming.map((a) => a.date), ...tokens.map((t) => t.appointment_date)].filter(Boolean))];
+      const booked = await appointments.findHoldingPlaceOn(dates);
+      const placeOf = ({ id, serviceId, date, timeSlot, finished, serving, pending }) => {
+        if (finished) return { position: null, citizensAhead: 0, citizensBehind: 0, totalInQueue: 0 };
+        const mine = parseTimeToMinutes(timeSlot);
+        const others = booked.filter((b) => b.id !== id && b.serviceId === serviceId && b.date === date);
+        const ahead = serving ? 0 : others.filter((b) => parseTimeToMinutes(b.timeSlot) < mine).length;
+        const behind = others.filter((b) => parseTimeToMinutes(b.timeSlot) > mine).length;
+        return {
+          position: pending ? null : ahead + 1, // a pending booking has no place until it is approved
+          citizensAhead: ahead,
+          citizensBehind: behind,
+          totalInQueue: others.length + 1,
+        };
+      };
 
       return {
         date: queueDate,
@@ -167,11 +133,10 @@ export function createQueueService({ events, audit } = {}) {
         queue: tokens.map((t) => {
           const serving = t.status === "SERVING";
           // Finished at the desk (served or no-show): no longer has a place in the queue.
-          const isCompleted = t.status === "COMPLETED" || t.status === "NO_SHOW";
-          const posData = positionMap.get(t.appointment_id);
-          const computedPosition = isCompleted ? null : serving ? 1 : (posData ? posData.position : (t.ahead + 1));
-          const computedAhead = isCompleted ? 0 : serving ? 0 : (posData ? posData.citizensAhead : t.ahead);
-          const computedBehind = isCompleted ? 0 : (posData ? posData.citizensBehind : 0);
+          const finished = t.status === "COMPLETED" || t.status === "NO_SHOW";
+          const place = placeOf({
+            id: t.appointment_id, serviceId: t.service_id, date: t.appointment_date, timeSlot: t.time_slot, finished, serving,
+          });
           return {
             appointmentId: t.appointment_id,
             referenceNumber: t.reference_number,
@@ -181,30 +146,24 @@ export function createQueueService({ events, audit } = {}) {
             timeSlot: t.time_slot,
             tokenNumber: t.token_number,
             status: t.status, // WAITING | SERVING | COMPLETED | NO_SHOW
-            position: computedPosition,
-            citizensAhead: computedAhead,
-            citizensBehind: computedBehind,
-            waitingTotal: posData?.totalInQueue ?? t.waiting_total,
+            ...place,
+            waitingTotal: place.totalInQueue,
             nowServing: t.now_serving ?? null,
             counterNumber: t.status === "SERVING" ? t.counter_number : null,
             checkedInTime: clock12(t.checked_in_time),
             calledTime: t.called_time ? clock12(t.called_time) : null,
-            estimatedWaitMinutes: (isCompleted || serving) ? 0 : computedAhead * AVG_SERVICE_MINUTES,
+            estimatedWaitMinutes: finished || serving ? 0 : place.citizensAhead * AVG_SERVICE_MINUTES,
             createdAt: t.appointment_created_at,
           };
         }),
-        // Today's appointments not yet checked in (no queue token yet) or completed directly.
-        notCheckedIn: todaysForCitizen
+        // Appointments from today on that are not checked in (no queue token yet) or were completed directly.
+        notCheckedIn: upcoming
           .filter((a) => !tokenApptIds.has(a.id))
           .map((a) => {
-            const isCompleted = a.status === "COMPLETED" || a.status === "NO_SHOW";
-            const isCancelled = a.status === "CANCELLED";
-            const isServing = a.status === "IN_PROGRESS";
-            const isPending = a.status === "PENDING";
-            const posData = positionMap.get(a.id);
-            const computedPosition = (isCompleted || isPending || isCancelled) ? null : isServing ? 1 : (posData ? posData.position : 1);
-            const computedAhead = (isCompleted || isPending || isCancelled) ? null : isServing ? 0 : (posData ? posData.citizensAhead : 0);
-            const computedBehind = (isCompleted || isPending || isCancelled) ? null : (posData ? posData.citizensBehind : 0);
+            const finished = ["COMPLETED", "NO_SHOW", "CANCELLED"].includes(a.status);
+            const serving = a.status === "IN_PROGRESS";
+            const pending = a.status === "PENDING";
+            const place = placeOf({ id: a.id, serviceId: a.serviceId, date: a.date, timeSlot: a.timeSlot, finished, serving, pending });
             return {
               appointmentId: a.id,
               referenceNumber: a.referenceNumber,
@@ -214,11 +173,8 @@ export function createQueueService({ events, audit } = {}) {
               appointmentDate: a.date,
               timeSlot: a.timeSlot,
               status: a.status,
-              position: computedPosition,
-              citizensAhead: computedAhead,
-              citizensBehind: computedBehind,
-              totalInQueue: posData ? posData.totalInQueue : 0,
-              estimatedWaitMinutes: (isCompleted || isPending || isCancelled) ? 0 : (computedAhead || 0) * AVG_SERVICE_MINUTES,
+              ...place,
+              estimatedWaitMinutes: finished || serving || pending ? 0 : place.citizensAhead * AVG_SERVICE_MINUTES,
               createdAt: a.createdAt,
             };
           }),

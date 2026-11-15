@@ -135,16 +135,26 @@
   position: relative;
 }
 
-/* Citizen > My Queue: nine columns, so tighter cells than the default 2rem. */
+/* Citizen > My Queue: ten columns, so tighter cells than the default 2rem. */
 .queue-table .data-table thead th,
 .queue-table .data-table tbody td {
-  padding: 0.85rem 0.65rem;
+  padding: 0.85rem 0.5rem;
 }
+/* Ten columns: two-word headers ("Appointment Date") may wrap onto two lines, so the header text
+   does not make a column wider than its values. */
+.queue-table .data-table thead th,
+.queue-table .data-table thead .data-table-sort {
+  white-space: normal;
+  line-height: 1.3;
+  vertical-align: middle;
+}
+.queue-table .data-table thead .data-table-sort { text-align: left; }
+
 /* Long department names wrap instead of pushing the Action column out of view. */
-.queue-table .queue-dept { max-width: 12rem; line-height: 1.3; }
+.queue-table .queue-dept { max-width: 10rem; line-height: 1.3; }
 .queue-table .queue-th-note {
   display: block;
-  max-width: 8.5rem;
+  max-width: 5.5rem;
   white-space: normal;
   line-height: 1.25;
   text-transform: none;

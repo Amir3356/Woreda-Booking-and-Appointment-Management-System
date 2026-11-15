@@ -14,6 +14,12 @@ import { serviceApi, departmentApi, scheduleApi, appointmentApi, queueApi } from
 import { http, tokenStorage } from "@/api/httpClient";
 import { normalizeEthiopianPhone } from "@/utils";
 
+/** The server's reason for a refused change ("conflict: …" -> "…"), as a sentence. */
+function conflictReason(err, fallback) {
+  const text = String(err?.message || "").replace(/^conflict:\s*/i, "").trim();
+  return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? "" : "."}` : fallback;
+}
+
 const DEFAULT_TIME_SLOTS = [
   "08:30 AM",
   "09:00 AM",
@@ -623,8 +629,8 @@ export const useStore = create(
           return true;
         } catch (err) {
           const message =
-            err?.status === 409 && /approved appointment can no longer be cancelled/i.test(err.message || "")
-              ? "A department officer has already approved this appointment, so it can no longer be cancelled."
+            err?.status === 409 && status === "CANCELLED"
+              ? conflictReason(err, "This appointment can no longer be cancelled.")
               : err?.status === 409
               ? "This appointment was already decided or changed. The list has been refreshed."
               : err?.status === 403

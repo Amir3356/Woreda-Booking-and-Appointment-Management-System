@@ -319,7 +319,8 @@ export default function CitizenBookAppointmentPage() {
     NO_SHOW: "No Show",
   };
   // Only while Pending: once a department officer approves the booking it can't be cancelled.
-  const CANCELLABLE = ["PENDING"];
+  // A citizen can cancel while pending, and after approval up to the cancellation cutoff (the server checks it).
+  const CANCELLABLE = ["PENDING", "APPROVED"];
   const [cancellingId, setCancellingId] = useState(null);
   const [cancelError, setCancelError] = useState("");
 
@@ -659,7 +660,7 @@ export default function CitizenBookAppointmentPage() {
   });
 
   // Filter appointments by search and dropdown filters
-  const filteredAppointments = citizenAppointments.filter((apt) => {
+  const matchingAppointments = citizenAppointments.filter((apt) => {
     // 1. Service Filter
     if (serviceFilter !== "ALL") {
       const matchService =
@@ -709,6 +710,15 @@ export default function CitizenBookAppointmentPage() {
       requestedAt.includes(q)
     );
   });
+
+  // Newest booking first ("Requested at"), so an appointment just booked is always the first row.
+  const requestedAtMs = (apt) => {
+    const t = Date.parse(apt.createdAt || "");
+    return Number.isNaN(t) ? 0 : t;
+  };
+  const filteredAppointments = [...matchingAppointments].sort(
+    (x, y) => requestedAtMs(y) - requestedAtMs(x) || String(y.date || "").localeCompare(String(x.date || ""))
+  );
 
   const handleOpenBooking = (slot, bookable = activeServices) => {
     // A slot whose service was since deactivated opens with no service chosen.
@@ -821,6 +831,8 @@ export default function CitizenBookAppointmentPage() {
   // Books through appointment-service, so the booking is stored in MongoDB and appears for the
   // officers of the department that provides the service.
   const [submitting, setSubmitting] = useState(false);
+  // Bumped after each booking so the My Appointments table shows page 1, newest first.
+  const [bookedVersion, setBookedVersion] = useState(0);
   const [bookingError, setBookingError] = useState("");
   const handleConfirmBooking = async (e) => {
     e.preventDefault();
@@ -861,6 +873,7 @@ export default function CitizenBookAppointmentPage() {
       setSelectedSlot(null);
       setAvailabilityVersion((v) => v + 1); // the slot just taken
       await loadAppointments().catch(() => {});
+      setBookedVersion((v) => v + 1);
       showSuccess("Appointment booked successfully!");
     } catch (err) {
       let msg = "Could not book the appointment: the server is unreachable. Please try again.";
@@ -1084,6 +1097,14 @@ export default function CitizenBookAppointmentPage() {
             <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 shadow-2xs">
               <Check className="w-3.5 h-3.5 text-emerald-600" />
               <span>Served</span>
+            </span>
+          );
+        }
+        if (apt.status === "CANCELLED") {
+          return (
+            <span className="inline-flex items-center gap-1 text-xs text-rose-600 font-semibold px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 shadow-2xs">
+              <X className="w-3.5 h-3.5 text-rose-500" />
+              <span>Cancelled</span>
             </span>
           );
         }
@@ -1381,6 +1402,7 @@ export default function CitizenBookAppointmentPage() {
       {/* Appointments Table with Header Text: services, Appoitment Date, Appoitment Time, Requested at, Mesage, Status, Action */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <DataTable
+          key={`my-appointments-${bookedVersion}`}
           data={filteredAppointments}
           columns={appointmentColumns}
           getRowId={(apt) => apt.id}

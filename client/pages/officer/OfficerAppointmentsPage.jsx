@@ -449,6 +449,14 @@ export default function OfficerAppointmentsPage() {
               Reject
             </button>
           </div>
+        ) : apt.status === "CANCELLED" ? (
+          <span
+            className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600"
+            title="This appointment was cancelled, so there is nothing to decide"
+          >
+            <X className="w-3.5 h-3.5" aria-hidden="true" />
+            Cancelled
+          </span>
         ) : (
           <span className="text-[11px] text-slate-400" title="Only pending bookings can be decided">
             Decided

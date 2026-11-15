@@ -66,6 +66,12 @@ async function insertWithReference(client, fields) {
   }
 }
 
+/** Minutes from now (woreda clock) until an appointment on date ("YYYY-MM-DD") at timeSlot starts; negative once started. */
+function minutesUntil(date, timeSlot) {
+  const days = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today()}T00:00:00Z`)) / 86400000);
+  return days * 24 * 60 + (slotMinutes(timeSlot) ?? 0) - nowMinutes();
+}
+
 /** audit: { record(caller, action, appointment, opts) }, events: { publish(type, id, data) } */
 export function createAppointmentService({ events, audit }) {
   async function getOfficerAssignedServices(caller) {
@@ -238,9 +244,11 @@ export function createAppointmentService({ events, audit }) {
     },
 
     /**
-     * POST /appointments/:id/cancel. A citizen may cancel only while the booking is PENDING: once a
-     * department officer has approved it, it stays. Officers and the administrator can still cancel
-     * PENDING or APPROVED appointments. A cancelled appointment no longer holds a place.
+     * POST /appointments/:id/cancel. A citizen may cancel their own appointment while it is PENDING,
+     * or once APPROVED up to the administrator's cancellation cutoff (Settings: hours before the
+     * appointment time; 0 = until the time itself). Once checked in at the desk it can no longer be
+     * cancelled. Officers and the administrator can cancel PENDING or APPROVED appointments at any
+     * time. A cancelled appointment no longer holds a place.
      */
     async cancel(caller, id) {
       const prev = await load(caller, id);
@@ -248,13 +256,23 @@ export function createAppointmentService({ events, audit }) {
         throw new ForbiddenError();
       }
       const isCitizen = caller.role === "CITIZEN";
-      if (!(await appointments.cancel(id, isCitizen ? ["PENDING"] : ["PENDING", "APPROVED"]))) {
+      if (isCitizen && prev.status === "APPROVED") {
+        const { cancellationCutoffHours } = await settings.findOrCreate();
+        const cutoffHours = Math.max(0, Number(cancellationCutoffHours) || 0);
+        if (minutesUntil(prev.date, prev.timeSlot) < cutoffHours * 60) {
+          throw new ConflictError(
+            cutoffHours > 0
+              ? `an approved appointment can be cancelled up to ${cutoffHours} hour${cutoffHours === 1 ? "" : "s"} before its time; please contact the office`
+              : "the appointment time has already passed",
+          );
+        }
+      }
+      // The status check happens in the same UPDATE, so a check-in at the same moment wins.
+      if (!(await appointments.cancel(id, ["PENDING", "APPROVED"]))) {
         throw new ConflictError(
-          isCitizen && prev.status === "APPROVED"
-            ? "an approved appointment can no longer be cancelled by the citizen"
-            : isCitizen
-              ? "only pending appointments can be cancelled"
-              : "only pending or approved appointments can be cancelled",
+          isCitizen
+            ? "this appointment can no longer be cancelled (it has been checked in, completed or decided)"
+            : "only pending or approved appointments can be cancelled",
         );
       }
       await audit.record(caller, "CANCELLED", await appointments.findById(id), { fromStatus: prev.status });
