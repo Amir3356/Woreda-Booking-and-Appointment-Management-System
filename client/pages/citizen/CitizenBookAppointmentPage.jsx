@@ -18,7 +18,8 @@ import {
   exceptionOnDate,
   isDayClosedByException,
 } from "@/utils";
-import { DataTable } from "@/components/ui";
+import { CountdownChip, DataTable } from "@/components/ui";
+import { appointmentStartMs } from "@/utils/countdown";
 import {
   Calendar,
   Clock,
@@ -34,6 +35,42 @@ import {
   Info,
   Building2,
 } from "lucide-react";
+
+// Calendar exceptions (Admin > Schedule Management > Calendar Exceptions) close dates for booking.
+// Every notice about such a closed date stays on screen for 6 seconds.
+const EXCEPTION_TOAST_MS = 6000;
+
+/**
+ * The exception that closes date for service, or null when the date is open. Same precedence as
+ * the server (utils/calendar.js resolveDay): a Blocked date is always closed, an exceptional
+ * working day re-opens a holiday or non-working day.
+ */
+function blockingException(list, service, date) {
+  if (!date || !isDayClosedByException(date, service, list || [])) return null;
+  const onDay = (list || []).filter((e) => exceptionOnDate(e, service, date) && e.type !== "WORKING_DAY");
+  return onDay.find((e) => e.type === "BLOCKED") || onDay[0] || null;
+}
+
+/** "Ethiopian Christmas (Public holiday)" style name of an exception. */
+function exceptionName(e) {
+  if (e.title && e.description) return `${e.title} (${e.description})`;
+  return e.title || e.description || "Calendar exception";
+}
+
+/** Identifies one notice: this date closed by this exception. */
+const closureKey = (date, e) => `${date}|${e.id || `${e.startDate}-${e.endDate}-${e.type}`}`;
+
+/** The toast text for a date closed by an exception. */
+function closedDateMessage(date, e) {
+  return `Booking is unavailable on ${displayDate(date)}: ${exceptionName(e)}. The office is closed ${exceptionRange(e)}. Please choose another date.`;
+}
+
+/** "on Wed, Jan 7, 2027" or "from … to …". */
+function exceptionRange(e) {
+  return e.endDate && e.endDate !== e.startDate
+    ? `from ${displayDate(e.startDate)} to ${displayDate(e.endDate)}`
+    : `on ${displayDate(e.startDate)}`;
+}
 
 function isoToDmy(iso) {
   if (!iso || typeof iso !== "string") return "";
@@ -370,6 +407,26 @@ export default function CitizenBookAppointmentPage() {
 
   const todayIso = localIsoDate();
   const selectedService = allServices.find((s) => s.id === selectedSlot?.serviceId) || null;
+
+  // Toast (6 s) whenever the date in the booking form is closed by a calendar exception: when the
+  // citizen picks such a date, or when the administrator closes it while the form is open (the
+  // exception list updates live). Shown once per date and exception.
+  const notifiedClosureRef = useRef("");
+  useEffect(() => {
+    if (!selectedSlot?.date || !selectedService) {
+      notifiedClosureRef.current = "";
+      return;
+    }
+    const blocked = blockingException(exceptions, selectedService, selectedSlot.date);
+    if (!blocked) {
+      notifiedClosureRef.current = ""; // picking the closed date again later notifies again
+      return;
+    }
+    const key = closureKey(selectedSlot.date, blocked);
+    if (notifiedClosureRef.current === key) return;
+    notifiedClosureRef.current = key;
+    toast.error(closedDateMessage(selectedSlot.date, blocked), { duration: EXCEPTION_TOAST_MS });
+  }, [exceptions, selectedSlot?.date, selectedService]);
   const serviceSchedules = schedulesForService(selectedService, schedules);
   const dateRange = bookableRange(selectedService, schedules, todayIso);
   const scheduleForDate =
@@ -578,25 +635,7 @@ export default function CitizenBookAppointmentPage() {
           year: "numeric",
         });
 
-    const activeExcList = useStore.getState().exceptions || exceptions || [];
-    const blockedException = activeExcList.find(
-      (e) => exceptionOnDate(e, selectedService, dateVal) && e.type !== "WORKING_DAY"
-    );
-
-    if (blockedException) {
-      const excTitle = blockedException.description
-        ? `${blockedException.description} (${blockedException.title})`
-        : blockedException.title || "Calendar Exception";
-      const rangeText =
-        blockedException.endDate && blockedException.endDate !== blockedException.startDate
-          ? `from ${displayDate(blockedException.startDate)} to ${displayDate(blockedException.endDate)}`
-          : `on ${displayDate(blockedException.startDate)}`;
-      toast.error(
-        `Appointments cannot be booked on that date: ${excTitle}. The office is closed ${rangeText}. Please select a date after ${displayDate(blockedException.endDate || blockedException.startDate)}.`,
-        { duration: 5000 }
-      );
-    }
-
+    // A date closed by a calendar exception is announced by the effect above.
     setSelectedSlot((prev) => ({
       ...prev,
       date: dateVal,
@@ -688,7 +727,18 @@ export default function CitizenBookAppointmentPage() {
   };
 
   // Directly opens the booking modal for a chosen public service card in the dashboard
-  const handleSelectServiceForBooking = (service) => {
+  const openingBookingRef = useRef(false);
+  const handleSelectServiceForBooking = async (service) => {
+    if (openingBookingRef.current) return; // a second tap while the check below is running
+    openingBookingRef.current = true;
+    try {
+      await selectServiceForBooking(service);
+    } finally {
+      openingBookingRef.current = false;
+    }
+  };
+
+  const selectServiceForBooking = async (service) => {
     const latestSchedules = schedules || [];
     const applicableSchedules = schedulesForService(service, latestSchedules);
 
@@ -718,50 +768,38 @@ export default function CitizenBookAppointmentPage() {
       return;
     }
 
-    const activeExcList = useStore.getState().exceptions || exceptions || [];
-    const dept = departments.find((d) => d.id === service.departmentId);
-    const date = nextWorkingDate(service, latestSchedules, activeExcList) || "";
-    if (!date) {
-      const activeExc = activeExcList.find(
-        (e) => exceptionOnDate(e, service, todayIso) && e.type !== "WORKING_DAY"
-      );
-      if (activeExc) {
-        const excTitle = activeExc.description
-          ? `${activeExc.description} (${activeExc.title})`
-          : activeExc.title || "Calendar Exception";
-        const rangeText =
-          activeExc.endDate && activeExc.endDate !== activeExc.startDate
-            ? `from ${displayDate(activeExc.startDate)} to ${displayDate(activeExc.endDate)}`
-            : `on ${displayDate(activeExc.startDate)}`;
-        toast.error(
-          `Appointments for "${service.name}" cannot be booked at this time: Office is closed for ${excTitle} ${rangeText}. Please check back after ${displayDate(activeExc.endDate || activeExc.startDate)}.`,
-          { duration: 5000 }
-        );
-      } else {
-        toast.error(
-          `Working hours and calendar schedule have not been configured by the administration yet. Appointments for "${service.name}" are currently unavailable.`,
-          { duration: 5000 }
-        );
+    // Latest calendar exceptions from the server (the administrator may have just added one);
+    // the list loaded with the page is the fallback when the server cannot be reached.
+    let activeExcList = useStore.getState().exceptions || exceptions || [];
+    try {
+      const { data } = await scheduleApi.activeExceptions();
+      if (Array.isArray(data)) {
+        activeExcList = data;
+        useStore.setState({ exceptions: data });
       }
+    } catch {
+      // keep the cached list; the server checks the date again when booking
+    }
+
+    // Today is a calendar exception for this service: only the notice, the booking form stays closed.
+    const closedToday = blockingException(activeExcList, service, todayIso);
+    if (closedToday) {
+      const until = closedToday.endDate || closedToday.startDate;
+      toast.error(
+        `Booking is unavailable today (${displayDate(todayIso)}): ${exceptionName(closedToday)}. The office is closed ${exceptionRange(closedToday)}.${until > todayIso ? ` Please book again after ${displayDate(until)}.` : ""}`,
+        { duration: EXCEPTION_TOAST_MS }
+      );
       return;
     }
 
-    // If today falls within an active calendar exception, notify the citizen that initial date was moved to the next available working day
-    const activeExcToday = activeExcList.find(
-      (e) => exceptionOnDate(e, service, todayIso) && e.type !== "WORKING_DAY"
-    );
-    if (activeExcToday) {
-      const excTitle = activeExcToday.description
-        ? `${activeExcToday.description} (${activeExcToday.title})`
-        : activeExcToday.title || "Calendar Exception";
-      const rangeText =
-        activeExcToday.endDate && activeExcToday.endDate !== activeExcToday.startDate
-          ? `from ${displayDate(activeExcToday.startDate)} to ${displayDate(activeExcToday.endDate)}`
-          : `on ${displayDate(activeExcToday.startDate)}`;
-      toast.info(
-        `Notice: Office is closed for ${excTitle} ${rangeText}. Initial booking date has been set to the next available working day (${displayDate(date)}).`,
+    const dept = departments.find((d) => d.id === service.departmentId);
+    const date = nextWorkingDate(service, latestSchedules, activeExcList) || "";
+    if (!date) {
+      toast.error(
+        `Working hours and calendar schedule have not been configured by the administration yet. Appointments for "${service.name}" are currently unavailable.`,
         { duration: 5000 }
       );
+      return;
     }
 
     handleOpenBooking(
@@ -788,23 +826,29 @@ export default function CitizenBookAppointmentPage() {
     e.preventDefault();
     if (!selectedSlot || !canConfirm || submitting) return;
     setBookingError("");
+    setSubmitting(true);
 
-    const activeExcList = useStore.getState().exceptions || exceptions || [];
-    const blocked = activeExcList.find(
-      (e) => exceptionOnDate(e, selectedService, selectedSlot.date) && e.type !== "WORKING_DAY"
-    );
+    // Check the date against the latest calendar exceptions from the server, not only the list
+    // loaded with the page: the administrator may have closed the date since.
+    let exceptionList = useStore.getState().exceptions || exceptions || [];
+    try {
+      const { data } = await scheduleApi.activeExceptions();
+      if (Array.isArray(data)) exceptionList = data;
+    } catch {
+      // Offline or server error: keep the cached list; the server checks again when booking.
+    }
+    const blocked = blockingException(exceptionList, selectedService, selectedSlot.date);
+    if (blocked) notifiedClosureRef.current = closureKey(selectedSlot.date, blocked);
+    useStore.setState({ exceptions: exceptionList });
     if (blocked) {
-      const excTitle = blocked.description
-        ? `${blocked.description} (${blocked.title})`
-        : blocked.title || "Calendar Exception";
-      toast.error(
-        `Cannot book appointment: The office is closed for ${excTitle} until ${displayDate(blocked.endDate || blocked.startDate)}. Please choose a date after ${displayDate(blocked.endDate || blocked.startDate)}.`,
-        { duration: 5000 }
-      );
+      const msg = closedDateMessage(selectedSlot.date, blocked);
+      setBookingError(msg);
+      toast.error(msg, { duration: EXCEPTION_TOAST_MS });
+      setAvailabilityVersion((v) => v + 1);
+      setSubmitting(false);
       return;
     }
 
-    setSubmitting(true);
     try {
       await bookAppointment({
         // The server uses the full name and phone number of the citizen's account (from sign-up).
@@ -828,6 +872,14 @@ export default function CitizenBookAppointmentPage() {
       } else if (err?.status === 409) {
         msg = err?.message || "This appointment time is already booked for this service. Please choose another available time.";
         setAvailabilityVersion((v) => v + 1);
+      } else if (err?.status === 422 && err.details?.some((d) => d.field === "date")) {
+        // The server refused the date: closed by a calendar exception or outside the working days.
+        msg = `Booking is unavailable on ${displayDate(selectedSlot.date)}. ${err.details.find((d) => d.field === "date").issue}`;
+        setBookingError(msg);
+        toast.error(msg, { duration: EXCEPTION_TOAST_MS });
+        useStore.getState().loadActiveExceptions?.().catch(() => {});
+        setAvailabilityVersion((v) => v + 1);
+        return;
       } else if (err?.status === 422 && err.details?.length) {
         msg = err.details.map((d) => d.issue).join(" ");
       } else if (err?.status === 404) {
@@ -902,10 +954,20 @@ export default function CitizenBookAppointmentPage() {
       cell: ({ row }) => {
         const apt = row.original;
         const timeVal = apt.timeSlot || apt.time;
+        // Live countdown while the appointment is still ahead: pending approval, approved or checked in.
+        const counting = ["PENDING", "APPROVED", "CHECKED_IN"].includes(apt.status) && (apt.date || "").split("T")[0] >= todayIso;
         return (
-          <div className="text-[11px] text-blue-700 font-semibold flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-blue-600 inline shrink-0" />
-            <span>{timeVal ? displayTime(timeVal) : "—"}</span>
+          <div>
+            <div className="text-[11px] text-blue-700 font-semibold flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-blue-600 inline shrink-0" />
+              <span>{timeVal ? displayTime(timeVal) : "—"}</span>
+            </div>
+            {counting && (
+              <CountdownChip
+                startMs={appointmentStartMs((apt.date || "").split("T")[0], timeVal)}
+                stage={apt.status === "PENDING" ? "pending" : apt.status === "APPROVED" ? "approved" : "checkedIn"}
+              />
+            )}
           </div>
         );
       },

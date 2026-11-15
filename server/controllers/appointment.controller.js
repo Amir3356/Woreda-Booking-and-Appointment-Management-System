@@ -27,7 +27,7 @@ export function createAppointmentController(appointmentService) {
       ok(res, 200, "Appointment cancelled.", await appointmentService.cancel(req.caller, req.params.id));
     },
     async slip(req, res) {
-      ok(res, 200, "Slip generated.", await appointmentService.slip(req.params.id));
+      ok(res, 200, "Slip generated.", await appointmentService.slip(req.caller, req.params.id));
     },
   };
 }

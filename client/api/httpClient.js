@@ -1,3 +1,4 @@
+import { recordServerTime } from "@/utils/countdown";
 // Thin fetch wrapper for the WoredaCare REST API (see API.md).
 // Every module in this folder goes through `request`, so auth headers,
 // the response envelope and error handling live in one place.
@@ -132,6 +133,7 @@ export async function request(method, path, { body, params, raw = false } = {}) 
     });
   }
 
+  if (payload?.meta?.timestamp) recordServerTime(payload.meta.timestamp);
   return { data: payload?.data, meta: payload?.meta, message: payload?.message };
 }
 

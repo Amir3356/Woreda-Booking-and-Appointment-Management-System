@@ -303,3 +303,37 @@
   }
 }
 
+
+/* ---- Appointment countdowns (Citizen > My Queue) ---- */
+.countdown-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.countdown-chip-icon { width: 12px; height: 12px; flex-shrink: 0; }
+.countdown-chip-clock { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.02em; }
+.countdown-chip--days,
+.countdown-chip--later    { color: #0b2545; background: #eff6ff; border-color: #bfdbfe; }
+.countdown-chip--soon     { color: #b45309; background: #fffbeb; border-color: #fde68a; }
+.countdown-chip--imminent { color: #be123c; background: #fff1f2; border-color: #fecdd3; animation: countdown-pulse 1.2s ease-in-out infinite; }
+.countdown-chip--now      { color: #047857; background: #ecfdf5; border-color: #a7f3d0; }
+.countdown-chip--late     { color: #be123c; background: #fff1f2; border-color: #fecdd3; }
+
+@keyframes countdown-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .countdown-chip--imminent { animation: none; }
+}
+
+/* Not approved yet: the requested time is not confirmed, so the countdown is drawn dashed. */
+.countdown-chip--pending { border-style: dashed; }

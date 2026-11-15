@@ -232,10 +232,7 @@ export function createAppointmentService({ events, audit }) {
       });
 
       const a = await appointments.findById(id);
-      await audit.record(caller, "RESCHEDULED", a, {
-        fromStatus: prev.status,
-        reason: `${prev.date} ${prev.timeSlot} -> ${a.date} ${a.timeSlot}${req.reason ? `: ${req.reason}` : ""}`,
-      });
+      await audit.record(caller, "RESCHEDULED", a, { fromStatus: prev.status, before: prev, reason: req.reason });
       events.publish("appointment.rescheduled", id, { previousDate: prev.date, previousTimeSlot: prev.timeSlot, reason: req.reason, appointment: a });
       return a;
     },
@@ -265,10 +262,13 @@ export function createAppointmentService({ events, audit }) {
       return { id, status: "CANCELLED" };
     },
 
-    /** GET /appointments/:id/slip: printable slip with the department's room and the required documents. */
-    async slip(id) {
-      const a = await appointments.findById(id);
-      if (!a) throw new NotFoundError();
+    /**
+     * GET /appointments/:id/slip: printable slip with the department's room and the required documents.
+     * Only the citizen who owns the appointment, an officer in its department/services, or the admin may read it.
+     */
+    async slip(caller, id) {
+      if (!caller?.authenticated) throw new UnauthorizedError("sign in to view an appointment slip");
+      const a = await load(caller, id);
       const cs = await publicServices.findWithDepartment(a.serviceId);
       return {
         appointment: a,

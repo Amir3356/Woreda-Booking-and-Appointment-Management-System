@@ -7,6 +7,7 @@ import { newId } from "../utils/id.js";
 import { roleLabel } from "../models/user.model.js";
 import * as users from "../repositories/user.repository.js";
 import * as departments from "../repositories/department.repository.js";
+import * as publicServices from "../repositories/publicService.repository.js";
 
 const BCRYPT_COST = 10;
 
@@ -24,6 +25,30 @@ function parseCitizenAddress(address) {
       )
       .join(", ") || "Addis Ababa";
   return { kebele, woreda, location };
+}
+
+/**
+ * A department officer works on the public services assigned to them; without any they could not
+ * see or decide a single appointment. So an officer needs at least one service, each an existing
+ * service of the officer's own department. On update an absent list keeps the current assignment.
+ */
+async function checkOfficerServices(req, { required }) {
+  if (req.role !== "OFFICER") return;
+  if (req.serviceIds === undefined && !required) return;
+  const ids = [...new Set(req.serviceIds ?? [])];
+  const v = new ValidationError();
+  if (ids.length === 0) {
+    v.add("serviceIds", "Assign at least one public service to the department officer.");
+  } else {
+    for (const id of ids) {
+      const service = await publicServices.findById(id);
+      if (!service) v.add("serviceIds", `Service ${id} does not exist.`);
+      else if (service.departmentId !== req.departmentId) {
+        v.add("serviceIds", `Service "${service.name}" does not belong to the officer's department.`);
+      }
+    }
+  }
+  v.throwIfAny();
 }
 
 function parseStaffServices(address) {
@@ -135,6 +160,7 @@ export function createStaffService({ events } = {}) {
       if (req.departmentId !== null && req.departmentId !== undefined && !(await departments.exists(req.departmentId))) {
         throw new ValidationError().add("departmentId", "Department does not exist.");
       }
+      await checkOfficerServices(req, { required: true });
       const id = newId("usr");
       const phoneVal = req.phone || "";
       const emailVal = req.email || (phoneVal ? `${phoneVal.replace(/\D/g, "")}@woreda.gov.et` : "");
@@ -167,6 +193,7 @@ export function createStaffService({ events } = {}) {
       if (req.departmentId !== null && req.departmentId !== undefined && !(await departments.exists(req.departmentId))) {
         throw new ValidationError().add("departmentId", "Department does not exist.");
       }
+      await checkOfficerServices(req, { required: false });
       const phoneVal = req.phone || "";
       const emailVal = req.email || (phoneVal ? `${phoneVal.replace(/\D/g, "")}@woreda.gov.et` : "");
       const passwordHash = req.password ? await bcrypt.hash(req.password, BCRYPT_COST) : null;

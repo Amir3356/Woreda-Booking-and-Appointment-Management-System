@@ -113,7 +113,7 @@ export async function findCitizenPage({
         SELECT 1 FROM appointments a
         WHERE (a.citizen_id = u.id OR (a.citizen_phone IS NOT NULL AND a.citizen_phone = u.phone))
           AND a.department_id = ${pDept}
-          AND (a.service_id = ANY(${pSrvs}) OR a.service_name = ANY(${pSrvs}))
+          AND a.service_id = ANY(${pSrvs})
       )`);
     } else if (hasDept) {
       params.push(departmentId);
@@ -129,7 +129,7 @@ export async function findCitizenPage({
       where.push(`EXISTS (
         SELECT 1 FROM appointments a
         WHERE (a.citizen_id = u.id OR (a.citizen_phone IS NOT NULL AND a.citizen_phone = u.phone))
-          AND (a.service_id = ANY(${pSrvs}) OR a.service_name = ANY(${pSrvs}))
+          AND a.service_id = ANY(${pSrvs})
       )`);
     }
   }
@@ -170,7 +170,7 @@ export async function findCitizenPage({
           SELECT 1 FROM appointments a
           WHERE (a.citizen_id = u.id OR (a.citizen_phone IS NOT NULL AND a.citizen_phone = u.phone))
             AND a.department_id = ${pDept}
-            AND (a.service_id = ANY(${pSrvs}) OR a.service_name = ANY(${pSrvs}))
+            AND a.service_id = ANY(${pSrvs})
         )`);
       } else if (hasDept) {
         scopeParams.push(departmentId);
@@ -186,7 +186,7 @@ export async function findCitizenPage({
         scopeWhere.push(`EXISTS (
           SELECT 1 FROM appointments a
           WHERE (a.citizen_id = u.id OR (a.citizen_phone IS NOT NULL AND a.citizen_phone = u.phone))
-            AND (a.service_id = ANY(${pSrvs}) OR a.service_name = ANY(${pSrvs}))
+            AND a.service_id = ANY(${pSrvs})
         )`);
       }
       const [{ total: scopedTotal }] = await rows(`SELECT COUNT(*)::int AS total FROM users u WHERE ${scopeWhere.join(" AND ")}`, scopeParams);

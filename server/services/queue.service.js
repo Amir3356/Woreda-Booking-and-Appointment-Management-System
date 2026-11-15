@@ -11,6 +11,9 @@ import * as appointments from "../repositories/appointment.repository.js";
 import * as departments from "../repositories/department.repository.js";
 import * as users from "../repositories/user.repository.js";
 
+/** Appointment statuses after which the desk has nothing more to finalize. */
+const FINAL_STATUSES = new Set(["COMPLETED", "NO_SHOW"]);
+
 /**
  * Creates today's next sequential token ({DEPT_CODE}-{count+1:02d}) and marks the appointment
  * CHECKED_IN, atomically. The advisory lock on the department's day keeps token numbers unique.
@@ -129,7 +132,7 @@ export function createQueueService({ events, audit } = {}) {
         appointments.findByCitizen({
           citizenId: caller.userId,
           fromDate: queueDate,
-          statuses: ["PENDING", "APPROVED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED", "CANCELLED"],
+          statuses: ["PENDING", "APPROVED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED", "NO_SHOW", "CANCELLED"],
         }),
         appointments.findActiveQueueForDate(queueDate),
       ]);
@@ -162,9 +165,9 @@ export function createQueueService({ events, audit } = {}) {
         date: queueDate,
         averageServiceMinutes: AVG_SERVICE_MINUTES,
         queue: tokens.map((t) => {
-          const waiting = t.status === "WAITING";
           const serving = t.status === "SERVING";
-          const isCompleted = t.status === "COMPLETED";
+          // Finished at the desk (served or no-show): no longer has a place in the queue.
+          const isCompleted = t.status === "COMPLETED" || t.status === "NO_SHOW";
           const posData = positionMap.get(t.appointment_id);
           const computedPosition = isCompleted ? null : serving ? 1 : (posData ? posData.position : (t.ahead + 1));
           const computedAhead = isCompleted ? 0 : serving ? 0 : (posData ? posData.citizensAhead : t.ahead);
@@ -174,6 +177,7 @@ export function createQueueService({ events, audit } = {}) {
             referenceNumber: t.reference_number,
             serviceName: t.service_name,
             departmentName: t.department_name,
+            appointmentDate: t.appointment_date,
             timeSlot: t.time_slot,
             tokenNumber: t.token_number,
             status: t.status, // WAITING | SERVING | COMPLETED | NO_SHOW
@@ -193,7 +197,7 @@ export function createQueueService({ events, audit } = {}) {
         notCheckedIn: todaysForCitizen
           .filter((a) => !tokenApptIds.has(a.id))
           .map((a) => {
-            const isCompleted = a.status === "COMPLETED";
+            const isCompleted = a.status === "COMPLETED" || a.status === "NO_SHOW";
             const isCancelled = a.status === "CANCELLED";
             const isServing = a.status === "IN_PROGRESS";
             const isPending = a.status === "PENDING";
@@ -207,6 +211,7 @@ export function createQueueService({ events, audit } = {}) {
               citizenName: a.citizenName,
               serviceName: a.serviceName,
               departmentName: a.departmentName,
+              appointmentDate: a.date,
               timeSlot: a.timeSlot,
               status: a.status,
               position: computedPosition,
@@ -259,40 +264,47 @@ export function createQueueService({ events, audit } = {}) {
       return res;
     },
 
-    /** Closes a WAITING/SERVING token as COMPLETED or NO_SHOW and cascades the status to its appointment. */
+    /**
+     * Closes a WAITING/SERVING token as COMPLETED or NO_SHOW and cascades the status to its appointment.
+     * id may be the queue token id or the appointment id. Idempotent: finalizing an appointment that
+     * is already COMPLETED/NO_SHOW changes nothing and records no second audit entry (the desk page
+     * calls this once with the token id and once with the appointment id).
+     */
     async finalize(officer, id, req) {
-      const appointmentId = await transaction(async (client) => {
+      const outcome = await transaction(async (client) => {
         let apptId = await queueTokens.finalize(id, officer.departmentId, req.status, client);
+        let prev = null;
         if (!apptId) {
           const a = await appointments.findById(id, client);
           if (a && (!officer.departmentId || a.departmentId === officer.departmentId)) {
-            if (a.status === "PENDING") {
-              throw new ConflictError("appointment must be APPROVED before service can be completed");
-            }
-            if (a.status === "REJECTED" || a.status === "CANCELLED") {
-              throw new ConflictError(`cannot complete service: appointment is ${a.status.toLowerCase()}`);
-            }
+            prev = a;
             apptId = a.id;
           }
         } else {
-          const a = await appointments.findById(apptId, client);
-          if (a && a.status === "PENDING") {
-            throw new ConflictError("appointment must be APPROVED before service can be completed");
-          }
-          if (a && (a.status === "REJECTED" || a.status === "CANCELLED")) {
-            throw new ConflictError(`cannot complete service: appointment is ${a.status.toLowerCase()}`);
-          }
+          prev = await appointments.findById(apptId, client);
         }
         if (!apptId) throw new NotFoundError();
+        if (prev?.status === "PENDING") {
+          throw new ConflictError("appointment must be APPROVED before service can be completed");
+        }
+        if (prev && (prev.status === "REJECTED" || prev.status === "CANCELLED")) {
+          throw new ConflictError(`cannot complete service: appointment is ${prev.status.toLowerCase()}`);
+        }
+        if (prev && FINAL_STATUSES.has(prev.status)) {
+          return { appointmentId: apptId, fromStatus: prev.status, alreadyFinal: true };
+        }
         await appointments.markFinal(apptId, req.status, client);
-        return apptId;
+        return { appointmentId: apptId, fromStatus: prev?.status ?? null, alreadyFinal: false };
       });
+      const { appointmentId } = outcome;
+      if (outcome.alreadyFinal) return { id, status: outcome.fromStatus };
+
       let finalizedApt = null;
       if (appointmentId) {
         finalizedApt = await appointments.findById(appointmentId);
         if (audit && finalizedApt) {
           await audit.record(officer, req.status, finalizedApt, {
-            fromStatus: "SERVING",
+            fromStatus: outcome.fromStatus,
             reason: req.status === "COMPLETED" ? "Service completed at counter" : "No-show at counter",
           });
         }

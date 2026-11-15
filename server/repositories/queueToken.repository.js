@@ -122,7 +122,7 @@ export async function findForCitizen(citizenId, queueDate) {
     `SELECT q.id, q.token_number,
             CASE WHEN a.status = 'COMPLETED' OR q.status = 'COMPLETED' THEN 'COMPLETED' ELSE q.status END AS status,
             q.counter_number, q.called_time, q.checked_in_time, q.department_id,
-            a.id AS appointment_id, a.reference_number, a.time_slot,
+            a.id AS appointment_id, a.reference_number, a.date AS appointment_date, a.time_slot,
             s.id AS service_id, s.name AS service_name, d.name AS department_name,
             a.created_at AS appointment_created_at,
             (SELECT COUNT(*) FROM queue_tokens w
@@ -131,11 +131,17 @@ export async function findForCitizen(citizenId, queueDate) {
                 AND wa.service_id = a.service_id
                 AND (
                   (wa.date,
-                   GREATEST(CASE WHEN wa.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN wa.time_slot::time ELSE w.checked_in_time END, w.checked_in_time),
+                   GREATEST(CASE
+                              WHEN wa.time_slot ~* '^\\s*(1[3-9]|2[0-3]):[0-5][0-9]' THEN (regexp_replace(wa.time_slot, '\\s*[ap]m', '', 'i'))::time
+                              WHEN wa.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN wa.time_slot::time
+                              ELSE w.checked_in_time END, w.checked_in_time),
                    w.checked_in_time, w.created_at, w.id)
                   <
                   (a.date,
-                   GREATEST(CASE WHEN a.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN a.time_slot::time ELSE q.checked_in_time END, q.checked_in_time),
+                   GREATEST(CASE
+                              WHEN a.time_slot ~* '^\\s*(1[3-9]|2[0-3]):[0-5][0-9]' THEN (regexp_replace(a.time_slot, '\\s*[ap]m', '', 'i'))::time
+                              WHEN a.time_slot ~* '^\\s*\\d{1,2}:\\d{2}' THEN a.time_slot::time
+                              ELSE q.checked_in_time END, q.checked_in_time),
                    q.checked_in_time, q.created_at, q.id)
                 ))::int AS ahead,
             (SELECT COUNT(*) FROM queue_tokens w

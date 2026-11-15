@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { ACTIONS } from "../models/auditLog.model.js";
 import {
-  bookingDate, dateString, nullableText, optionalText, pageQuery, phone, queryRequired, queryText, queryUpper, requiredText, timeSlot,
+  bookingDate, dateString, nullableText, optionalText, pageQuery, phone, queryInt, queryRequired, queryText, queryUpper, requiredText, timeSlot,
 } from "./common.js";
 
 export const bookSchema = z.object({
@@ -51,9 +51,32 @@ export const registryQuery = z.object({
 
 export const summaryQuery = z.object({ period: queryUpper, departmentId: queryText });
 
+/**
+ * Audit log keyset cursor: base64url of ["a" | "b", at, id], where "a" asks for the entries after
+ * (older than) the row (at, id) and "b" for the entries before (newer than) it. at is the exact
+ * timestamp text from the database (microseconds), so no entry is skipped or repeated.
+ */
+export function encodeAuditCursor(direction, at, id) {
+  return Buffer.from(JSON.stringify([direction, at, id])).toString("base64url");
+}
+const auditCursor = queryText.transform((raw, ctx) => {
+  if (raw === "") return null;
+  try {
+    const [direction, at, id] = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    if ((direction === "a" || direction === "b") && typeof at === "string" && !Number.isNaN(Date.parse(at)) && typeof id === "string" && id) {
+      return { direction, at, id };
+    }
+  } catch {
+    // fall through to the validation issue
+  }
+  ctx.addIssue({ code: "custom", message: "Invalid page cursor." });
+  return z.NEVER;
+});
+
 export const auditQuery = z.object({
   action: queryUpper.transform((a) => (ACTIONS.includes(a) ? a : "")),
   departmentId: queryText,
   search: queryText,
-  ...pageQuery,
+  cursor: auditCursor,
+  pageSize: queryInt(5, 1, 100),
 });

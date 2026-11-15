@@ -14,10 +14,18 @@ import {
   X,
 } from "lucide-react";
 import { useStore } from "@/context";
-import { queueApi } from "@/api";
+import { appointmentApi, queueApi } from "@/api";
 import { subscribe } from "@/api/realtime";
 import { displayDate, displayTime } from "@/utils";
-import { DataTable } from "@/components/ui";
+import { CountdownChip, DataTable } from "@/components/ui";
+import { appointmentStartMs } from "@/utils/countdown";
+
+// Appointments not yet at the counter get a live countdown, from booking (pending approval) on.
+const COUNTDOWN_STATUSES = new Set(["PENDING", "APPROVED", "CHECKED_IN", "WAITING"]);
+const countdownStage = (status) => (status === "PENDING" ? "pending" : status === "APPROVED" ? "approved" : "checkedIn");
+
+// Statuses after which the appointment has no place in the queue any more.
+const FINISHED = new Set(["COMPLETED", "SERVED", "NO_SHOW", "CANCELLED", "REJECTED"]);
 
 function parseTimeToMinutes(val) {
   if (!val) return 0;
@@ -39,7 +47,6 @@ export default function CitizenQueuePage() {
   const currentUser = useStore((s) => s.currentUser);
   const appointments = useStore((s) => s.appointments);
   const loadAppointments = useStore((s) => s.loadAppointments);
-  const updateAppointmentStatus = useStore((s) => s.updateAppointmentStatus);
 
   const [state, setState] = useState({ loading: true, data: null, error: false });
   const [cancellingId, setCancellingId] = useState(null);
@@ -68,23 +75,25 @@ export default function CitizenQueuePage() {
     }
   }, []);
 
+  // A citizen may cancel only a PENDING appointment (the server refuses once it is approved).
   const handleCancel = async (item) => {
     const aptId = item.appointmentId || item.id;
     if (!aptId) return;
     setCancellingId(aptId);
     try {
-      const ok = await updateAppointmentStatus(aptId, "CANCELLED");
-      if (ok) {
-        toast.success("Appointment has been cancelled.");
-        await load();
-        await loadAppointments?.().catch(() => {});
-      } else {
-        toast.error("Could not cancel appointment. Please try again.");
-      }
-    } catch {
-      toast.error("Could not cancel appointment. Please try again.");
+      await appointmentApi.cancel(aptId);
+      toast.success("Appointment has been cancelled.");
+    } catch (err) {
+      toast.error(
+        err?.status === 409
+          ? "This appointment has already been approved, so it can no longer be cancelled."
+          : err?.message || "Could not cancel appointment. Please try again.",
+        { duration: 6000 }
+      );
     } finally {
       setCancellingId(null);
+      await load();
+      await loadAppointments?.().catch(() => {});
     }
   };
 
@@ -264,6 +273,7 @@ export default function CitizenQueuePage() {
         referenceNumber: a.referenceNumber,
         serviceName: a.serviceName,
         departmentName: a.departmentName,
+        appointmentDate: (a.date || "").split("T")[0],
         timeSlot: a.timeSlot,
         tokenNumber: a.tokenNumber || "—",
         status: isCompleted ? "COMPLETED" : a.status,
@@ -296,23 +306,21 @@ export default function CitizenQueuePage() {
         : aptInStore?.status === "SERVING" || row.status === "SERVING"
         ? "SERVING"
         : aptInStore?.status || row.status;
-      const isPending = effectiveStatus === "PENDING";
-      const isCompleted = effectiveStatus === "COMPLETED";
-      const isCancelled = effectiveStatus === "CANCELLED";
+      const noPlace = effectiveStatus === "PENDING" || FINISHED.has(effectiveStatus);
       return {
         ...row,
         status: effectiveStatus,
         completedAt: aptInStore?.completedAt || row.completedAt || null,
-        position: isPending || isCompleted || isCancelled ? null : row.position,
-        citizensAhead: isPending || isCompleted || isCancelled ? null : row.citizensAhead,
-        citizensBehind: isPending || isCompleted || isCancelled ? null : row.citizensBehind,
+        position: noPlace ? null : row.position,
+        citizensAhead: noPlace ? null : row.citizensAhead,
+        citizensBehind: noPlace ? null : row.citizensBehind,
       };
     });
 
   // Sort: SERVING first, then active by Queue Position / scheduled appointment time, pending awaiting approval, and COMPLETED / CANCELLED cleanly displayed at the bottom
   const allRows = [...rawRows].sort((a, b) => {
-    const aFinal = a.status === "COMPLETED" || a.status === "CANCELLED";
-    const bFinal = b.status === "COMPLETED" || b.status === "CANCELLED";
+    const aFinal = FINISHED.has(a.status);
+    const bFinal = FINISHED.has(b.status);
     if (aFinal !== bFinal) return aFinal ? 1 : -1;
 
     const aPending = a.status === "PENDING";
@@ -334,6 +342,8 @@ export default function CitizenQueuePage() {
     return 0;
   });
 
+  const startOf = (row) => appointmentStartMs(row.appointmentDate || state.data?.date, row.timeSlot);
+  // The citizen's next approved appointment (earliest start), unless they are at the counter already.
   const completedRows = allRows.filter((r) => r.status === "COMPLETED");
   const servingRows = allRows.filter((r) => r.status === "SERVING");
 
@@ -356,7 +366,7 @@ export default function CitizenQueuePage() {
   const activeRowsByService = useMemo(() => {
     const map = new Map();
     allRows.forEach((r) => {
-      if (r.status === "COMPLETED" || r.status === "CANCELLED" || r.status === "REJECTED" || r.status === "PENDING") return;
+      if (FINISHED.has(r.status) || r.status === "PENDING") return;
       const key = r.serviceName || r.serviceId || "default";
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(r);
@@ -397,13 +407,15 @@ export default function CitizenQueuePage() {
           <span className="font-semibold text-slate-900 block">
             {row.original.serviceName || "Municipal Service"}
           </span>
-          <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-            <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
+          <div className="text-[11px] text-slate-500 flex items-start gap-1 mt-0.5 queue-dept">
+            <Building2 className="w-3 h-3 text-slate-400 shrink-0 mt-0.5" />
             <span>{row.original.departmentName || "Public Service Desk"}</span>
-            {row.original.referenceNumber && (
-              <span className="text-slate-400">· Ref: {row.original.referenceNumber}</span>
-            )}
           </div>
+          {row.original.referenceNumber && (
+            <div className="text-[11px] text-slate-400 font-mono mt-0.5 whitespace-nowrap">
+              Ref: {row.original.referenceNumber}
+            </div>
+          )}
         </div>
       ),
     },
@@ -415,9 +427,14 @@ export default function CitizenQueuePage() {
       cell: ({ row }) => {
         const item = row.original;
         return (
-          <div className="text-[11px] text-blue-700 font-bold flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-blue-600 inline shrink-0" />
-            <span>{item.timeSlot ? displayTime(item.timeSlot) : "—"}</span>
+          <div>
+            <div className="text-[11px] text-blue-700 font-bold flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-blue-600 inline shrink-0" />
+              <span>{item.timeSlot ? displayTime(item.timeSlot) : "—"}</span>
+            </div>
+            {COUNTDOWN_STATUSES.has(item.status) && (
+              <CountdownChip startMs={startOf(item)} stage={countdownStage(item.status)} />
+            )}
           </div>
         );
       },
@@ -455,6 +472,15 @@ export default function CitizenQueuePage() {
             <span className="inline-flex items-center gap-1.5 text-rose-700 font-bold text-xs bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200 shadow-2xs">
               <X className="w-3.5 h-3.5 text-rose-600" />
               <span>Cancelled</span>
+            </span>
+          );
+        }
+
+        if (row.original.status === "NO_SHOW") {
+          return (
+            <span className="inline-flex items-center gap-1.5 text-amber-800 font-bold text-xs bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 shadow-2xs">
+              <X className="w-3.5 h-3.5 text-amber-600" />
+              <span>Missed</span>
             </span>
           );
         }
@@ -500,7 +526,7 @@ export default function CitizenQueuePage() {
       header: () => (
         <div className="flex flex-col">
           <span className="font-bold text-slate-800 text-xs whitespace-nowrap">People Ahead</span>
-          <span className="text-[10px] text-slate-400 font-normal whitespace-nowrap">
+          <span className="queue-th-note text-[10px] text-slate-400 font-normal">
             (Number of citizens before you)
           </span>
         </div>
@@ -510,7 +536,7 @@ export default function CitizenQueuePage() {
         const isCompleted = row.original.status === "COMPLETED";
         const isCancelled = row.original.status === "CANCELLED";
         const isPending = row.original.status === "PENDING";
-        if (isCompleted || isCancelled || isPending) return <span className="text-slate-400 text-xs">—</span>;
+        if (isCompleted || isCancelled || isPending || FINISHED.has(row.original.status)) return <span className="text-slate-400 text-xs">—</span>;
         const ahead =
           row.original.citizensAhead != null
             ? row.original.citizensAhead
@@ -547,7 +573,7 @@ export default function CitizenQueuePage() {
       header: () => (
         <div className="flex flex-col">
           <span className="font-bold text-slate-800 text-xs whitespace-nowrap">People Behind</span>
-          <span className="text-[10px] text-slate-400 font-normal whitespace-nowrap">
+          <span className="queue-th-note text-[10px] text-slate-400 font-normal">
             (Citizens scheduled after you)
           </span>
         </div>
@@ -557,7 +583,7 @@ export default function CitizenQueuePage() {
         const isCompleted = row.original.status === "COMPLETED";
         const isCancelled = row.original.status === "CANCELLED";
         const isPending = row.original.status === "PENDING";
-        if (isCompleted || isCancelled || isPending) return <span className="text-slate-400 text-xs">—</span>;
+        if (isCompleted || isCancelled || isPending || FINISHED.has(row.original.status)) return <span className="text-slate-400 text-xs">—</span>;
         const key = row.original.serviceName || row.original.serviceId || "default";
         const groupList = activeRowsByService.get(key) || [];
         const total = row.original.totalInQueue != null ? row.original.totalInQueue : groupList.length;
@@ -642,6 +668,17 @@ export default function CitizenQueuePage() {
             </span>
           );
         }
+        if (status === "NO_SHOW") {
+          return (
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border bg-amber-50 text-amber-800 border-amber-200 shadow-2xs"
+              title="You were called at the desk but did not attend. Please book a new appointment."
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
+              No-show
+            </span>
+          );
+        }
         if (status === "SERVING" || status === "IN_PROGRESS") {
           return (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200 shadow-2xs">
@@ -723,7 +760,8 @@ export default function CitizenQueuePage() {
           );
         }
 
-        if (isYou && (item.status === "PENDING" || item.status === "APPROVED" || item.status === "WAITING" || item.status === "CHECKED_IN")) {
+        // The server lets a citizen cancel only while the booking still awaits approval.
+        if (isYou && item.status === "PENDING") {
           return (
             <button
               type="button"
@@ -815,7 +853,7 @@ export default function CitizenQueuePage() {
       )}
 
       {/* Main Queue DataTable */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden queue-table">
         <DataTable
           data={displayedRows}
           columns={queueColumns}

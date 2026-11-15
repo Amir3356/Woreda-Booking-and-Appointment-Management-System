@@ -129,6 +129,31 @@
   padding: 0.9rem 2rem;
 }
 
+/* Header cells contain visually hidden helper text (position: absolute). Without a positioned
+   header cell that text escapes the table's scroll box and widens the whole page. */
+.data-table thead th {
+  position: relative;
+}
+
+/* Citizen > My Queue: nine columns, so tighter cells than the default 2rem. */
+.queue-table .data-table thead th,
+.queue-table .data-table tbody td {
+  padding: 0.85rem 0.65rem;
+}
+/* Long department names wrap instead of pushing the Action column out of view. */
+.queue-table .queue-dept { max-width: 12rem; line-height: 1.3; }
+.queue-table .queue-th-note {
+  display: block;
+  max-width: 8.5rem;
+  white-space: normal;
+  line-height: 1.25;
+  text-transform: none;
+}
+.queue-table .data-table thead th:first-child,
+.queue-table .data-table tbody td:first-child { padding-left: 1.4rem; }
+.queue-table .data-table thead th:last-child,
+.queue-table .data-table tbody td:last-child { padding-right: 1.4rem; }
+
 .data-table tbody td.data-table-empty {
   padding: 3.5rem 2rem;
   text-align: center;
@@ -137,3 +162,90 @@
 .data-table tr.is-past td {
   opacity: 0.6;
 }
+
+/* ---- Admin > Audit Logs ---- */
+.audit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.audit-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.audit-badge--booked      { color: #4338ca; background: #eef2ff; border-color: #c7d2fe; }
+.audit-badge--approved    { color: #047857; background: #ecfdf5; border-color: #a7f3d0; }
+.audit-badge--rejected    { color: #be123c; background: #fff1f2; border-color: #fecdd3; }
+.audit-badge--completed   { color: #0f766e; background: #f0fdfa; border-color: #99f6e4; }
+.audit-badge--no_show     { color: #c2410c; background: #fff7ed; border-color: #fed7aa; }
+.audit-badge--cancelled   { color: #334155; background: #f1f5f9; border-color: #cbd5e1; }
+.audit-badge--rescheduled { color: #1d4ed8; background: #eff6ff; border-color: #bfdbfe; }
+
+/* Seven columns: tighter cell padding than the default 2rem so Before/After fit beside the rest. */
+.audit-table .data-table thead th,
+.audit-table .data-table tbody td {
+  padding: 0.85rem 1rem;
+  vertical-align: top;
+}
+.audit-table .data-table thead th:first-child,
+.audit-table .data-table tbody td:first-child { padding-left: 1.5rem; }
+.audit-table .data-table thead th:last-child,
+.audit-table .data-table tbody td:last-child { padding-right: 1.5rem; }
+
+/* Before / After snapshot cells */
+.audit-snapshot { white-space: nowrap; }
+.audit-snapshot-line {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #64748b;
+}
+.audit-snapshot-line.is-changed {
+  color: #0f172a;
+  font-weight: 700;
+}
+.audit-snapshot-empty {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+  white-space: nowrap;
+}
+.audit-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+}
+.audit-pill--pending     { color: #b45309; background: #fffbeb; border-color: #fde68a; }
+.audit-pill--approved    { color: #047857; background: #ecfdf5; border-color: #a7f3d0; }
+.audit-pill--rejected    { color: #be123c; background: #fff1f2; border-color: #fecdd3; }
+.audit-pill--completed   { color: #0f766e; background: #f0fdfa; border-color: #99f6e4; }
+.audit-pill--no_show     { color: #c2410c; background: #fff7ed; border-color: #fed7aa; }
+.audit-pill--cancelled   { color: #475569; background: #f1f5f9; border-color: #cbd5e1; }
+.audit-pill--checked_in,
+.audit-pill--in_progress { color: #1d4ed8; background: #eff6ff; border-color: #bfdbfe; }
+/* A value the action changed: a ring on the status, bold text on date/time (see .is-changed above). */
+.audit-pill.is-changed { box-shadow: 0 0 0 2px #fff, 0 0 0 3px currentColor; }
+
+.audit-reason {
+  margin-top: 4px;
+  max-width: 260px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #64748b;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.audit-nowrap { white-space: nowrap; }
