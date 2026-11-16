@@ -17,8 +17,9 @@ business rules it enforces, and the known gaps between the specification and the
 4. [Functional requirements](#4-functional-requirements)
 5. [Non-functional requirements](#5-non-functional-requirements)
 6. [Business rules](#6-business-rules)
-7. [Known gaps](#7-known-gaps)
-8. [Getting started](#8-getting-started)
+7. [System limitations](#7-system-limitations)
+8. [Known gaps](#8-known-gaps)
+9. [Getting started](#9-getting-started)
 
 ---
 
@@ -168,7 +169,7 @@ Requirement IDs are stable so they can be referenced from tests and change reque
 | FR-ADM-02 | **Citizen Management:** browse and search registered citizens with location filters (cursor-based pages). |
 | FR-ADM-03 | **Department Management:** create, edit, activate/deactivate and delete departments (unique code, room, contact phone). |
 | FR-ADM-04 | **Service Management:** create, edit, activate/deactivate and delete services (code, department, duration, daily quota, fee, processing time, required documents). |
-| FR-ADM-05 | **System settings:** woreda name, region, hotline, emergency phone, maximum parallel bookings per time slot and cancellation cutoff (hours), plus stored options listed in [Known gaps](#7-known-gaps). |
+| FR-ADM-05 | **System settings:** woreda name, region, hotline, emergency phone, maximum parallel bookings per time slot and cancellation cutoff (hours), plus stored options listed in [Known gaps](#8-known-gaps). |
 | FR-ADM-06 | **Reports:** appointment outcome summary for Today, This Week or This Month (optionally per department), a geographical breakdown, and a CSV export of the appointment registry. |
 
 ### 4.7 Schedule Management (administrator only)
@@ -283,7 +284,13 @@ Requirement IDs are stable so they can be referenced from tests and change reque
 
 ---
 
-## 7. Known gaps
+## 7. System limitations
+
+- **SMS Integration:** The system does not currently support SMS integration. Therefore, SMS-based reminders, appointment notifications, reminder queues, and other SMS-related communication features are not available.
+
+---
+
+## 8. Known gaps
 
 Items from the specification that the current build does not yet meet, so they are not mistaken
 for working features:
@@ -302,7 +309,7 @@ for working features:
 
 ---
 
-## 8. Getting started
+## 9. Getting started
 
 ### Prerequisites
 
