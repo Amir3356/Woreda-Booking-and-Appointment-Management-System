@@ -8,7 +8,7 @@
     "build": "node build.mjs"
   },
   "dependencies": {
-    "mermaid": "11.4.1",
+    "mermaid": "11.16.1",
     "pdf-lib": "1.17.1",
     "puppeteer-core": "23.11.1"
   }
