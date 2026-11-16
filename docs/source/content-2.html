@@ -1,0 +1,434 @@
+<!-- ============================== CHAPTER 3 ============================== -->
+<section class="chapter">
+<h1>Chapter 3: System Design Document (SDD)</h1>
+
+<h2>3.1 Introduction</h2>
+<h3>3.1.1 Purpose of the System</h3>
+<p>The purpose of WoredaCare is to let citizens reserve in-person woreda services online and to let the woreda departments serve those reservations in an orderly, transparent and auditable way. This chapter describes how the system is decomposed, deployed and secured, and how its data is stored.</p>
+<h3>3.1.2 Design Goals</h3>
+<table class="t" data-cap="Design goals">
+<thead><tr><th>Goal</th><th>How the design achieves it</th></tr></thead>
+<tbody>
+<tr><td>Security</td><td>Server-side authorization for every request (CASL abilities with department, service and ownership conditions), hashed passwords, HttpOnly session cookie with CSRF protection, input validation, rate limiting and security headers.</td></tr>
+<tr><td>Data integrity</td><td>Database constraints, transactions, PostgreSQL advisory locks for bookings and queue tokens, and conditional status updates so that concurrent actions cannot corrupt the state.</td></tr>
+<tr><td>Responsiveness</td><td>A WebSocket channel pushes change notices so that open pages refresh within about a second.</td></tr>
+<tr><td>Maintainability</td><td>A strict layered API (routes, middleware, controllers, services, repositories), small single-purpose modules, one response envelope and versioned schema migrations.</td></tr>
+<tr><td>Accountability</td><td>An append-only audit log with actor, time and before and after snapshots of every appointment decision.</td></tr>
+<tr><td>Usability and reach</td><td>A browser-based client that works on desktop and mobile widths, with plain-language messages and live status.</td></tr>
+<tr><td>Correct local time</td><td>All scheduling uses woreda time (Africa/Addis_Ababa), independent of the device time zone.</td></tr>
+</tbody></table>
+
+<h2>3.2 Current Software Architecture</h2>
+<p>There is no current software system for booking or queue management at the woreda; the existing process is manual (Section 2.2). Therefore no existing architecture constrains the design, and no data migration from a previous system is required.</p>
+
+<h2>3.3 Proposed Software Architecture</h2>
+<h3>3.3.1 System Design</h3>
+<h4>1. Overview</h4>
+<p>WoredaCare uses a three-tier client-server architecture (Figure 3.1). The <b>client tier</b> is a React single-page application served as static files and run in the user's browser. The <b>application tier</b> is a single Node.js process running an Express REST API under <code>/api/v1</code> and a WebSocket hub under <code>/api/v1/ws</code>. The <b>data tier</b> is a PostgreSQL database. The client sends HTTPS requests to the API and receives change notices over the WebSocket; after a notice it re-reads the data it displays.</p>
+<fig id="arch" caption="Three-tier architecture of WoredaCare"></fig>
+<p>Inside the API every request passes through the same ordered layers (Figure 3.2): routes map the URL to a handler; middleware assigns a request identifier, logs the request, applies CORS and rate limits, authenticates the JWT, checks CSRF, checks the CASL ability and validates the input; controllers translate between HTTP and services; services implement the business rules; repositories run parameterized SQL.</p>
+<fig id="layers" caption="Request layers of the API"></fig>
+
+<h4>2. Subsystem Decomposition</h4>
+<fig id="subsystems" caption="Subsystem decomposition"></fig>
+<table class="t" data-cap="Subsystems and their responsibilities">
+<thead><tr><th>Subsystem</th><th>Responsibility</th><th>Main modules</th></tr></thead>
+<tbody>
+<tr><td>Public portal</td><td>Sign-in, registration, service and department catalog, tracking page</td><td>client/pages (AuthPage, RegisterPage, ServicesPage, TrackPage)</td></tr>
+<tr><td>Citizen portal</td><td>Booking, My Appointments, My Queue</td><td>CitizenBookAppointmentPage, CitizenQueuePage</td></tr>
+<tr><td>Officer service desk</td><td>Request decisions and the desk queue</td><td>OfficerAppointmentsPage, OfficerQueuePage</td></tr>
+<tr><td>Administration console</td><td>Accounts, citizens, departments, services, schedules, audit</td><td>client/pages/admin</td></tr>
+<tr><td>Shared client layer</td><td>REST client with CSRF handling, WebSocket client, application store, reusable components</td><td>client/api, client/context/store.js, client/components/ui</td></tr>
+<tr><td>Authentication and sessions</td><td>Registration, sign-in, lockout, token issue and revocation</td><td>auth.service, session.repository, middleware/jwt, middleware/csrf</td></tr>
+<tr><td>Catalog</td><td>Departments and public services</td><td>department.service, publicService.service</td></tr>
+<tr><td>Scheduling</td><td>Operating hours, capacities, calendar exceptions, availability</td><td>schedule.service, scheduleManagement.service, availability.service, dayRules, utils/slots, utils/calendar</td></tr>
+<tr><td>Appointment management</td><td>Booking, review, reschedule, cancel, tracking, slip</td><td>appointment.service, appointment.repository</td></tr>
+<tr><td>Desk queue</td><td>Check-in, queue tokens, call next, finalize, citizen position</td><td>queue.service, queueToken.repository</td></tr>
+<tr><td>Reporting</td><td>Outcome summary, geographical breakdown, CSV export</td><td>report.service, utils/csv</td></tr>
+<tr><td>Audit trail</td><td>Recording and paging audit entries</td><td>audit.service, auditLog.repository</td></tr>
+<tr><td>Staff, citizens, settings</td><td>Staff provisioning, citizen directory and profile, system settings</td><td>staff.service, profile.service, settings.service</td></tr>
+<tr><td>Events and realtime</td><td>Publishing domain events and broadcasting them over WebSocket</td><td>event.service, realtime.service</td></tr>
+</tbody></table>
+
+<h4>3. Hardware/Software Mapping</h4>
+<p>Figure 3.4 maps the software components to processing nodes. The repository contains the application but no deployment configuration (for example container files or a process manager), so the target hardware is described at the level required by the software.</p>
+<fig id="deploy" caption="Hardware/software mapping (deployment view)"></fig>
+<table class="t" data-cap="Nodes and their software">
+<thead><tr><th>Node</th><th>Software</th><th>Communication</th></tr></thead>
+<tbody>
+<tr><td>User device</td><td>Current web browser on a desktop computer or mobile phone</td><td>HTTPS to the web and application servers; WebSocket (WSS) to the application server</td></tr>
+<tr><td>Web server</td><td>Any static file server hosting the production build of the client (client/dist)</td><td>Serves HTML, JavaScript and CSS</td></tr>
+<tr><td>Application server</td><td>Node.js 22 or later running server.js (Express API and WebSocket hub)</td><td>HTTP port 8080 by default; connects to PostgreSQL</td></tr>
+<tr><td>Database server</td><td>PostgreSQL 13 or later (developed and tested on 16)</td><td>TCP port 5432</td></tr>
+</tbody></table>
+<p>During development the client runs on the Vite development server (port 3000), the API on port 8080 and PostgreSQL on port 5432 on one machine. <span class="ph">[Team to specify the production hardware and hosting, if deployed.]</span></p>
+
+<h4>4. Persistent Data Management</h4>
+<p>Persistent data is stored in a PostgreSQL relational database. The schema is created and changed only through 21 versioned migrations managed by node-pg-migrate; every migration has a reversible down step. A seed creates the first administrator. The final schema consists of 13 tables (Figure 3.5); the full data dictionary is given in Appendix B.</p>
+<fig id="er" land caption="Entity relationship diagram of the database"></fig>
+<table class="t" data-cap="Database tables">
+<thead><tr><th>Table</th><th>Content</th></tr></thead>
+<tbody>
+<tr><td>departments</td><td>Woreda departments with unique code, room and contact phone</td></tr>
+<tr><td>services</td><td>Public services with fee, processing time, daily quota and required documents</td></tr>
+<tr><td>users</td><td>Citizens, officers and administrators with role and, for officers, department</td></tr>
+<tr><td>appointments</td><td>Bookings with reference number, date, time slot, status and decision details</td></tr>
+<tr><td>queue_tokens</td><td>One desk token per checked-in appointment, with counter and token status</td></tr>
+<tr><td>schedules, schedule_service_capacities</td><td>Operating hours, lunch break, slot length and capacities per service</td></tr>
+<tr><td>calendar_exceptions, calendar_exception_departments</td><td>Holidays, non-working days, blocked dates and exceptional working days with their department scope</td></tr>
+<tr><td>audit_logs</td><td>Append-only record of appointment events with before and after snapshots (JSONB)</td></tr>
+<tr><td>system_settings</td><td>A single row of woreda-wide settings</td></tr>
+<tr><td>revoked_tokens, login_failures</td><td>Revoked session identifiers and sign-in failure counters for lockout</td></tr>
+</tbody></table>
+<p><b>Integrity mechanisms.</b> Primary, unique and check constraints protect the data (for example unique department and service codes, positive capacities and allowed status values). Foreign keys use explicit delete rules (RESTRICT, CASCADE or SET NULL). Bookings and token issuing run inside transactions with PostgreSQL advisory locks, and status changes use conditional updates. Dates are stored as DATE values in woreda time.</p>
+<p><b>Design notes.</b> Audit entries deliberately copy names and dates instead of referencing other tables, so that history is preserved when records change. Two weaknesses are documented for future work: officer service assignments are stored as JSON in the <code>users.address</code> column instead of a separate table, and <code>appointments.citizen_id</code> has no foreign key to <code>users</code>.</p>
+
+<h4>5. System Design Class Diagram</h4>
+<p>Figure 3.6 shows the domain classes, their main attributes and operations, and their associations. In the implementation the operations are provided by service modules (Chapter 4).</p>
+<fig id="classes" tall caption="System design class diagram"></fig>
+
+<h4>6. Access Control and Security</h4>
+<p>Access control is role-based with attribute conditions. On every request the JWT middleware identifies the caller and builds a CASL ability from the role, department and assigned services; route middleware then checks the required action, and services re-check the conditions against the actual record (for example that an appointment belongs to the officer's department and services, or to the citizen). Table 3.5 summarizes the permissions.</p>
+<table class="t matrix" data-cap="Access control matrix">
+<thead><tr><th>Resource / action</th><th>Visitor</th><th>Citizen</th><th>Officer</th><th>Admin</th></tr></thead>
+<tbody>
+<tr><td>Departments, services, bookable schedules: read</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>Departments, services: create, update, delete</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td><td>Yes</td></tr>
+<tr><td>Schedule management (hours, exceptions, calendar)</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td><td>Yes</td></tr>
+<tr><td>Register, sign in</td><td>Yes</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+<tr><td>Book appointment</td><td>&ndash;</td><td>Yes</td><td>&ndash;</td><td>Yes</td></tr>
+<tr><td>Own appointments: read, cancel, reschedule</td><td>&ndash;</td><td>Own only</td><td>&ndash;</td><td>&ndash;</td></tr>
+<tr><td>Appointment registry, review, reschedule, cancel</td><td>&ndash;</td><td>&ndash;</td><td>Own department and services</td><td>All</td></tr>
+<tr><td>Desk queue: check in, call next, finalize</td><td>&ndash;</td><td>&ndash;</td><td>Own department</td><td>All</td></tr>
+<tr><td>Own queue position (My Queue)</td><td>&ndash;</td><td>Yes</td><td>&ndash;</td><td>&ndash;</td></tr>
+<tr><td>Reports and CSV export</td><td>&ndash;</td><td>&ndash;</td><td>Own department</td><td>All</td></tr>
+<tr><td>Citizen directory</td><td>&ndash;</td><td>&ndash;</td><td>Own department (API)</td><td>All</td></tr>
+<tr><td>Staff accounts, settings, audit log</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td><td>Yes</td></tr>
+<tr><td>Own profile</td><td>&ndash;</td><td>Yes</td><td>&ndash;</td><td>&ndash;</td></tr>
+</tbody></table>
+<p><b>Security mechanisms.</b></p>
+<ul>
+<li><b>Authentication:</b> passwords are hashed with bcrypt; a signed JWT (HS256) carrying the user identifier, role, department and services is stored in an HttpOnly cookie; a Bearer token is accepted for API clients. Signing out records the token identifier as revoked. Sessions do not expire on inactivity by design.</li>
+<li><b>Brute-force protection:</b> five failed sign-ins lock the phone or email for 15 minutes; requests are rate-limited per IP address.</li>
+<li><b>CSRF protection:</b> a double-submit token (cookie plus X-CSRF-Token header) and an Origin check are required for state-changing requests that use the session cookie.</li>
+<li><b>Input handling:</b> every body and query is validated with Zod; SQL is always parameterized; request bodies are limited to 1 MB; Helmet sets security headers; CORS allows only the configured web origins.</li>
+<li><b>Data exposure:</b> public tracking and availability responses contain no personal contact data; appointment slips are restricted to the owner, the responsible officer and the administrator.</li>
+</ul>
+</section>
+
+<!-- ============================== CHAPTER 4 ============================== -->
+<section class="chapter">
+<h1>Chapter 4: Object Design Document (ODD)</h1>
+
+<h2>4.1 Object Design</h2>
+<h3>4.1.1 Object Design Trade-offs</h3>
+<table class="t" data-cap="Object design trade-offs">
+<thead><tr><th>Decision</th><th>Alternative</th><th>Rationale and consequence</th></tr></thead>
+<tbody>
+<tr><td>Factory functions returning objects (for example <code>createAppointmentService({ events, audit })</code>) instead of classes</td><td>Class hierarchies</td><td>Dependencies are injected explicitly and state is kept in closures, which keeps modules small and easy to test. Only errors use a class hierarchy, because <code>instanceof</code> checks are needed in the error handler.</td></tr>
+<tr><td>JavaScript (ES modules) without static types</td><td>TypeScript</td><td>Faster iteration; type safety at the boundary is provided by Zod schemas and the shared response envelope, at the cost of fewer compile-time checks inside the code.</td></tr>
+<tr><td>Business rules enforced on the server; the client repeats some checks only for feedback</td><td>Rules in the client only</td><td>A page that missed a live update can never complete a forbidden action; the cost is some duplicated logic.</td></tr>
+<tr><td>Notify-then-refetch over WebSocket</td><td>Pushing full data over the socket</td><td>Notices are small and the client always reads authoritative, permission-filtered data through the REST API.</td></tr>
+<tr><td>Keyset (cursor) pagination for the audit log</td><td>Offset pagination</td><td>Pages stay stable while new entries arrive and remain fast as the log grows; arbitrary page jumps are not supported.</td></tr>
+<tr><td>Denormalized audit snapshots</td><td>Foreign keys to live records</td><td>History is preserved when records change or are deleted; some data is duplicated.</td></tr>
+<tr><td>HttpOnly cookie with CSRF token</td><td>Token in browser storage</td><td>The token cannot be read by injected scripts; CSRF protection is required in return.</td></tr>
+<tr><td>Zustand store for client state</td><td>Redux or component state only</td><td>A small, central store with little boilerplate, shared by the portals.</td></tr>
+</tbody></table>
+
+<h3>4.1.2 Interface Documentation Guidelines</h3>
+<ul>
+<li><b>Module headers:</b> every file starts with a comment stating its responsibility; public functions carry a JSDoc comment describing parameters and results.</li>
+<li><b>Naming:</b> service factories are named <code>createXService</code>, controller factories <code>createXController</code> and route factories <code>createXRoutes</code>; repository functions use <code>findX</code>, <code>countX</code>, <code>create</code>, <code>update</code> and <code>remove</code>. File names follow <code>name.layer.js</code> (for example <code>queue.service.js</code>).</li>
+<li><b>Data names:</b> JavaScript and JSON use camelCase; database columns use snake_case; models translate rows with <code>fromRow</code>.</li>
+<li><b>REST interface:</b> resources are plural nouns under <code>/api/v1</code>; actions that are not plain updates use sub-resources (for example <code>POST /appointments/:id/cancel</code>).</li>
+<li><b>Response envelope:</b> success responses are <code>{ success: true, message, data, meta }</code>; errors are <code>{ success: false, message, error: { code, details }, meta }</code>.</li>
+<li><b>Status codes:</b> 200/201 success; 401 not signed in; 403 not allowed; 404 not found; 409 conflict with the current state (slot taken, capacity reached, already decided); 422 validation failure with field details; 429 too many attempts.</li>
+</ul>
+
+<land><h3>4.1.3 Packages</h3>
+<p>Figure 4.1 shows the packages of the two applications and their dependencies. Dependencies point inward: routes depend on middleware and controllers, controllers on services, services on repositories, models and utilities.</p>
+<fig id="packages" caption="Package diagram"></fig></land>
+<table class="t" data-cap="Server packages (server/)">
+<thead><tr><th>Package</th><th>Content</th></tr></thead>
+<tbody>
+<tr><td>routes</td><td>12 route factories mapping URLs to middleware and controller handlers</td></tr>
+<tr><td>middleware</td><td>requestId, requestLogger, rateLimit, jwt (authentication), csrf, casl (ability check), validate (Zod), errorHandler</td></tr>
+<tr><td>controllers</td><td>12 controllers translating HTTP requests into service calls and envelopes</td></tr>
+<tr><td>services</td><td>16 modules with the business rules (appointment, queue, audit, auth, availability, schedule, schedule management, department, public service, staff, profile, settings, report, event, realtime, day rules)</td></tr>
+<tr><td>repositories</td><td>10 modules with parameterized SQL per table group</td></tr>
+<tr><td>models</td><td>9 modules converting rows to API objects and defining status and action constants</td></tr>
+<tr><td>validations</td><td>7 modules of Zod schemas for request bodies and queries</td></tr>
+<tr><td>security</td><td>CASL subjects, actions and the ability definition per role</td></tr>
+<tr><td>utils, config</td><td>Dates, slots, calendar rules, pagination, CSV, errors, response envelope; configuration, database pool, logger, CORS</td></tr>
+<tr><td>migrations, seeds, test</td><td>21 schema migrations, the administrator seed, and the automated tests</td></tr>
+</tbody></table>
+<table class="t" data-cap="Client packages (client/)">
+<thead><tr><th>Package</th><th>Content</th></tr></thead>
+<tbody>
+<tr><td>pages</td><td>Public pages; admin, officer and citizen pages; schedule management pages</td></tr>
+<tr><td>layout</td><td>Role layouts with access guards, dashboard header and sidebar, public navigation bar and footer</td></tr>
+<tr><td>components/ui</td><td>DataTable (client and server pagination), StatusBadge, CountdownChip, and other shared components</td></tr>
+<tr><td>features</td><td>Appointment slip; schedule calendar model and confirmation dialog</td></tr>
+<tr><td>context</td><td>Zustand application store with the data loaders and actions</td></tr>
+<tr><td>api</td><td>HTTP client (envelope, CSRF, server clock), one module per resource, WebSocket client</td></tr>
+<tr><td>hooks, services, utils, styles</td><td>Reusable hooks, client-side helpers, formatting and date utilities, style sheets</td></tr>
+</tbody></table>
+
+<h3>4.1.4 Class Interfaces</h3>
+<p>Errors form the only class hierarchy in the code base (Figure 4.2). Services throw these errors and the error handler converts them into the error envelope with the matching HTTP status.</p>
+<fig id="errors" tall caption="Error class hierarchy"></fig>
+<p>Tables 4.4 to 4.6 describe the interfaces of the central service objects. Every method receives the authenticated caller where authorization depends on it.</p>
+<table class="t api" data-cap="Interface of AppointmentService (createAppointmentService({ events, audit }))">
+<thead><tr><th>Operation</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td>book(caller, request)</td><td>Validates the request against the schedule, exceptions and capacities inside a locked transaction and creates a Pending appointment; records BOOKED and publishes appointment.booked.</td></tr>
+<tr><td>review(caller, id, decision)</td><td>Approves or rejects a Pending appointment within the caller's scope; records the decision.</td></tr>
+<tr><td>reschedule(caller, id, request)</td><td>Moves the appointment to another valid date and time; records RESCHEDULED with the old and new slot.</td></tr>
+<tr><td>cancel(caller, id)</td><td>Cancels a Pending or Approved appointment, applying the citizen cancellation cutoff; records CANCELLED.</td></tr>
+<tr><td>track(ref)</td><td>Returns the public status of the latest appointment for a reference or phone number, without contact details.</td></tr>
+<tr><td>mine(caller, filter) / listPage(caller, filter)</td><td>Lists the caller's own appointments, or one page of the registry scoped to the caller.</td></tr>
+<tr><td>slip(caller, id)</td><td>Returns the printable slip to the owner, the responsible officer or the administrator.</td></tr>
+</tbody></table>
+<table class="t api" data-cap="Interface of QueueService (createQueueService({ events, audit }))">
+<thead><tr><th>Operation</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td>checkIn(officer, request)</td><td>Checks in an Approved appointment and issues the next token of the department for the day.</td></tr>
+<tr><td>callNext(officer, { counterNumber })</td><td>Claims the oldest waiting token of the officer's department and marks the appointment In Progress.</td></tr>
+<tr><td>finalize(officer, id, { status })</td><td>Marks the service Completed or No-show; idempotent, so a repeated call records nothing new.</td></tr>
+<tr><td>board(officer)</td><td>Returns the live queue of the officer's department.</td></tr>
+<tr><td>mine(caller)</td><td>Returns the citizen's appointments from today on with position and people ahead and behind.</td></tr>
+</tbody></table>
+<table class="t api" data-cap="Interfaces of AuditService, AuthService and AvailabilityService">
+<thead><tr><th>Operation</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td>AuditService.record(caller, action, appointment, { fromStatus, reason, before })</td><td>Appends an audit entry with before and after snapshots and publishes audit.created; never fails the calling action.</td></tr>
+<tr><td>AuditService.list({ action, departmentId, search, cursor, pageSize })</td><td>Returns one keyset page (default five entries) with previous and next cursors and the total count.</td></tr>
+<tr><td>AuthService.register(fields) / login(credentials) / me(userId) / logout(caller)</td><td>Creates a citizen account; verifies credentials with lockout; returns the current user; revokes the session.</td></tr>
+<tr><td>AvailabilityService (via schedule controller)</td><td>Builds the bookable time slots of a service on a date and the bookable dates in a range, applying hours, lunch break, exceptions and capacities.</td></tr>
+</tbody></table>
+<p>The REST interface of the system (59 endpoints) is listed in Appendix A.</p>
+</section>
+
+<!-- ============================== CHAPTER 5 ============================== -->
+<section class="chapter">
+<h1>Chapter 5: Implementation of the System</h1>
+
+<h2>5.1 Tools Used During Development</h2>
+<p>The technologies were introduced in Table 1.2. Table 5.1 gives the exact versions declared by the project.</p>
+<table class="t" data-cap="Library and tool versions">
+<thead><tr><th>Component</th><th>Library or tool</th><th>Version</th></tr></thead>
+<tbody>
+<tr><td rowspan="5">Server</td><td>Node.js</td><td>22 or later (developed on 26.13)</td></tr>
+<tr><td>express / pg / ws</td><td>5.1.0 / 8.16.3 / 8.22.0</td></tr>
+<tr><td>zod / @casl/ability</td><td>4.6.7 / 7.1.x</td></tr>
+<tr><td>jsonwebtoken / bcryptjs / helmet / cors</td><td>9.0.2 / 2.4.3 / 8.3.0 / 2.8.6</td></tr>
+<tr><td>pino / node-pg-migrate / nodemon</td><td>9.6.0 / 9.0.0 / 3.1.14</td></tr>
+<tr><td rowspan="4">Client</td><td>react / react-dom / react-router-dom</td><td>19.x / 19.x / 7.x</td></tr>
+<tr><td>zustand / @tanstack/react-table</td><td>5.x / 9.x</td></tr>
+<tr><td>recharts / sonner / lucide-react</td><td>3.x / 2.x / 1.x</td></tr>
+<tr><td>vite / @vitejs/plugin-react</td><td>6.x / 4.x</td></tr>
+<tr><td>Database</td><td>PostgreSQL</td><td>13 or later (developed on 16.15)</td></tr>
+<tr><td>Testing</td><td>Node.js test runner; Puppeteer with Google Chrome for browser checks</td><td>built in; puppeteer-core 23</td></tr>
+</tbody></table>
+
+<h2>5.2 System Implementation and Prototype</h2>
+<p>The prototype consists of approximately 17,800 lines of client code and 9,000 lines of server code (JavaScript and JSX, excluding dependencies). The following implementation details are central to the system's behaviour:</p>
+<ul>
+<li><b>Concurrency-safe booking:</b> a booking takes a PostgreSQL advisory lock on the service and day inside a transaction before counting the taken places, so simultaneous requests for the same slot cannot both succeed.</li>
+<li><b>Day rules:</b> one function resolves a day from the base schedule and the calendar exceptions, so booking, availability and the booking form apply the same rules.</li>
+<li><b>Live updates:</b> services publish domain events; the realtime hub broadcasts typed notices (appointments, catalog, staff, citizens, audit) over a single WebSocket per page, which reconnects with backoff.</li>
+<li><b>Countdowns:</b> the client learns the server clock from every API response, so countdowns are correct even on a device with a wrong clock.</li>
+<li><b>Audit trail:</b> every appointment event is written once with before and after snapshots and paged with a keyset cursor.</li>
+</ul>
+
+<h3>5.2.1 User Interface</h3>
+<p>The figures below show the implemented user interface with sample data.</p>
+<shot src="pub-login" caption="Sign-in page"></shot>
+<shot src="cit-appointment" caption="Citizen Appointment page with bookable services"></shot>
+<shot src="cit-myqueue-mobile" narrow caption="My Queue at mobile phone width"></shot>
+<shot src="off-queue" caption="Officer desk queue"></shot>
+<shot src="adm-accounts" caption="Administrator: Account Provision"></shot>
+<shot src="adm-hours" tall caption="Administrator: Operating Hours with per-service daily capacities"></shot>
+<shot src="adm-exceptions" caption="Administrator: Calendar Exceptions"></shot>
+<shot src="adm-audit" caption="Administrator: Audit Logs with Before and After snapshots and cursor pagination"></shot>
+
+<h3>5.2.2 Evaluation and Testing</h3>
+<p>The system was evaluated at four levels (Table 5.2).</p>
+<table class="t" data-cap="Testing levels">
+<thead><tr><th>Level</th><th>Method</th><th>Scope</th></tr></thead>
+<tbody>
+<tr><td>Unit</td><td>Node.js test runner (<code>npm test</code>)</td><td>Validation schemas, JWT handling, CASL abilities, pagination, schedule and slot rules, queue priority, audit snapshots</td></tr>
+<tr><td>Integration</td><td>Node.js test runner against a disposable PostgreSQL database built from the migrations</td><td>Regression scenarios through the real Express application: authorization, scheduling, booking, cancellation rules, queue, audit trail and pagination</td></tr>
+<tr><td>End-to-end API</td><td>Script exercising the running API with real HTTP requests</td><td>146 checks covering authentication, RBAC, catalog, schedules, booking rules, concurrency, review, queue, reports, audit, input robustness and CSRF</td></tr>
+<tr><td>Browser</td><td>Puppeteer driving Google Chrome against the running client and API</td><td>Fifteen user-interface scenarios (booking, exceptions, My Queue, officer and administrator pages), including live updates and phone-width layout</td></tr>
+</tbody></table>
+<table class="t" data-cap="Automated test suite in the repository (server/test)">
+<thead><tr><th>Test file</th><th>Tests</th><th>Subject</th></tr></thead>
+<tbody>
+<tr><td>schedule-management.test.js</td><td>22</td><td>Day resolution, exceptions, slots, lunch break, capacities</td></tr>
+<tr><td>regressions.integration.test.js</td><td>12</td><td>End-to-end regressions through the API on a disposable database</td></tr>
+<tr><td>casl-rbac.test.js</td><td>9</td><td>Role and attribute based permissions</td></tr>
+<tr><td>jwt.test.js</td><td>8</td><td>Token extraction, verification and middleware</td></tr>
+<tr><td>queue-priority.test.js</td><td>7</td><td>Queue ordering and positions</td></tr>
+<tr><td>catalog.test.js</td><td>5</td><td>Department and service validation</td></tr>
+<tr><td>audit-snapshots.test.js, citizens-pagination.test.js, staff-pagination.test.js</td><td>4 + 4 + 4</td><td>Audit snapshots for older entries; cursor pagination</td></tr>
+<tr><td><b>Total</b></td><td><b>75</b></td><td>All passing at the time of writing</td></tr>
+</tbody></table>
+<p><b>Results.</b> In the final test run all 75 automated tests, all 146 end-to-end API checks and all browser scenarios passed, and the server logged no errors or warnings. The end-to-end API and browser scripts were run during development against disposable databases and are not stored in the repository. Testing found and led to the correction of the defects listed in Table 5.4.</p>
+<table class="t" data-cap="Defects found by testing and corrected">
+<thead><tr><th>Defect</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Officer citizen directory failed with a server error (query referenced a missing column)</td><td>Query corrected; regression test added</td></tr>
+<tr><td>A citizen's queue page failed for afternoon appointment times</td><td>Time conversion corrected; regression test added</td></tr>
+<tr><td>Appointment slips could be read by any user</td><td>Ownership and scope check added; regression test added</td></tr>
+<tr><td>Completing a service could create duplicate audit entries; no-show entries were rejected by the database</td><td>Completion made idempotent; database constraint extended; regression test added</td></tr>
+<tr><td>Cancel offered for appointments the server would refuse; no-shows displayed as waiting</td><td>Interface aligned with the server rules</td></tr>
+<tr><td>Tables wider than the page caused horizontal scrolling</td><td>Layout corrected for desktop and phone widths</td></tr>
+</tbody></table>
+
+<h3>5.2.3 Usability Testing</h3>
+<p>Formal usability testing with representative citizens, department officers and administrators has <b>not yet been conducted</b>. During development the interface was checked for phone and desktop widths, readable labels and messages, accessible timer text and keyboard use, but these checks do not replace testing with real users. The planned procedure is:</p>
+<ol>
+<li>Recruit participants from each user group <span class="ph">[number of participants to be decided by the team]</span>.</li>
+<li>Ask each participant to complete typical tasks: register and book an appointment, find their queue position, cancel an appointment (citizens); approve, check in, call and complete (officers); add a holiday and review the audit log (administrator).</li>
+<li>Measure task completion, time on task and errors, and collect the System Usability Scale (SUS) questionnaire [9].</li>
+</ol>
+<p class="note"><span class="ph">[Team to supplement: usability test participants, tasks, results and SUS score once the test has been carried out.]</span></p>
+</section>
+
+<!-- ============================== CHAPTER 6 ============================== -->
+<section class="chapter">
+<h1>Chapter 6: Conclusions and Recommendations</h1>
+<h2>6.1 Conclusions</h2>
+<p>The project produced a working web-based system that moves the booking of woreda public services online while keeping the service itself at the desk. Citizens can register, book appointments under enforced schedule rules, follow their status and queue position live and cancel within the allowed time. Department officers decide requests and run the desk queue for their own department and services, and the administrator manages accounts, catalog, schedules, calendar exceptions and an auditable record of every decision.</p>
+<p>The design emphasizes server-side enforcement of all rules, concurrency-safe booking, an append-only audit trail and live updates. The system was verified with 75 automated tests, 146 end-to-end API checks and fifteen browser scenarios, all passing in the final run. The main limitations are the absence of SMS integration and of per-department operating hours, together with the partially implemented features listed in Table 2.5.</p>
+<h2>6.2 Recommendations</h2>
+<ol>
+<li><b>SMS integration:</b> connect an SMS gateway for booking confirmations, approvals, reminders and turn notifications.</li>
+<li><b>Per-department operating hours:</b> allow one working schedule per department, as required by the schedule management specification.</li>
+<li><b>Calendar view:</b> add the monthly and weekly calendar page using the existing calendar API, and give department heads read-only access to their schedule.</li>
+<li><b>Public tracking:</b> connect the Track page to the existing tracking API so that visitors can check a booking without signing in.</li>
+<li><b>Settings:</b> enforce the auto-approve and advance-booking-days settings, or remove them from the settings form.</li>
+<li><b>Check-in rule:</b> allow check-in only on the appointment date.</li>
+<li><b>Data model:</b> store officer service assignments in a dedicated table and add a foreign key from appointments to users.</li>
+<li><b>CSV export:</b> neutralize values beginning with =, +, - or @ to prevent spreadsheet formula injection.</li>
+<li><b>Interface:</b> add menu entries for the existing reports, settings, profile and notification pages, fit the officer appointment table to standard screen widths, and consider an Amharic language option.</li>
+<li><b>Operations:</b> prepare a production deployment (HTTPS, process supervision, database backups) and carry out the usability study described in Section 5.2.3.</li>
+</ol>
+</section>
+
+<!-- ============================== CHAPTER 7 ============================== -->
+<section class="chapter">
+<h1>Chapter 7: References</h1>
+<ol class="refs">
+<li>Kotebe University of Education, <i>Industrial Project Guideline</i>. <span class="ph">[Department and year to be completed by the team.]</span></li>
+<li>B. Bruegge and A. H. Dutoit, <i>Object-Oriented Software Engineering: Using UML, Patterns, and Java</i>, 3rd ed. Upper Saddle River, NJ, USA: Prentice Hall, 2010.</li>
+<li>I. Sommerville, <i>Software Engineering</i>, 10th ed. Harlow, UK: Pearson, 2016.</li>
+<li><i>ISO/IEC/IEEE 29148:2018, Systems and software engineering: Life cycle processes: Requirements engineering</i>. Geneva, Switzerland: ISO, 2018.</li>
+<li>M. Jones, J. Bradley and N. Sakimura, "JSON Web Token (JWT)," RFC 7519, IETF, May 2015.</li>
+<li>I. Fette and A. Melnikov, "The WebSocket Protocol," RFC 6455, IETF, Dec. 2011.</li>
+<li>Y. Shafranovich, "Common Format and MIME Type for Comma-Separated Values (CSV) Files," RFC 4180, IETF, Oct. 2005.</li>
+<li>OWASP Foundation, "Cross-Site Request Forgery Prevention Cheat Sheet," OWASP Cheat Sheet Series. [Online]. Available: https://cheatsheetseries.owasp.org</li>
+<li>J. Brooke, "SUS: A 'quick and dirty' usability scale," in <i>Usability Evaluation in Industry</i>, P. W. Jordan et al., Eds. London, UK: Taylor &amp; Francis, 1996, pp. 189&ndash;194.</li>
+<li>The PostgreSQL Global Development Group, "PostgreSQL Documentation." [Online]. Available: https://www.postgresql.org/docs/</li>
+<li>OpenJS Foundation, "Express: Node.js web application framework." [Online]. Available: https://expressjs.com</li>
+<li>Meta Platforms, Inc., "React documentation." [Online]. Available: https://react.dev</li>
+<li>Object Management Group, <i>OMG Unified Modeling Language (UML), Version 2.5.1</i>, Dec. 2017.</li>
+</ol>
+</section>
+
+<!-- ============================== CHAPTER 8 ============================== -->
+<section class="chapter">
+<h1>Chapter 8: Appendices</h1>
+
+<h2>Appendix A: REST API Endpoints</h2>
+<p>All endpoints are under <code>/api/v1</code> except the health check. "Public" endpoints need no sign-in.</p>
+<table class="t small-t" data-cap="REST API endpoints">
+<thead><tr><th>Method</th><th>Path</th><th>Access</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td>GET</td><td>/healthz</td><td>Public</td><td>Service health</td></tr>
+<tr><td>GET</td><td>/auth/csrf</td><td>Public</td><td>Issue a CSRF token</td></tr>
+<tr><td>POST</td><td>/auth/register</td><td>Public</td><td>Register a citizen</td></tr>
+<tr><td>POST</td><td>/auth/login</td><td>Public</td><td>Sign in</td></tr>
+<tr><td>GET</td><td>/auth/me</td><td>Signed in</td><td>Current user</td></tr>
+<tr><td>POST</td><td>/auth/logout</td><td>Signed in</td><td>Sign out (revoke token)</td></tr>
+<tr><td>GET, PUT</td><td>/citizen/profile</td><td>Citizen</td><td>Read and update own profile</td></tr>
+<tr><td>GET</td><td>/admin/users</td><td>Admin</td><td>Staff list (cursor pages)</td></tr>
+<tr><td>GET</td><td>/admin/users/citizens</td><td>Officer, Admin</td><td>Citizen directory</td></tr>
+<tr><td>POST</td><td>/admin/users/provision</td><td>Admin</td><td>Create a staff account</td></tr>
+<tr><td>PUT, DELETE</td><td>/admin/users/:id</td><td>Admin</td><td>Update or delete a staff account</td></tr>
+<tr><td>PATCH</td><td>/admin/users/:id/status</td><td>Admin</td><td>Activate or deactivate</td></tr>
+<tr><td>GET, PUT</td><td>/admin/settings</td><td>Admin</td><td>Read and update system settings</td></tr>
+<tr><td>GET</td><td>/departments</td><td>Public</td><td>List departments</td></tr>
+<tr><td>POST</td><td>/departments</td><td>Admin</td><td>Create a department</td></tr>
+<tr><td>PUT, DELETE</td><td>/departments/:id</td><td>Admin</td><td>Update or delete</td></tr>
+<tr><td>PATCH</td><td>/departments/:id/status</td><td>Admin</td><td>Activate or deactivate</td></tr>
+<tr><td>GET</td><td>/services</td><td>Public</td><td>List services</td></tr>
+<tr><td>POST</td><td>/services</td><td>Admin</td><td>Create a service</td></tr>
+<tr><td>PUT, DELETE</td><td>/services/:id</td><td>Admin</td><td>Update or delete</td></tr>
+<tr><td>PATCH</td><td>/services/:id/status</td><td>Admin</td><td>Activate or deactivate</td></tr>
+<tr><td>GET</td><td>/schedules/active, /daily-status, /availability, /bookable-dates, /active-exceptions</td><td>Public</td><td>Bookable schedules, daily counts, free slots, bookable dates, current exceptions</td></tr>
+<tr><td>GET</td><td>/schedules/calendar, /schedules/impact</td><td>Admin</td><td>Calendar view data; bookings affected by a change</td></tr>
+<tr><td>GET, POST</td><td>/schedules/exceptions</td><td>Admin</td><td>List or create calendar exceptions</td></tr>
+<tr><td>PUT, DELETE</td><td>/schedules/exceptions/:id</td><td>Admin</td><td>Update or delete an exception</td></tr>
+<tr><td>GET, POST</td><td>/schedules</td><td>Admin</td><td>List or create working schedules</td></tr>
+<tr><td>PUT, DELETE</td><td>/schedules/:id</td><td>Admin</td><td>Update or delete a schedule</td></tr>
+<tr><td>PATCH</td><td>/schedules/:id/status</td><td>Admin</td><td>Activate or deactivate a schedule</td></tr>
+<tr><td>POST</td><td>/appointments</td><td>Citizen, Admin</td><td>Book an appointment</td></tr>
+<tr><td>GET</td><td>/appointments/track</td><td>Public</td><td>Track by reference or phone</td></tr>
+<tr><td>GET</td><td>/appointments/my</td><td>Citizen</td><td>Own appointments</td></tr>
+<tr><td>GET</td><td>/appointments</td><td>Officer, Admin</td><td>Appointment registry (pages)</td></tr>
+<tr><td>PATCH</td><td>/appointments/:id/status</td><td>Officer, Admin</td><td>Approve or reject</td></tr>
+<tr><td>POST</td><td>/appointments/:id/reschedule</td><td>Owner, Officer, Admin</td><td>Reschedule</td></tr>
+<tr><td>POST</td><td>/appointments/:id/cancel</td><td>Owner, Officer, Admin</td><td>Cancel</td></tr>
+<tr><td>GET</td><td>/appointments/:id/slip</td><td>Owner, Officer, Admin</td><td>Printable slip</td></tr>
+<tr><td>GET</td><td>/queue/me</td><td>Citizen</td><td>Own queue status</td></tr>
+<tr><td>POST</td><td>/queue/verify-checkin</td><td>Officer, Admin</td><td>Check in and issue a token</td></tr>
+<tr><td>GET</td><td>/queue</td><td>Officer, Admin</td><td>Department queue board</td></tr>
+<tr><td>POST</td><td>/queue/call-next</td><td>Officer, Admin</td><td>Call the next citizen</td></tr>
+<tr><td>PATCH</td><td>/queue/:id/status</td><td>Officer, Admin</td><td>Complete or no-show</td></tr>
+<tr><td>GET</td><td>/reports/summary, /reports/geographical, /reports/export-csv</td><td>Officer, Admin</td><td>Outcome summary, breakdown, CSV export</td></tr>
+<tr><td>GET</td><td>/audit-logs</td><td>Admin</td><td>Audit log (keyset pages)</td></tr>
+<tr><td>WS</td><td>/api/v1/ws</td><td>Allowed origins</td><td>Live change notices</td></tr>
+</tbody></table>
+
+<h2>Appendix B: Data Dictionary</h2>
+<p>PK = primary key, FK = foreign key, UK = unique. A question mark marks a column that may be null.</p>
+<table class="t small-t dd" data-cap="Data dictionary">
+<thead><tr><th>Table</th><th>Columns</th></tr></thead>
+<tbody>
+<tr><td>departments</td><td>id PK, code UK, name, description, building_room, contact_phone, is_active, created_at, updated_at</td></tr>
+<tr><td>services</td><td>id PK, department_id? FK&rarr;departments (SET NULL), code UK, name, description, duration_minutes, daily_quota, fee_etb, processing_days, required_documents (text[]), is_active, created_at, updated_at</td></tr>
+<tr><td>users</td><td>id PK, full_name, email?, phone, password_hash, national_id UK, role (CITIZEN | OFFICER | ADMIN), department_id? FK&rarr;departments (SET NULL), counter_number?, address?, is_active, created_at, updated_at</td></tr>
+<tr><td>appointments</td><td>id PK, reference_number UK, citizen_id, citizen_name, citizen_phone, department_id FK&rarr;departments (CASCADE), service_id FK&rarr;services (RESTRICT), date, time_slot, status, token_number?, citizen_notes?, officer_notes?, rejection_reason?, responsible_officer_id?, checked_in_at?, completed_at?, created_at, updated_at</td></tr>
+<tr><td>queue_tokens</td><td>id PK, appointment_id UK FK&rarr;appointments (CASCADE), token_number, department_id, counter_number, officer_id?, status (WAITING | SERVING | COMPLETED | NO_SHOW), checked_in_time, called_time?, estimated_minutes_remaining, queue_date, created_at, updated_at</td></tr>
+<tr><td>schedules</td><td>id PK, department_id? FK&rarr;departments (CASCADE), service_id? FK&rarr;services (SET NULL), working_days (text[]), opening_time, closing_time, lunch_start?, lunch_end?, slot_interval_minutes, daily_capacity, effective_start_date, effective_end_date?, status (ACTIVE | INACTIVE), created_at, updated_at</td></tr>
+<tr><td>schedule_service_capacities</td><td>schedule_id PK FK&rarr;schedules (CASCADE), service_id PK FK&rarr;services (CASCADE), daily_capacity</td></tr>
+<tr><td>calendar_exceptions</td><td>id PK, type (PUBLIC_HOLIDAY | NON_WORKING_DAY | BLOCKED | WORKING_DAY), title, description?, start_date, end_date, scope (ALL | DEPARTMENT | DEPARTMENTS), opening_time?, closing_time?, daily_capacity?, created_by?, created_at, updated_at</td></tr>
+<tr><td>calendar_exception_departments</td><td>exception_id PK FK&rarr;calendar_exceptions (CASCADE), department_id PK FK&rarr;departments (CASCADE)</td></tr>
+<tr><td>audit_logs</td><td>id PK, at, action (BOOKED | APPROVED | REJECTED | CANCELLED | RESCHEDULED | COMPLETED | NO_SHOW), from_status?, to_status, actor_id?, actor_name, actor_role, appointment_id, reference_number, citizen_name, department_id?, department_name, service_name, appointment_date, time_slot, reason?, before_snapshot? (jsonb), after_snapshot? (jsonb)</td></tr>
+<tr><td>system_settings</td><td>id PK (single row), woreda_name, city_region, hotline, reception_phone, sms_gateway_active, auto_approve_bookings, advance_booking_days, cancellation_cutoff_hours, max_parallel_slots, updated_at</td></tr>
+<tr><td>revoked_tokens</td><td>jti PK, expires_at</td></tr>
+<tr><td>login_failures</td><td>email PK (phone or email identifier), failures, expires_at</td></tr>
+</tbody></table>
+
+<h2>Appendix C: Additional Screens</h2>
+<shot src="pub-register" caption="Citizen registration page"></shot>
+<shot src="cit-appointment-full" tall caption="Citizen Appointment page with the My Appointments list"></shot>
+<shot src="adm-departments" caption="Administrator: Department Management"></shot>
+<shot src="adm-services" caption="Administrator: Service Management"></shot>
+<shot src="adm-citizens" caption="Administrator: Citizen Management"></shot>
+
+<h2>Appendix D: Information to Be Supplied by the Team</h2>
+<p>The following information cannot be derived from the software and must be completed by the project team before submission. It is marked in this document with highlighted placeholders.</p>
+<table class="t" data-cap="Information to be supplied by the team">
+<thead><tr><th>Item</th><th>Location</th></tr></thead>
+<tbody>
+<tr><td>Team member names and identification numbers, advisor, department, submission date</td><td>Cover page</td></tr>
+<tr><td>Field data on the current manual process (observations, interviews, figures)</td><td>Sections 1.1.1, 1.6.1 and 2.2</td></tr>
+<tr><td>Calendar dates of the semester and planned weeks 10 to 16</td><td>Section 1.8</td></tr>
+<tr><td>Production hardware and hosting, if deployed</td><td>Section 3.3.1 (Hardware/Software Mapping)</td></tr>
+<tr><td>Usability test participants, results and SUS score</td><td>Section 5.2.3</td></tr>
+<tr><td>Bibliographic details of the university guideline</td><td>Chapter 7, reference [1]</td></tr>
+</tbody></table>
+</section>

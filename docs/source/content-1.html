@@ -1,0 +1,244 @@
+<!-- ============================== CHAPTER 1 ============================== -->
+<section class="chapter">
+<h1>Chapter 1: Project Proposal</h1>
+
+<h2>1.1 Introduction</h2>
+<p>Woredas are the local administrative units through which Ethiopian residents obtain everyday public services such as birth and marriage certificates, residence identification, tax clearance and land holding certificates. Each service is delivered by a department of the woreda administration at a physical desk, and residents must appear in person to be served.</p>
+<p>This project, <b>WoredaCare: Woreda Booking and Appointment Management System</b>, is a web-based system that lets citizens book these in-person visits in advance, lets each department review the requests and serve citizens through an organized desk queue, and gives the woreda administration central control over departments, services, working schedules, staff accounts and an audit trail of every appointment decision.</p>
+
+<h3>1.1.1 Existing System</h3>
+<p>The system is designed to replace an in-person, walk-in process in which citizens arrive at the woreda office, wait in a physical queue on a first-come, first-served basis, and learn only at the desk whether the required documents are complete or whether the service is available that day. There is no way to reserve a time, no visibility of the expected waiting time, and decisions about requests are not recorded centrally.</p>
+<p class="note"><span class="ph">[Team to supplement: observations, interviews or figures collected at the target woreda describing the current process (for example average waiting time, daily visitor numbers, and how records are kept). This information is not contained in the software and has not been invented here.]</span></p>
+
+<h2>1.2 Motivation</h2>
+<p>The motivation for the project comes from the cost that the walk-in process places on both citizens and staff:</p>
+<ul>
+<li>Citizens lose working time travelling to the office and waiting without knowing when, or whether, they will be served.</li>
+<li>Departments cannot plan their daily workload because demand is unknown until citizens arrive.</li>
+<li>Holidays and office closures are communicated poorly, so citizens may travel on days when no service is available.</li>
+<li>Decisions such as approving, rejecting or rescheduling a request leave no reliable record that the administration can review.</li>
+</ul>
+<p>Widespread access to mobile phones and web browsers makes it practical to move the booking step online while keeping the service itself at the desk.</p>
+
+<h2>1.3 Problem Statement</h2>
+<p>Woreda public services are delivered through unscheduled walk-in queues. As a result, citizens experience long and unpredictable waiting times, departments cannot control their daily capacity, citizens are not reliably informed about non-working days, and there is no transparent, auditable record of who decided what about each request. The problem this project addresses is the absence of a system that allows citizens to reserve a specific service time, allows departments to review and serve those reservations in an orderly queue, and gives the administration control and visibility over schedules and decisions.</p>
+
+<h2>1.4 Objectives</h2>
+<h3>1.4.1 General Objective</h3>
+<p>To design and develop a web-based booking and appointment management system that enables citizens to schedule woreda public services online and enables woreda departments and administrators to manage, serve and audit those appointments.</p>
+<h3>1.4.2 Specific Objectives</h3>
+<ul>
+<li>To allow citizens to register with an Ethiopian mobile number and book an appointment for a specific service, date and time.</li>
+<li>To enforce working hours, lunch breaks, daily capacities and calendar exceptions (holidays, non-working days, blocked dates) when bookings are made.</li>
+<li>To let department officers approve, reject, reschedule and cancel requests, check citizens in at the desk, call them to a counter and complete the service.</li>
+<li>To show citizens their live queue position, the number of citizens ahead and behind them, and a countdown to their appointment time.</li>
+<li>To give administrators management of staff accounts, departments, services, operating hours and calendar exceptions.</li>
+<li>To record every appointment decision in an audit log with before and after snapshots.</li>
+<li>To protect the system with authentication, role-based access control and protection against common web attacks.</li>
+</ul>
+
+<h2>1.5 Scope of the Project</h2>
+<table class="t" data-cap="Scope of the project">
+<thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+<tbody>
+<tr><td>Online citizen registration and sign-in</td><td>Online payment of service fees</td></tr>
+<tr><td>Booking, approval, rejection, rescheduling and cancellation of appointments</td><td>Uploading and verifying supporting documents online</td></tr>
+<tr><td>Desk check-in, queue tokens, calling to a counter, completing a service</td><td>SMS and e-mail delivery of notifications and reminders</td></tr>
+<tr><td>Departments, services, operating hours, daily capacities and calendar exceptions</td><td>Integration with national identity or civil registration databases</td></tr>
+<tr><td>Staff account provisioning and a citizen directory</td><td>Native mobile applications (the web client is used on mobile browsers)</td></tr>
+<tr><td>Reports, CSV export and an audit log of decisions</td><td>Multiple woredas in one deployment</td></tr>
+</tbody></table>
+
+<h2>1.6 Methodology and Tools</h2>
+<h3>1.6.1 Data Collection Methodology</h3>
+<p>Requirements were derived from the project specification for the woreda booking system, including the Schedule Management and Audit Log specifications prepared by the team, and refined iteratively during development through review sessions on the running system.</p>
+<p class="note"><span class="ph">[Team to supplement: data collection methods used with the target woreda, such as interviews with department heads, observation of the service desks, questionnaires to citizens, and review of existing paper forms, together with dates and participants.]</span></p>
+<h3>1.6.2 System Development Methodology</h3>
+<p>The system was developed using an <b>object-oriented analysis and design</b> approach with <b>iterative and incremental development</b>. Each increment added or refined a set of features (for example schedule management, the desk queue, the audit log and live updates), was verified against the running system, and was recorded in the project's Git history (98 commits at the time of writing). Requirements are modelled with UML use case, sequence, activity and class diagrams, and the database with an entity relationship diagram.</p>
+<h3>1.6.3 Development Tools</h3>
+<table class="t" data-cap="Main development tools and technologies">
+<thead><tr><th>Area</th><th>Tool or technology</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td>Front end</td><td>React 19, React Router 7, Vite 6</td><td>Single-page web client and build tool</td></tr>
+<tr><td>Client state and UI</td><td>Zustand 5, TanStack Table, Recharts, Sonner, Lucide icons</td><td>State store, data tables, charts, notifications, icons</td></tr>
+<tr><td>Back end</td><td>Node.js (version 22 or later), Express 5</td><td>REST API server</td></tr>
+<tr><td>Validation and authorization</td><td>Zod 4, CASL 7</td><td>Request validation, role-based access control</td></tr>
+<tr><td>Security</td><td>jsonwebtoken, bcryptjs, Helmet, cookie-parser, cors</td><td>Tokens, password hashing, security headers, cookies, CORS</td></tr>
+<tr><td>Real time</td><td>ws (WebSocket)</td><td>Live change notices to open pages</td></tr>
+<tr><td>Database</td><td>PostgreSQL, pg, node-pg-migrate</td><td>Relational storage, driver, schema migrations</td></tr>
+<tr><td>Logging and testing</td><td>pino, Node.js built-in test runner</td><td>Structured logs, automated tests</td></tr>
+<tr><td>Version control</td><td>Git</td><td>Source history</td></tr>
+</tbody></table>
+
+<h2>1.7 Application</h2>
+<p>The system is useful to three groups:</p>
+<ul>
+<li><b>Citizens</b> can book a visit from a phone or computer, avoid closed days, see whether their request has been approved, follow their place in the queue and cancel when they cannot attend.</li>
+<li><b>Department officers</b> know their daily demand in advance, decide requests in one place, and run the desk queue with numbered tokens and counters.</li>
+<li><b>The woreda administration</b> configures services and schedules centrally, declares holidays once for all departments, and reviews an auditable record of every decision.</li>
+</ul>
+
+<h2>1.8 Schedule</h2>
+<p>The schedule follows the milestones defined by the university guideline. Weeks 1, 5 and 9 are fixed by the guideline; the remaining weeks show the planned allocation of work.</p>
+<table class="t gantt" data-cap="Project schedule by semester week">
+<thead><tr><th>Activity</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th><th>13</th><th>14</th><th>15</th><th>16</th></tr></thead>
+<tbody>
+<tr><td>Project proposal and advisor approval</td><td class="on">&#9632;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Requirement gathering and analysis (RAD)</td><td></td><td class="on">&#9632;</td><td class="on">&#9632;</td><td class="on">&#9632;</td><td class="on ms">&#9670;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>System and object design (SDD, ODD)</td><td></td><td></td><td></td><td></td><td></td><td class="on">&#9632;</td><td class="on">&#9632;</td><td class="on">&#9632;</td><td class="on ms">&#9670;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Implementation</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="on">&#9632;</td><td class="on">&#9632;</td><td class="on">&#9632;</td><td class="on">&#9632;</td><td class="on">&#9632;</td><td></td><td></td><td></td></tr>
+<tr><td>Testing and evaluation</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="on">&#9632;</td><td class="on">&#9632;</td><td class="on">&#9632;</td><td class="on">&#9632;</td><td></td><td></td></tr>
+<tr><td>Final documentation and presentation</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="on">&#9632;</td><td class="on">&#9632;</td><td class="on">&#9632;</td></tr>
+</tbody></table>
+<p class="small">&#9670; = submission milestone defined by the guideline (RAD at the end of week 5; SDD and ODD at the end of week 9). <span class="ph">[Team to confirm the calendar dates of the semester and the planned weeks 10 to 16.]</span></p>
+
+<h2>1.9 References</h2>
+<p>The references used throughout this document are listed in Chapter 7. The principal sources for the proposal are the university industrial project guideline [1], the object-oriented software engineering method on which the document templates are based [2], and the requirements engineering standard [4].</p>
+</section>
+
+<!-- ============================== CHAPTER 2 ============================== -->
+<section class="chapter">
+<h1>Chapter 2: Requirement Analysis Document (RAD)</h1>
+
+<h2>2.1 Introduction</h2>
+<h3>2.1.1 Introduction to the System</h3>
+<p>WoredaCare is a web application with four kinds of users. Visitors can browse services and register. Citizens book and follow their appointments. Department officers decide requests and run the desk queue for their own department. The administrator manages the configuration of the whole woreda. The system consists of a React single-page client, an Express REST API with a WebSocket channel for live updates, and a PostgreSQL database.</p>
+<h3>2.1.2 Scope of the System</h3>
+<p>The system covers the full life of an appointment, from the citizen's request to the completion of the service at the desk, together with the configuration that governs when appointments can be booked. The boundaries of the project are listed in Table 1.1. This document distinguishes features that are implemented, partially implemented and not implemented; the status of each is stated where relevant and summarized in Section 2.3.4.</p>
+<h3>2.1.3 Objectives and Success Criteria of the Project</h3>
+<table class="t" data-cap="Success criteria">
+<thead><tr><th>Objective</th><th>Success criterion</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Online booking under schedule rules</td><td>The server refuses bookings in the past, outside working hours, in the lunch break, on exception dates and beyond capacity; a time slot cannot be booked twice even under simultaneous requests.</td><td>Met (verified by automated tests)</td></tr>
+<tr><td>Department review and desk service</td><td>Officers can approve, reject, reschedule, check in, call and complete appointments only for their own department and services.</td><td>Met</td></tr>
+<tr><td>Citizen transparency</td><td>Citizens see status, queue position, people ahead and behind, and a live countdown, updated without reloading the page.</td><td>Met</td></tr>
+<tr><td>Central configuration</td><td>The administrator manages staff, departments, services, operating hours and calendar exceptions.</td><td>Met, with the schedule limitations in Section 2.3.4</td></tr>
+<tr><td>Accountability</td><td>Every decision is recorded once in the audit log with actor, time, and before and after snapshots.</td><td>Met</td></tr>
+<tr><td>Security</td><td>Unauthorized and cross-role access is refused by the server; passwords are hashed; requests are protected against CSRF.</td><td>Met (verified by automated tests)</td></tr>
+</tbody></table>
+
+<h2>2.2 Current System</h2>
+<p>As described in Section 1.1.1, the current process is a manual walk-in queue. Its weaknesses, which the proposed system addresses, are: no advance reservation, unpredictable waiting, no control of daily capacity, poor communication of closures, and no central record of decisions. No existing software system was replaced by this project; consequently, no existing data was migrated.</p>
+<p class="note"><span class="ph">[Team to supplement: a description of the current manual workflow at the target woreda, ideally with a simple process diagram drawn from field observation.]</span></p>
+
+<h2>2.3 Proposed System</h2>
+<h3>2.3.1 Overview</h3>
+<p>In the proposed system a citizen books an appointment online. The request starts as <i>Pending</i> and is reviewed by an officer of the responsible department, who approves or rejects it. On the day of the visit the officer checks the citizen in, which issues a numbered queue token; the officer then calls the citizen to a counter and completes the service or records a no-show. Every step is written to the audit log and pushed live to the pages that display it. Figure 2.1 shows the life cycle of an appointment.</p>
+<fig id="states" land caption="Life cycle of an appointment (UML state diagram)"></fig>
+
+<h3>2.3.2 Functional Requirements</h3>
+<p>Functional requirements are grouped by actor. Each requirement has a stable identifier.</p>
+<table class="t req" data-cap="Functional requirements: visitor and citizen">
+<thead><tr><th>ID</th><th>Requirement</th></tr></thead>
+<tbody>
+<tr><td>FR-01</td><td>A visitor can register as a citizen with full name, Ethiopian mobile number and password; email and address are optional. A phone number or email can belong to only one account.</td></tr>
+<tr><td>FR-02</td><td>Citizens sign in with phone number and password; staff sign in with email or phone. After five failed attempts an identifier is locked for 15 minutes. Signing out revokes the session.</td></tr>
+<tr><td>FR-03</td><td>Visitors can browse active departments and public services with fees, processing time and required documents (partially implemented, see Table 2.5).</td></tr>
+<tr><td>FR-04</td><td>The citizen sees the bookable services and opens a booking form with <i>Book Slot</i>. The form offers only dates and times allowed by the schedule and shows the citizen's expected order in the queue.</td></tr>
+<tr><td>FR-05</td><td>A booking is always made under the name and phone number of the citizen's account. Each booking receives a reference number of the form WRD-YYYYMMDD-NNNN and starts as Pending.</td></tr>
+<tr><td>FR-06</td><td>If today is closed by a calendar exception for the service, <i>Book Slot</i> shows a six-second notice and does not open the form. On <i>Confirm Booking</i> the date is re-checked against the latest exceptions; a closed date is refused with a six-second notice.</td></tr>
+<tr><td>FR-07</td><td>My Appointments lists the citizen's appointments with the newest booking first, a search box, and service and status filters. After a booking the list returns to its first page.</td></tr>
+<tr><td>FR-08</td><td>A citizen can cancel a Pending appointment, and an Approved appointment up to the cancellation cutoff configured by the administrator (default four hours before the appointment).</td></tr>
+<tr><td>FR-09</td><td>My Queue lists the citizen's appointments from today onward with appointment date and time, queue position, people ahead and people behind, request time and status. People ahead and behind count the other approved bookings for the same service on the same date by appointment time.</td></tr>
+<tr><td>FR-10</td><td>Every appointment still ahead shows a live countdown to its start time; a pending appointment is shown as awaiting approval. When the citizen is called, a banner shows the counter number.</td></tr>
+<tr><td>FR-11</td><td>The owner of an appointment, the responsible officer and the administrator can view a printable appointment slip with reference, room and required documents.</td></tr>
+</tbody></table>
+<table class="t req" data-cap="Functional requirements: department officer and administrator">
+<thead><tr><th>ID</th><th>Requirement</th></tr></thead>
+<tbody>
+<tr><td>FR-12</td><td>An officer sees and acts only on appointments of their own department and assigned services.</td></tr>
+<tr><td>FR-13</td><td>An officer approves or rejects a Pending appointment; a rejection requires a reason. An officer can reschedule an appointment (all booking rules apply) and cancel pending or approved appointments.</td></tr>
+<tr><td>FR-14</td><td>An officer checks in an Approved appointment, which issues the next queue token of the department for the day (for example CRV-03).</td></tr>
+<tr><td>FR-15</td><td>An officer calls the next waiting citizen to a numbered counter and marks the service Completed or No-show. Completing twice records the completion once.</td></tr>
+<tr><td>FR-16</td><td>Officers and the administrator can view an outcome summary for today, this week or this month and export the appointment registry as CSV; officers see their own department only.</td></tr>
+<tr><td>FR-17</td><td>The administrator creates, edits, activates, deactivates and deletes staff accounts. An officer must be assigned to a department and at least one service of that department.</td></tr>
+<tr><td>FR-18</td><td>The administrator browses and searches the citizen directory, and manages departments and services.</td></tr>
+<tr><td>FR-19</td><td>The administrator sets operating hours: working days, opening and closing times, an optional lunch break, the slot length, a default daily capacity and a daily capacity per service.</td></tr>
+<tr><td>FR-20</td><td>The administrator adds calendar exceptions (public holiday, non-working day, blocked date, exceptional working day) for a date or a range of up to 366 days, scoped to all departments, one department or selected departments. An exceptional working day requires its own hours and capacity.</td></tr>
+<tr><td>FR-21</td><td>Changes to the working schedule and deletions ask for confirmation and show the existing bookings that would be affected.</td></tr>
+<tr><td>FR-22</td><td>The audit log records every appointment event (Appointment Requested, Approved, Rejected, Rescheduled, Cancelled, Completed Service, No-show) with time, actor, citizen, service, reason and before and after snapshots.</td></tr>
+<tr><td>FR-23</td><td>The Audit Logs page shows Citizen, Performed By, Service, Action, Before, After and Date &amp; Time, with action, department and text filters, five entries per page using server-side cursor pagination, and live updates.</td></tr>
+<tr><td>FR-24</td><td>The administrator configures system settings: woreda name, region, hotline, maximum parallel bookings per time slot and the cancellation cutoff.</td></tr>
+</tbody></table>
+
+<h3>2.3.3 Non-Functional Requirements</h3>
+<table class="t req" data-cap="Non-functional requirements">
+<thead><tr><th>ID</th><th>Category</th><th>Requirement</th></tr></thead>
+<tbody>
+<tr><td>NFR-01</td><td>Security</td><td>Passwords are stored as bcrypt hashes and must be at least eight characters with a digit or symbol.</td></tr>
+<tr><td>NFR-02</td><td>Security</td><td>Sessions use a signed JWT (HS256) in an HttpOnly cookie (Secure in production, SameSite=Lax). State-changing requests made with the cookie require a matching CSRF token and an allowed Origin.</td></tr>
+<tr><td>NFR-03</td><td>Security</td><td>Role, department, service and ownership rules are enforced on the server for every endpoint; a citizen can never read or change another citizen's data.</td></tr>
+<tr><td>NFR-04</td><td>Security</td><td>All input is validated (Zod); invalid input is answered with HTTP 422 and field-level messages. All SQL statements are parameterized.</td></tr>
+<tr><td>NFR-05</td><td>Security</td><td>Requests are rate-limited per IP address (5 per second with a burst of 50; sign-in and registration 20 per minute with a burst of 10). Security headers are set with Helmet and request bodies are limited to 1 MB.</td></tr>
+<tr><td>NFR-06</td><td>Integrity</td><td>A time slot can never be booked twice and capacities can never be exceeded, even under simultaneous requests; status changes are atomic and conditional.</td></tr>
+<tr><td>NFR-07</td><td>Integrity</td><td>Audit entries are only added, never changed or deleted.</td></tr>
+<tr><td>NFR-08</td><td>Performance</td><td>Long lists are paged on the server; the audit log uses keyset pagination so that pages remain fast and stable as it grows.</td></tr>
+<tr><td>NFR-09</td><td>Real time</td><td>Changes are pushed to open pages over WebSocket and appear within about a second; the connection reconnects automatically and the queue pages also refresh on a short timer as a fallback.</td></tr>
+<tr><td>NFR-10</td><td>Reliability</td><td>Failure to record an audit entry or to send a live notice never makes the user's action fail; such errors are logged.</td></tr>
+<tr><td>NFR-11</td><td>Usability</td><td>Pages work at mobile phone width without horizontal page scrolling; messages are plain language; countdown timers are announced to screen readers as readable text and animation respects reduced-motion preferences.</td></tr>
+<tr><td>NFR-12</td><td>Localization</td><td>All dates and times are woreda time (Africa/Addis_Ababa, UTC+3) regardless of the device time zone; countdowns use the server clock. Phone numbers follow the format +2519XXXXXXXX.</td></tr>
+<tr><td>NFR-13</td><td>Maintainability</td><td>The API follows a strict layering (routes, middleware, controllers, services, repositories) with one response envelope; the schema is managed by versioned, reversible migrations; logs are structured JSON with a request identifier.</td></tr>
+</tbody></table>
+
+<h3>2.3.4 Implementation Status and Limitations</h3>
+<p>The following items from the specification are not, or only partially, implemented in the current version:</p>
+<table class="t" data-cap="Features not yet or only partially implemented">
+<thead><tr><th>Feature</th><th>Status</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td>SMS integration</td><td>Not implemented</td><td>SMS reminders, appointment notifications and reminder queues are not available. A setting for an SMS gateway exists but is not connected.</td></tr>
+<tr><td>Per-department operating hours</td><td>Not implemented</td><td>Only one working schedule for the whole woreda can exist.</td></tr>
+<tr><td>Monthly and weekly calendar view</td><td>Partially implemented</td><td>The API provides the data (GET /schedules/calendar) but no page displays it.</td></tr>
+<tr><td>Department head read access to schedules</td><td>Not implemented</td><td>Schedule Management is available to the administrator only.</td></tr>
+<tr><td>Public appointment tracking page</td><td>Partially implemented</td><td>The API supports tracking by reference or phone number (GET /appointments/track), but the Track page searches only data already held in the browser and therefore finds nothing for a visitor who is not signed in.</td></tr>
+<tr><td>Public service catalog page</td><td>Partially implemented</td><td>The API lists services publicly (GET /services), but the Services page does not load them for a visitor and shows "No Services Found" unless another page has already loaded them. In the development server, reloading the /services address shows a source file because the address matches the client's services folder.</td></tr>
+<tr><td>Auto-approve and advance booking days settings</td><td>Partially implemented</td><td>The settings are stored but not enforced.</td></tr>
+<tr><td>Pages without menu entries</td><td>Partially implemented</td><td>Citizen Profile and Notifications, officer Verify and Reports, and administrator Appointments, Reports and Settings pages exist but have no sidebar entry; citizen notifications are kept in the browser only. The officer citizen directory link leads to an administrator-only page.</td></tr>
+<tr><td>Officer appointment table layout</td><td>Partially implemented</td><td>At a 1440-pixel window the Action column of the officer appointment table requires horizontal scrolling.</td></tr>
+<tr><td>Check-in date restriction</td><td>Not implemented</td><td>The server allows an approved appointment to be checked in on a day before its appointment date.</td></tr>
+</tbody></table>
+
+<h2>2.4 System Models</h2>
+<h3>2.4.1 Scenarios</h3>
+<p>The following scenarios describe typical uses of the system. The names are illustrative.</p>
+<p><b>Scenario 1: Booking a birth certificate.</b> Almaz signs in with her phone number and opens the Appointment page. She taps <i>Book Slot</i> on Birth Certificate Issuance. The form opens on the next working day and shows the free times, with the lunch break unavailable, and her expected order in the queue. She picks 9:00 AM and confirms. The system re-checks the date, validates the request on the server and creates the appointment as Pending with a reference number. The appointment appears as the first row of My Appointments with a dashed countdown marked "awaiting approval".</p>
+<p><b>Scenario 2: Deciding requests and serving at the desk.</b> Hana, an officer of the Civil Registration department, opens her Appointment page and approves Almaz's request; Almaz's countdown becomes solid without reloading. On the day of the visit Almaz arrives, and Hana checks her in, which issues token CRV-02. When the previous citizen has been served, Hana calls the next citizen to counter 2. Almaz's My Queue page shows "It's your turn! Please proceed to Counter Desk #2". After serving her, Hana clicks <i>Complete Service</i>; Almaz's row shows Served and a notice confirms the completion.</p>
+<p><b>Scenario 3: Declaring a public holiday.</b> The administrator opens Calendar Exceptions and adds a public holiday for all departments. From that moment the date is closed for booking: a citizen who has the booking form open on that date sees a six-second notice immediately, and the server refuses any booking for the date.</p>
+<p><b>Scenario 4: Cancelling an approved appointment.</b> Dani has an approved appointment in three days but can no longer attend. On My Queue he clicks <i>Cancel</i>. Because the appointment is more than four hours away, the cancellation is accepted, the time becomes bookable again, the officer's list shows the appointment as Cancelled in red, and the audit log records the cancellation with Dani as the actor.</p>
+
+<h3>2.4.2 Use Case Model</h3>
+<p>Figures 2.2 and 2.3 show the use cases of the four actors. The Citizen actor is also a participant in the officer's check-in use case, because the citizen must be present at the desk.</p>
+<fig id="uc-citizen" caption="Use case diagram: visitor and citizen"></fig>
+<fig id="uc-staff" caption="Use case diagram: department officer and administrator"></fig>
+<p>Table 2.6 describes the main use cases in detail.</p>
+<table class="t uc" data-cap="Use case descriptions">
+<thead><tr><th>Use case</th><th>Actor</th><th>Pre-condition</th><th>Main flow</th><th>Alternative flows</th><th>Post-condition</th></tr></thead>
+<tbody>
+<tr><td>UC-01 Book appointment</td><td>Citizen</td><td>Signed in as citizen</td><td>1. Tap Book Slot. 2. Pick date and time. 3. Confirm Booking. 4. System validates and creates the appointment.</td><td>Today closed: notice, no form. Date closed or slot full: notice or reason, pick again.</td><td>Pending appointment with reference; audit entry; officers notified live.</td></tr>
+<tr><td>UC-02 Review appointment</td><td>Officer</td><td>Appointment Pending in the officer's department and services</td><td>1. Open Appointment page. 2. Approve. 3. System records the decision.</td><td>Reject: a reason is required.</td><td>Appointment Approved or Rejected; audit entry; citizen updated live.</td></tr>
+<tr><td>UC-03 Cancel appointment</td><td>Citizen</td><td>Own appointment Pending, or Approved and outside the cutoff</td><td>1. Click Cancel. 2. System cancels and frees the time.</td><td>Inside the cutoff or already checked in: refused with the reason.</td><td>Appointment Cancelled; audit entry.</td></tr>
+<tr><td>UC-04 Serve at the desk</td><td>Officer, Citizen</td><td>Appointment Approved; citizen present</td><td>1. Check in (token issued). 2. Call next to a counter. 3. Complete Service.</td><td>Citizen absent: mark No-show.</td><td>Appointment Completed or No-show; audit entry; citizen notified.</td></tr>
+<tr><td>UC-05 Manage calendar exception</td><td>Administrator</td><td>Signed in as administrator</td><td>1. Enter type, title, dates and scope. 2. Save.</td><td>Exceptional working day: hours and capacity required.</td><td>Dates closed or opened for booking; open pages updated live.</td></tr>
+</tbody></table>
+
+<land><h3>2.4.3 Sequence Diagrams</h3>
+<p>Figure 2.4 shows how a booking is validated and stored. The advisory lock serializes concurrent bookings of the same service and day, which guarantees that a slot is never double-booked.</p>
+<fig id="seq-book" caption="Sequence diagram: book an appointment"></fig></land>
+<land><p>Figure 2.5 shows an officer's approval and how the change reaches the citizen's open page through the WebSocket channel.</p>
+<fig id="seq-approve" caption="Sequence diagram: approve an appointment and update the citizen live"></fig></land>
+<land><p>Figure 2.6 shows check-in, calling the next citizen and completing the service.</p>
+<fig id="seq-desk" caption="Sequence diagram: check in, call next and complete service"></fig></land>
+
+<h3>2.4.4 Activity Diagrams</h3>
+<fig id="act-book" tall caption="Activity diagram: citizen books an appointment"></fig>
+<fig id="act-desk" caption="Activity diagram: department officer serves a request"></fig>
+
+<land><h3>2.4.5 User Interface</h3>
+<h4>Navigational Paths</h4>
+<p>Figure 2.9 shows the pages reachable by each role after signing in, as defined by the client routes. The administration console pages are listed in the order of the sidebar menu.</p>
+<fig id="nav" caption="Navigational paths by role"></fig></land>
+<h4>Screen Mock-ups</h4>
+<p>The screens below are taken from the implemented prototype with sample data. Further screens are presented in Chapter 5 and Appendix C.</p>
+<shot src="cit-booking-form" caption="Booking form with free time slots and expected queue order (citizen)"></shot>
+<shot src="cit-myqueue" caption="My Queue: live status, people ahead and behind, and countdown (citizen)"></shot>
+<shot src="off-appointments" caption="Appointment requests awaiting decision (department officer)"></shot>
+</section>

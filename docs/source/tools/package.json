@@ -1,0 +1,15 @@
+{
+  "name": "woredacare-docs-build",
+  "private": true,
+  "type": "module",
+  "description": "Builds docs/WoredaCare_Project_Documentation.pdf from the HTML chapters, diagrams and screenshots in docs/source.",
+  "scripts": {
+    "diagrams": "node diagrams.mjs && node subsystems.mjs",
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "mermaid": "11.4.1",
+    "pdf-lib": "1.17.1",
+    "puppeteer-core": "23.11.1"
+  }
+}

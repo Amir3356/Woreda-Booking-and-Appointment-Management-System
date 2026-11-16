@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 630" width="960" height="630">
+<defs><marker id="a" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#334155"/></marker>
+<marker id="g" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#15803d"/></marker></defs>
+<rect x="10" y="10" width="940" height="150" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+<text x="24" y="32" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Presentation subsystems (client/)</text>
+<rect x="30" y="40" width="205" height="44" rx="5" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.3"/>
+<text x="132.5" y="67" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Public portal</text>
+<rect x="253" y="40" width="205" height="44" rx="5" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.3"/>
+<text x="355.5" y="67" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Citizen portal</text>
+<rect x="476" y="40" width="205" height="44" rx="5" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.3"/>
+<text x="578.5" y="67" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Officer service desk</text>
+<rect x="699" y="40" width="205" height="44" rx="5" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.3"/>
+<text x="801.5" y="67" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Administration console</text>
+<rect x="30" y="100" width="900" height="44" rx="5" fill="#e0f2fe" stroke="#0369a1" stroke-width="1.3"/>
+<text x="480" y="127" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Shared client layer: REST API client, WebSocket client, Zustand store, UI components</text>
+<line x1="360" y1="160" x2="360" y2="200" stroke="#334155" stroke-width="1.6" marker-end="url(#a)"/>
+<text x="368" y="184" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#334155">HTTPS REST /api/v1</text>
+<rect x="30" y="200" width="900" height="46" rx="5" fill="#fef3c7" stroke="#b45309" stroke-width="1.3"/>
+<text x="480" y="228" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13.5" fill="#0f172a">Security and request middleware: request id, logging, CORS, rate limit, JWT authentication, CSRF, CASL abilities, Zod validation</text>
+<line x1="360" y1="246" x2="360" y2="280" stroke="#334155" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="10" y="280" width="940" height="210" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+<text x="24" y="302" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Application subsystems (server/): controllers, services, repositories</text>
+<rect x="30" y="312" width="205" height="56" rx="5" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.3"/>
+<text x="132.5" y="337" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Authentication</text>
+<text x="132.5" y="353" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">and sessions</text>
+<rect x="253" y="312" width="205" height="56" rx="5" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.3"/>
+<text x="355.5" y="337" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Catalog: departments</text>
+<text x="355.5" y="353" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">and services</text>
+<rect x="476" y="312" width="205" height="56" rx="5" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.3"/>
+<text x="578.5" y="337" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Scheduling: hours,</text>
+<text x="578.5" y="353" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">exceptions, availability</text>
+<rect x="699" y="312" width="205" height="56" rx="5" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.3"/>
+<text x="801.5" y="337" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Appointment</text>
+<text x="801.5" y="353" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">management</text>
+<rect x="30" y="382" width="205" height="56" rx="5" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.3"/>
+<text x="132.5" y="407" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Desk queue:</text>
+<text x="132.5" y="423" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">check-in, call, finalize</text>
+<rect x="253" y="382" width="205" height="56" rx="5" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.3"/>
+<text x="355.5" y="407" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Reporting and</text>
+<text x="355.5" y="423" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">CSV export</text>
+<rect x="476" y="382" width="205" height="56" rx="5" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.3"/>
+<text x="578.5" y="415" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Audit trail</text>
+<rect x="699" y="382" width="205" height="56" rx="5" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.3"/>
+<text x="801.5" y="407" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">Staff, citizens,</text>
+<text x="801.5" y="423" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">profiles, settings</text>
+<rect x="30" y="452" width="900" height="30" rx="5" fill="#dcfce7" stroke="#15803d" stroke-width="1.3"/>
+<text x="480" y="472" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13.5" fill="#0f172a">Event service and realtime hub (WebSocket broadcast to open pages)</text>
+<path d="M 920 452 L 920 260 Q 920 170 920 146" fill="none" stroke="#15803d" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#g)"/>
+<text x="730" y="268" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#15803d">WebSocket live notices</text>
+<line x1="360" y1="490" x2="360" y2="530" stroke="#334155" stroke-width="1.6" marker-end="url(#a)"/>
+<text x="368" y="514" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#334155">parameterized SQL</text>
+<rect x="10" y="530" width="940" height="90" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+<text x="24" y="552" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Data management</text>
+<ellipse cx="480" cy="562" rx="120" ry="10" fill="#e2e8f0" stroke="#334155"/>
+<rect x="360" y="562" width="240" height="40" fill="#e2e8f0" stroke="none"/>
+<line x1="360" y1="562" x2="360" y2="602" stroke="#334155"/><line x1="600" y1="562" x2="600" y2="602" stroke="#334155"/>
+<ellipse cx="480" cy="602" rx="120" ry="10" fill="#e2e8f0" stroke="#334155"/>
+<text x="480" y="588" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#0f172a">PostgreSQL (13 tables)</text></svg>
